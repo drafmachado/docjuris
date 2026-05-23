@@ -36,7 +36,6 @@ app.use('/api/users', userRoutes);
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.0.0' }));
 // Servir frontend
-import { fileURLToPath } from 'url';
 const __dirname2 = path.dirname(fileURLToPath(import.meta.url));
 const frontendDist = path.join(__dirname2, '../frontend/dist');
 app.use(express.static(frontendDist));

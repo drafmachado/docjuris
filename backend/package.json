@@ -2,9 +2,10 @@
   "name": "docjuris-backend",
   "version": "1.0.0",
   "type": "module",
-  "scripts": {
-    "dev": "node --watch server.js",
-    "start": "node server.js"
+ "scripts": {
+  "dev": "node --watch server.js",
+  "start": "node server.js",
+  "build": "cd ../frontend && npm install && npm run build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",

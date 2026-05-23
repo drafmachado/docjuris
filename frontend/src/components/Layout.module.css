@@ -1,5 +1,30 @@
 .app { display: flex; min-height: 100vh; }
 
+/* ─── Overlay escuro quando sidebar aberta no mobile ─── */
+.overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 99;
+}
+.overlay.open { display: block; }
+
+/* ─── Botão hambúrguer (só aparece no mobile) ─── */
+.menuBtn {
+  display: none;
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 200;
+  background: #0f2035;
+  border: none;
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+  color: white;
+}
+
 .sidebar {
   width: 220px;
   min-height: 100vh;
@@ -10,6 +35,7 @@
   top: 0; left: 0;
   z-index: 100;
   flex-shrink: 0;
+  transition: transform 0.25s ease;
 }
 
 .logo {
@@ -21,7 +47,6 @@
 }
 .logoTitle { display: block; font-size: 14px; font-weight: 600; color: white; }
 .logoSub { display: block; font-size: 10px; color: rgba(255,255,255,0.35); margin-top: 1px; }
-
 .nav { flex: 1; padding: 0.75rem 0; overflow-y: auto; }
 .navSection {
   display: block;
@@ -78,9 +103,31 @@
   padding: 1.5rem;
   flex: 1;
   min-height: 100vh;
+  /* Garante que o main nunca ultrapasse a largura da tela */
+  max-width: calc(100vw - 220px);
+  overflow-x: hidden;
 }
 
+/* ─── Mobile ─── */
 @media (max-width: 768px) {
-  .sidebar { width: 100%; min-height: auto; position: relative; flex-direction: row; flex-wrap: wrap; }
-  .main { margin-left: 0; }
+  .menuBtn { display: flex; }
+
+  /* Sidebar fica escondida fora da tela à esquerda */
+  .sidebar {
+    transform: translateX(-100%);
+    width: 240px;
+  }
+
+  /* Quando aberta, desliza para dentro */
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  /* Main ocupa a tela toda */
+  .main {
+    margin-left: 0;
+    max-width: 100vw;
+    padding: 1rem;
+    padding-top: 3.5rem; /* espaço para o botão hambúrguer */
+  }
 }

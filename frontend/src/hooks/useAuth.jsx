@@ -10,22 +10,30 @@ export function AuthProvider({ children }) {
       return saved ? JSON.parse(saved) : null;
     } catch { return null; }
   });
-  const [loading, setLoading] = useState(true);
+
+  // ✅ Fix: loading começa false se já tem usuário salvo
+  const [loading, setLoading] = useState(() => {
+    return !localStorage.getItem('docjuris_token');
+  });
 
   useEffect(() => {
     const token = localStorage.getItem('docjuris_token');
-    if (token) {
-      api.get('/auth/me')
-        .then(res => { setUser(res.data.user); })
-        .catch(() => {
-          localStorage.removeItem('docjuris_token');
-          localStorage.removeItem('docjuris_user');
-          setUser(null);
-        })
-        .finally(() => setLoading(false));
-    } else {
+    if (!token) {
       setLoading(false);
+      return;
     }
+
+    api.get('/auth/me')
+      .then(res => {
+        setUser(res.data.user);
+        localStorage.setItem('docjuris_user', JSON.stringify(res.data.user));
+      })
+      .catch(() => {
+        localStorage.removeItem('docjuris_token');
+        localStorage.removeItem('docjuris_user');
+        setUser(null);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const login = async (email, password) => {

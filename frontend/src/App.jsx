@@ -9,6 +9,7 @@ import ClientDetail from './pages/ClientDetail.jsx';
 import Documents from './pages/Documents.jsx';
 import Templates from './pages/Templates.jsx';
 import Users from './pages/Users.jsx';
+import UploadPage from './pages/UploadPage.jsx';
 
 function ProtectedRoute({ children, adminOnly }) {
   const { user, loading } = useAuth();
@@ -23,6 +24,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
+      <Route path="/upload/:token" element={<UploadPage />} />
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Dashboard />} />
         <Route path="clients" element={<Clients />} />

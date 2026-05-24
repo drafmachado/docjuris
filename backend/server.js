@@ -4,43 +4,40 @@ import fileUpload from 'express-fileupload';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { initDB } from './db.js';
-import authRoutes from './routes/auth.js';
-import clientRoutes from './routes/clients.js';
-import documentRoutes from './routes/documents.js';
-import templateRoutes from './routes/templates.js';
-import userRoutes from './routes/users.js';
+import authRoutes from './rotas/auth.js';
+import clientRoutes from './rotas/clientes.js';
+import documentRoutes from './rotas/documentos.js';
+import templateRoutes from './rotas/templates.js';
+import userRoutes from './rotas/usuários.js';
+import uploadLinkRoutes from './rotas/uploadLinks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
 app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173', credentials: true }));
 app.use(express.json());
 app.use(fileUpload({
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+  limits: { fileSize: 50 * 1024 * 1024 },
   useTempFiles: true,
   tempFileDir: path.join(__dirname, '../uploads_temp'),
 }));
 
-// Servir arquivos estáticos (PDFs gerados, templates)
 app.use('/files', express.static(path.join(__dirname, '../storage')));
 
-// Rotas
 app.use('/api/auth', authRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/upload-links', uploadLinkRoutes);
 
-// Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.0.0' }));
-// Landing Page
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
-// Servir frontend
 
 const frontendDist = path.join(__dirname, '../frontend/dist');
 app.use(express.static(frontendDist));
@@ -48,7 +45,6 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(frontendDist, 'index.html'));
 });
 
-// Inicializa DB e sobe servidor
 initDB();
 app.listen(PORT, () => {
   console.log(`✅ DocJuris API rodando em http://localhost:${PORT}`);

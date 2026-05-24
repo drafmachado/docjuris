@@ -15,7 +15,6 @@ export function getDB() {
 }
 
 export function initDB() {
-  // Garante que a pasta storage existe
   const storageDir = path.join(__dirname, '../storage');
   const templatesDir = path.join(storageDir, 'templates');
   const pdfsDir = path.join(storageDir, 'pdfs');
@@ -26,24 +25,21 @@ export function initDB() {
 
   const db = getDB();
 
-  // Ativar foreign keys
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 
-  // Tabela de usuários
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'colaborador', -- 'admin' | 'colaborador'
+      role TEXT NOT NULL DEFAULT 'colaborador',
       active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
 
-  // Tabela de clientes
   db.exec(`
     CREATE TABLE IF NOT EXISTS clients (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,7 +60,6 @@ export function initDB() {
     );
   `);
 
-  // Tabela de arquivos do cliente (docs enviados como RG, CPF, etc.)
   db.exec(`
     CREATE TABLE IF NOT EXISTS client_files (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,17 +73,14 @@ export function initDB() {
     );
   `);
 
-  // Tabela de templates
   db.exec(`
     CREATE TABLE IF NOT EXISTS templates (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
-      type TEXT NOT NULL, -- 'contrato' | 'procuracao' | 'declaracao' | 'peticao' | 'outro'
+      type TEXT NOT NULL,
       filename TEXT NOT NULL,
       original_name TEXT NOT NULL,
-      -- Campos extraídos automaticamente pelo sistema (JSON array de strings)
       auto_fields TEXT NOT NULL DEFAULT '[]',
-      -- Campos a preencher manualmente (JSON array de {key, label, type})
       manual_fields TEXT NOT NULL DEFAULT '[]',
       active INTEGER NOT NULL DEFAULT 1,
       created_by INTEGER REFERENCES users(id),
@@ -96,7 +88,6 @@ export function initDB() {
     );
   `);
 
-  // Tabela de documentos gerados
   db.exec(`
     CREATE TABLE IF NOT EXISTS documents (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -105,19 +96,34 @@ export function initDB() {
       generated_by INTEGER REFERENCES users(id),
       pdf_filename TEXT,
       docx_filename TEXT,
-      -- Campos manuais usados nesta geração (JSON object)
       manual_values TEXT NOT NULL DEFAULT '{}',
-      -- Campos auto extraídos usados (JSON object)
       auto_values TEXT NOT NULL DEFAULT '{}',
       email_sent INTEGER NOT NULL DEFAULT 0,
       email_sent_to TEXT,
       email_sent_at TEXT,
-      status TEXT NOT NULL DEFAULT 'gerado', -- 'gerado' | 'enviado' | 'erro'
+      status TEXT NOT NULL DEFAULT 'gerado',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
 
-  // Cria admin padrão se não existe
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS upload_links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      token TEXT UNIQUE NOT NULL,
+      client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      template_ids TEXT NOT NULL DEFAULT '[]',
+      required_docs TEXT NOT NULL DEFAULT '[]',
+      manual_values TEXT NOT NULL DEFAULT '{}',
+      message TEXT NOT NULL DEFAULT '',
+      received_docs TEXT NOT NULL DEFAULT '[]',
+      expires_at TEXT NOT NULL,
+      completed_at TEXT,
+      signed_at TEXT,
+      created_by INTEGER REFERENCES users(id),
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
   const adminExists = db.prepare('SELECT id FROM users WHERE role = ?').get('admin');
   if (!adminExists) {
     const hash = bcrypt.hashSync('admin123', 10);

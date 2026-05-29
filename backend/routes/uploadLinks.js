@@ -150,7 +150,9 @@ router.post('/:token/files', async (req, res) => {
  
   const fileArray = Object.values(files).flat();
  
-  const clientFilesDir = path.join(__dirname, '../../storage/client_files');
+  const clientFilesDir = process.env.NODE_ENV === 'production'
+    ? '/app/storage/client_files'
+    : path.join(__dirname, '../../storage/client_files');
   if (!fs.existsSync(clientFilesDir)) fs.mkdirSync(clientFilesDir, { recursive: true });
  
   const savedFiles = [];

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
 import { Card, Btn, Table, Tr, Td, Badge, FormField, FormGrid, EmptyState } from '../components/UI.jsx';
 import GenerateModal from '../components/GenerateModal.jsx';
+import UploadLinkModal from '../components/UploadLinkModal.jsx';
 import api from '../utils/api.js';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Upload, Trash2, Download } from 'lucide-react';
@@ -18,6 +19,7 @@ export default function ClientDetail() {
   const [client, setClient] = useState(null);
   const [tab, setTab] = useState('docs');
   const [showGenerate, setShowGenerate] = useState(false);
+  const [showUploadLink, setShowUploadLink] = useState(false);
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -66,106 +68,4 @@ export default function ClientDetail() {
 
   const initials = client.nome?.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
 
-  const tabs = [{ id: 'docs', label: 'Documentos' }, { id: 'data', label: 'Dados pessoais' }, { id: 'files', label: `Arquivos (${client.files?.length || 0})` }];
-
-  return (
-    <div>
-      <button onClick={() => navigate('/clients')} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: '#6b6b68', fontSize: 13, marginBottom: '1rem' }}>
-        <ArrowLeft size={14} /> Voltar
-      </button>
-
-      <Card style={{ padding: '1.25rem', marginBottom: '1rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#e8f0fe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 600, color: '#185fa5', flexShrink: 0 }}>
-            {initials}
-          </div>
-          <div style={{ flex: 1 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 600 }}>{client.nome}</h2>
-            <p style={{ fontSize: 13, color: '#6b6b68' }}>CPF: {client.cpf || '—'} · {[client.cidade, client.estado].filter(Boolean).join(', ') || '—'}</p>
-          </div>
-          <Btn onClick={() => setShowGenerate(true)}>+ Gerar Documento</Btn>
-        </div>
-      </Card>
-
-      <div style={{ display: 'flex', gap: 0, borderBottom: '0.5px solid rgba(0,0,0,0.1)', marginBottom: '1rem' }}>
-        {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={{
-            padding: '8px 16px', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer',
-            borderBottom: tab === t.id ? '2px solid #1a3a5c' : '2px solid transparent',
-            color: tab === t.id ? '#1a3a5c' : '#6b6b68', fontWeight: tab === t.id ? 500 : 400,
-            marginBottom: -1,
-          }}>{t.label}</button>
-        ))}
-      </div>
-
-      {tab === 'docs' && (
-        <Card>
-          <Table headers={['Documento', 'Gerado em', 'Por', 'Status', 'Ações']}>
-            {(client.documents || []).map(d => (
-              <Tr key={d.id}>
-                <Td>{d.template_name}</Td>
-                <Td muted>{fmt(d.created_at)}</Td>
-                <Td muted>{d.generated_by_name || '—'}</Td>
-                <Td><Badge color={statusColor(d.status)}>{d.status}</Badge></Td>
-                <Td>
-                  {d.pdf_filename && <a href={`/files/pdfs/${d.pdf_filename}`} target="_blank" rel="noreferrer" style={{ color: '#185fa5', fontSize: 12, marginRight: 8 }}>PDF</a>}
-                  {d.docx_filename && <a href={`/api/documents/${d.id}/download/docx`} style={{ color: '#185fa5', fontSize: 12, marginRight: 8 }}>DOCX</a>}
-                  <button onClick={() => handleResend(d.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#185fa5', fontSize: 12, textDecoration: 'underline' }}>Reenviar</button>
-                </Td>
-              </Tr>
-            ))}
-            {!client.documents?.length && <tr><td colSpan={5}><EmptyState icon="📄" title="Nenhum documento ainda" subtitle="Clique em 'Gerar Documento'" /></td></tr>}
-          </Table>
-        </Card>
-      )}
-
-      {tab === 'data' && (
-        <Card style={{ padding: '1.25rem' }}>
-          <FormGrid cols={2}>
-            <FormField label="Nome completo" col={2}><input value={form.nome || ''} onChange={e => set('nome', e.target.value)} /></FormField>
-            <FormField label="Nacionalidade"><input value={form.nacionalidade || ''} onChange={e => set('nacionalidade', e.target.value)} /></FormField>
-            <FormField label="CPF"><input value={form.cpf || ''} onChange={e => set('cpf', e.target.value)} /></FormField>
-            <FormField label="RG"><input value={form.rg || ''} onChange={e => set('rg', e.target.value)} /></FormField>
-            <FormField label="Órgão expedidor"><input value={form.orgao_expedidor || ''} onChange={e => set('orgao_expedidor', e.target.value)} /></FormField>
-            <FormField label="Endereço" col={2}><input value={form.endereco || ''} onChange={e => set('endereco', e.target.value)} /></FormField>
-            <FormField label="Cidade"><input value={form.cidade || ''} onChange={e => set('cidade', e.target.value)} /></FormField>
-            <FormField label="Estado"><input value={form.estado || ''} onChange={e => set('estado', e.target.value)} /></FormField>
-            <FormField label="Email"><input type="email" value={form.email || ''} onChange={e => set('email', e.target.value)} /></FormField>
-            <FormField label="Telefone"><input value={form.telefone || ''} onChange={e => set('telefone', e.target.value)} /></FormField>
-            <FormField label="Observações" col={2}><textarea value={form.observacoes || ''} onChange={e => set('observacoes', e.target.value)} /></FormField>
-          </FormGrid>
-          <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
-            <Btn onClick={handleSave} loading={saving}>Salvar alterações</Btn>
-          </div>
-        </Card>
-      )}
-
-      {tab === 'files' && (
-        <Card style={{ padding: '1.25rem' }}>
-          <div {...getRootProps()} style={{
-            border: `1.5px dashed ${isDragActive ? '#1a3a5c' : 'rgba(0,0,0,0.2)'}`,
-            borderRadius: 8, padding: '1.5rem', textAlign: 'center', cursor: 'pointer',
-            background: isDragActive ? '#f0f7ff' : '#fafaf8', marginBottom: '1rem',
-          }}>
-            <input {...getInputProps()} />
-            <Upload size={22} color="#6b6b68" style={{ margin: '0 auto 8px', display: 'block' }} />
-            <p style={{ fontSize: 13, color: '#6b6b68' }}>{uploading ? 'Enviando...' : 'Arraste ou clique para enviar arquivos'}</p>
-            <p style={{ fontSize: 11, color: '#9a9a97', marginTop: 4 }}>RG, CPF, comprovante, procuração, etc.</p>
-          </div>
-
-          {(client.files || []).map(f => (
-            <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: '#f5f5f0', borderRadius: 6, marginBottom: 6 }}>
-              <span style={{ fontSize: 13, flex: 1 }}>📄 {f.original_name}</span>
-              <span style={{ fontSize: 11, color: '#9a9a97' }}>{fmt(f.uploaded_at)}</span>
-              <a href={`/files/client_files/${f.filename}`} target="_blank" rel="noreferrer" style={{ color: '#185fa5' }}><Download size={14} /></a>
-              <button onClick={() => handleDeleteFile(f.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a32d2d' }}><Trash2 size={14} /></button>
-            </div>
-          ))}
-          {!client.files?.length && <EmptyState icon="📁" title="Nenhum arquivo" subtitle="Envie documentos do cliente acima" />}
-        </Card>
-      )}
-
-      <GenerateModal open={showGenerate} preselectedClient={client} onClose={() => setShowGenerate(false)} onSuccess={() => { setShowGenerate(false); load(); }} />
-    </div>
-  );
-}
+  const tabs = [{ id: 'docs', label: 'Documentos' }, { id: 'data', label: 'Dados pessoais'

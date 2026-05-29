@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import nodemailer from 'nodemailer';
 import { getDB } from '../db.js';
-import { authMiddleware } from './auth.js';
+import { authMiddleware } from '../middleware/auth.js';
 
 const router = express.Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

@@ -160,7 +160,20 @@ router.post('/:token/files', async (req, res) => {
   if (!fs.existsSync(clientFilesDir)) fs.mkdirSync(clientFilesDir, { recursive: true });
 
   const savedFiles = [];
-  const fileArray = Array.isArray(files.files) ? files.files : [files.files];
+  const ALLOWED_TYPES = [
+    'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+    'application/pdf',
+  ];
+  const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+
+  for (const file of fileArray) {
+    if (!ALLOWED_TYPES.includes(file.mimetype)) {
+      return res.status(400).json({ error: `Tipo de arquivo não permitido: ${file.name}. Envie apenas imagens ou PDF.` });
+    }
+    if (file.size > MAX_SIZE) {
+      return res.status(400).json({ error: `Arquivo muito grande: ${file.name}. Máximo 10MB.` });
+    }
+  }
 
   for (const file of fileArray) {
     const ext = path.extname(file.name);

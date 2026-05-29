@@ -184,7 +184,7 @@ export default function UploadPage() {
 // ─── Componente de upload individual ─────────────────────────────────────────
 function DocUploadCard({ doc, status, active, onSetActive, onDrop }) {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
+    onDrop: (acceptedFiles) => onDrop(acceptedFiles),
     multiple: true,
     accept: {
       'image/*': ['.jpg', '.jpeg', '.png', '.heic', '.webp'],

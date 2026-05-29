@@ -48,7 +48,7 @@ export default function UploadLinkModal({ open, client, onClose }) {
     selectedTemplates.forEach(id => {
       const t = templates.find(t => t.id === id);
       if (!t) return;
-      const mf = JSON.parse(t.manual_fields || '[]');
+      const mf = Array.isArray(t.manual_fields) ? t.manual_fields : JSON.parse(t.manual_fields || '[]');
       mf.forEach(f => {
         if (!seen.has(f.key)) {
           seen.add(f.key);

@@ -34,14 +34,24 @@ app.use('/api/upload-links', uploadLinkRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.0.0' }));
 
+// 1. Landing page (tem prioridade sobre o React)
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// 2. React app
 const frontendDist = path.join(__dirname, '../frontend/dist');
 app.use(express.static(frontendDist));
+
+// 3. Catch-all — protege /api e garante landing na raiz
 app.get('*', (req, res) => {
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  if (req.path === '/') {
+    return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  }
   res.sendFile(path.join(frontendDist, 'index.html'));
 });
 

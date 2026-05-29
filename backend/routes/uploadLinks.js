@@ -4,33 +4,25 @@ import { randomBytes } from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { getDB } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
  
 const router = express.Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
  
-// ─── Email helper ─────────────────────────────────────────────────────────────
-function createTransporter() {
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS, // App Password do Gmail
-    },
-  });
-}
+// ─── Email helper (Resend) ────────────────────────────────────────────────────
+const resend = new Resend(process.env.RESEND_API_KEY);
  
 async function sendNotification({ to, subject, html }) {
   try {
-    const transporter = createTransporter();
-    await transporter.sendMail({
-      from: `"DocJuris" <${process.env.EMAIL_USER}>`,
+    await resend.emails.send({
+      from: 'DocJuris <onboarding@resend.dev>',
       to,
       subject,
       html,
     });
+    console.log(`✅ Email enviado para ${to}`);
   } catch (err) {
     console.error('❌ Erro ao enviar email:', err.message);
   }
@@ -41,11 +33,11 @@ router.post('/', authMiddleware, (req, res) => {
   const db = getDB();
   const {
     client_id,
-    template_ids,      // array de IDs de templates a gerar
-    required_docs,     // array de { key, label } — docs que o cliente deve enviar
-    manual_values,     // { honorarios, valor, etc. } — valores manuais
-    message,           // mensagem personalizada para o cliente
-    expires_in_days,   // 3, 7, 15 dias
+    template_ids,
+    required_docs,
+    manual_values,
+    message,
+    expires_in_days,
   } = req.body;
  
   if (!client_id || !template_ids?.length) {
@@ -115,7 +107,6 @@ router.get('/:token', (req, res) => {
     return res.status(410).json({ error: 'Este link expirou' });
   }
  
-  // Busca info dos templates
   const templateIds = JSON.parse(link.template_ids || '[]');
   const templates = templateIds.map(id =>
     db.prepare('SELECT id, name, type, manual_fields FROM templates WHERE id = ?').get(id)
@@ -156,8 +147,7 @@ router.post('/:token/files', async (req, res) => {
     return res.status(400).json({ error: 'Nenhum arquivo enviado' });
   }
  
-  // ✅ CORREÇÃO: converte objeto do express-fileupload para array plano
-  // Suporta tanto campo único (objeto) quanto múltiplos arquivos no mesmo campo (array)
+  // Converte objeto do express-fileupload para array plano
   const fileArray = Object.values(files).flat();
  
   const clientFilesDir = path.join(__dirname, '../../storage/client_files');
@@ -170,7 +160,6 @@ router.post('/:token/files', async (req, res) => {
   ];
   const MAX_SIZE = 10 * 1024 * 1024; // 10MB
  
-  // Valida todos os arquivos antes de salvar qualquer um
   for (const file of fileArray) {
     if (!ALLOWED_TYPES.includes(file.mimetype)) {
       return res.status(400).json({ error: `Tipo de arquivo não permitido: ${file.name}. Envie apenas imagens ou PDF.` });
@@ -180,7 +169,6 @@ router.post('/:token/files', async (req, res) => {
     }
   }
  
-  // Salva os arquivos validados
   for (const file of fileArray) {
     const ext = path.extname(file.name);
     const filename = `${Date.now()}_${randomBytes(8).toString('hex')}${ext}`;
@@ -195,7 +183,6 @@ router.post('/:token/files', async (req, res) => {
     savedFiles.push({ filename, original_name: file.name });
   }
  
-  // Salva quais docs foram enviados neste link
   const docKey = req.body.doc_key || 'arquivo';
   const existing = JSON.parse(link.received_docs || '[]');
   existing.push({ doc_key: docKey, files: savedFiles, sent_at: new Date().toISOString() });
@@ -204,21 +191,17 @@ router.post('/:token/files', async (req, res) => {
     UPDATE upload_links SET received_docs = ? WHERE token = ?
   `).run(JSON.stringify(existing), link.token);
  
-  // ── Verifica se todos os documentos foram enviados ──
   const requiredDocs = JSON.parse(link.required_docs || '[]');
   const sentKeys = existing.map(d => d.doc_key);
   const allSent = requiredDocs.every(d => sentKeys.includes(d.key));
  
   if (allSent && !link.completed_at) {
-    // Marca como completo
     db.prepare(`
       UPDATE upload_links SET completed_at = datetime('now') WHERE token = ?
     `).run(link.token);
  
-    // ── Geração automática dos documentos ──
     await generateDocumentsAutomatically(db, link);
  
-    // ── Notificação por email para a advogada ──
     const baseUrl = process.env.BASE_URL || 'https://docjuris-production.up.railway.app';
     await sendNotification({
       to: 'fmachado.andreia@gmail.com',
@@ -252,7 +235,6 @@ async function generateDocumentsAutomatically(db, link) {
       const template = db.prepare('SELECT * FROM templates WHERE id = ?').get(templateId);
       if (!template) continue;
  
-      // Campos automáticos do cliente
       const autoValues = {
         nome: client.nome || '',
         nacionalidade: client.nacionalidade || '',
@@ -267,10 +249,7 @@ async function generateDocumentsAutomatically(db, link) {
         data_atual: new Date().toLocaleDateString('pt-BR'),
       };
  
-      // Combina com valores manuais
       const allValues = { ...autoValues, ...manualValues };
- 
-      // Gera o documento via rota interna (reutiliza lógica existente)
       const docxFilename = await fillTemplate(template, allValues, client);
  
       if (docxFilename) {

@@ -7,6 +7,7 @@ import fs from 'fs';
 import { Resend } from 'resend';
 import { getDB } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { extractClientData } from '../services/ai.js';
  
 const router = express.Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -147,22 +148,18 @@ router.post('/:token/files', async (req, res) => {
     return res.status(400).json({ error: 'Nenhum arquivo enviado' });
   }
  
-  // Converte objeto do express-fileupload para array plano
   const fileArray = Object.values(files).flat();
  
   const clientFilesDir = path.join(__dirname, '../../storage/client_files');
   if (!fs.existsSync(clientFilesDir)) fs.mkdirSync(clientFilesDir, { recursive: true });
  
   const savedFiles = [];
-  const ALLOWED_TYPES = [
-    'image/jpeg', 'image/png', 'image/webp', 'image/gif',
-    'application/pdf',
-  ];
-  const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+  const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
+  const MAX_SIZE = 10 * 1024 * 1024;
  
   for (const file of fileArray) {
     if (!ALLOWED_TYPES.includes(file.mimetype)) {
-      return res.status(400).json({ error: `Tipo de arquivo não permitido: ${file.name}. Envie apenas imagens ou PDF.` });
+      return res.status(400).json({ error: `Tipo não permitido: ${file.name}. Envie apenas imagens ou PDF.` });
     }
     if (file.size > MAX_SIZE) {
       return res.status(400).json({ error: `Arquivo muito grande: ${file.name}. Máximo 10MB.` });
@@ -187,21 +184,76 @@ router.post('/:token/files', async (req, res) => {
   const existing = JSON.parse(link.received_docs || '[]');
   existing.push({ doc_key: docKey, files: savedFiles, sent_at: new Date().toISOString() });
  
-  db.prepare(`
-    UPDATE upload_links SET received_docs = ? WHERE token = ?
-  `).run(JSON.stringify(existing), link.token);
+  db.prepare(`UPDATE upload_links SET received_docs = ? WHERE token = ?`)
+    .run(JSON.stringify(existing), link.token);
  
   const requiredDocs = JSON.parse(link.required_docs || '[]');
   const sentKeys = existing.map(d => d.doc_key);
   const allSent = requiredDocs.every(d => sentKeys.includes(d.key));
  
   if (allSent && !link.completed_at) {
-    db.prepare(`
-      UPDATE upload_links SET completed_at = datetime('now') WHERE token = ?
-    `).run(link.token);
+    db.prepare(`UPDATE upload_links SET completed_at = datetime('now') WHERE token = ?`)
+      .run(link.token);
  
+    // ── Extrai dados do cliente a partir dos arquivos enviados via IA ──
+    try {
+      console.log('🤖 Extraindo dados do cliente via IA...');
+      const allClientFiles = db.prepare(
+        'SELECT * FROM client_files WHERE client_id = ? ORDER BY uploaded_at DESC LIMIT 10'
+      ).all(link.client_id);
+ 
+      const fileObjects = allClientFiles
+        .map(f => {
+          const filePath = path.join(clientFilesDir, f.filename);
+          if (!fs.existsSync(filePath)) return null;
+          return {
+            name: f.original_name,
+            mimetype: f.mimetype,
+            data: fs.readFileSync(filePath),
+            size: f.size,
+          };
+        })
+        .filter(Boolean);
+ 
+      if (fileObjects.length > 0) {
+        const extracted = await extractClientData(fileObjects);
+        const current = db.prepare('SELECT * FROM clients WHERE id = ?').get(link.client_id);
+ 
+        const updated = {
+          nome:            extracted.nome            || current.nome,
+          nacionalidade:   extracted.nacionalidade   || current.nacionalidade,
+          cpf:             extracted.cpf             || current.cpf,
+          rg:              extracted.rg              || current.rg,
+          orgao_expedidor: extracted.orgao_expedidor || current.orgao_expedidor,
+          endereco:        extracted.endereco        || current.endereco,
+          cidade:          extracted.cidade          || current.cidade,
+          estado:          extracted.estado          || current.estado,
+          email:           extracted.email           || current.email,
+          telefone:        extracted.telefone        || current.telefone,
+        };
+ 
+        db.prepare(`
+          UPDATE clients SET
+            nome = ?, nacionalidade = ?, cpf = ?, rg = ?, orgao_expedidor = ?,
+            endereco = ?, cidade = ?, estado = ?, email = ?, telefone = ?,
+            updated_at = datetime('now')
+          WHERE id = ?
+        `).run(
+          updated.nome, updated.nacionalidade, updated.cpf, updated.rg, updated.orgao_expedidor,
+          updated.endereco, updated.cidade, updated.estado, updated.email, updated.telefone,
+          link.client_id,
+        );
+ 
+        console.log(`✅ Dados do cliente ${link.client_nome} atualizados via IA`);
+      }
+    } catch (err) {
+      console.error('❌ Erro na extração automática de dados:', err.message);
+    }
+ 
+    // ── Geração automática dos documentos ──
     await generateDocumentsAutomatically(db, link);
  
+    // ── Notificação por email ──
     const baseUrl = process.env.BASE_URL || 'https://docjuris-production.up.railway.app';
     await sendNotification({
       to: 'fmachado.andreia@gmail.com',
@@ -210,7 +262,7 @@ router.post('/:token/files', async (req, res) => {
         <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
           <h2 style="color:#1a3a5c">Documentos recebidos!</h2>
           <p>O cliente <strong>${link.client_nome}</strong> enviou todos os documentos solicitados.</p>
-          <p>Os documentos foram <strong>gerados automaticamente</strong> e já estão disponíveis na pasta do cliente.</p>
+          <p>Os dados foram <strong>extraídos automaticamente</strong> e o contrato foi gerado.</p>
           <a href="${baseUrl}/clients/${link.client_id}"
              style="display:inline-block;background:#1a3a5c;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:16px">
             Ver pasta do cliente
@@ -229,6 +281,8 @@ async function generateDocumentsAutomatically(db, link) {
   try {
     const templateIds = JSON.parse(link.template_ids || '[]');
     const manualValues = JSON.parse(link.manual_values || '{}');
+ 
+    // Busca cliente já atualizado pela IA
     const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(link.client_id);
  
     for (const templateId of templateIds) {
@@ -236,17 +290,19 @@ async function generateDocumentsAutomatically(db, link) {
       if (!template) continue;
  
       const autoValues = {
-        nome: client.nome || '',
-        nacionalidade: client.nacionalidade || '',
-        cpf: client.cpf || '',
-        rg: client.rg || '',
-        orgao_expedidor: client.orgao_expedidor || '',
-        endereco: client.endereco || '',
-        cidade: client.cidade || '',
-        estado: client.estado || '',
-        email: client.email || '',
-        telefone: client.telefone || '',
-        data_atual: new Date().toLocaleDateString('pt-BR'),
+        nome:                   client.nome            || '',
+        nacionalidade:          client.nacionalidade   || '',
+        cpf:                    client.cpf             || '',
+        rg:                     client.rg              || '',
+        orgao_expedidor:        client.orgao_expedidor || '',
+        endereco:               client.endereco        || '',
+        cidade:                 client.cidade          || '',
+        estado:                 client.estado          || '',
+        // ✅ Campo combinado para o template
+        cidade_estado:          [client.cidade, client.estado].filter(Boolean).join(', ') || '',
+        email:                  client.email           || '',
+        telefone:               client.telefone        || '',
+        data_atual:             new Date().toLocaleDateString('pt-BR'),
       };
  
       const allValues = { ...autoValues, ...manualValues };
@@ -279,7 +335,11 @@ async function fillTemplate(template, values, client) {
     const Docxtemplater = (await import('docxtemplater')).default;
     const { randomBytes } = await import('crypto');
  
-    const templatePath = path.join(__dirname, '../../storage/templates', template.filename);
+    const storageDir = process.env.NODE_ENV === 'production'
+      ? '/app/storage'
+      : path.join(__dirname, '../../storage');
+ 
+    const templatePath = path.join(storageDir, 'templates', template.filename);
     if (!fs.existsSync(templatePath)) return null;
  
     const content = fs.readFileSync(templatePath, 'binary');
@@ -294,7 +354,7 @@ async function fillTemplate(template, values, client) {
  
     const buf = doc.getZip().generate({ type: 'nodebuffer' });
     const filename = `${Date.now()}_${randomBytes(4).toString('hex')}.docx`;
-    const outPath = path.join(__dirname, '../../storage/pdfs', filename);
+    const outPath = path.join(storageDir, 'pdfs', filename);
     fs.writeFileSync(outPath, buf);
  
     return filename;
@@ -304,15 +364,14 @@ async function fillTemplate(template, values, client) {
   }
 }
  
-// ─── POST /api/upload-links/:token/sign — Cliente assina (hook futuro) ───────
+// ─── POST /api/upload-links/:token/sign ──────────────────────────────────────
 router.post('/:token/sign', async (req, res) => {
   const db = getDB();
   const link = db.prepare('SELECT * FROM upload_links WHERE token = ?').get(req.params.token);
   if (!link) return res.status(404).json({ error: 'Link não encontrado' });
  
-  db.prepare(`
-    UPDATE upload_links SET signed_at = datetime('now') WHERE token = ?
-  `).run(link.token);
+  db.prepare(`UPDATE upload_links SET signed_at = datetime('now') WHERE token = ?`)
+    .run(link.token);
  
   const client = db.prepare('SELECT nome FROM clients WHERE id = ?').get(link.client_id);
   const baseUrl = process.env.BASE_URL || 'https://docjuris-production.up.railway.app';

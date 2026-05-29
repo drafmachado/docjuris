@@ -3,31 +3,39 @@ import bcrypt from 'bcryptjs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
-
+ 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_PATH = path.join(__dirname, '../storage/docjuris.db');
-
+ 
+// Em produção usa o volume do Railway (/app/storage), em dev usa pasta local
+const DB_PATH = process.env.NODE_ENV === 'production'
+  ? '/app/storage/docjuris.db'
+  : path.join(__dirname, '../storage/docjuris.db');
+ 
 let db;
-
+ 
 export function getDB() {
   if (!db) db = new Database(DB_PATH);
   return db;
 }
-
+ 
 export function initDB() {
-  const storageDir = path.join(__dirname, '../storage');
+  const storageDir = process.env.NODE_ENV === 'production'
+    ? '/app/storage'
+    : path.join(__dirname, '../storage');
+ 
   const templatesDir = path.join(storageDir, 'templates');
   const pdfsDir = path.join(storageDir, 'pdfs');
   const clientFilesDir = path.join(storageDir, 'client_files');
+ 
   [storageDir, templatesDir, pdfsDir, clientFilesDir].forEach(d => {
     if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
   });
-
+ 
   const db = getDB();
-
+ 
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
-
+ 
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,7 +47,7 @@ export function initDB() {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
-
+ 
   db.exec(`
     CREATE TABLE IF NOT EXISTS clients (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,7 +67,7 @@ export function initDB() {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
-
+ 
   db.exec(`
     CREATE TABLE IF NOT EXISTS client_files (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,7 +80,7 @@ export function initDB() {
       uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
-
+ 
   db.exec(`
     CREATE TABLE IF NOT EXISTS templates (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,7 +95,7 @@ export function initDB() {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
-
+ 
   db.exec(`
     CREATE TABLE IF NOT EXISTS documents (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -105,7 +113,7 @@ export function initDB() {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
-
+ 
   db.exec(`
     CREATE TABLE IF NOT EXISTS upload_links (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -123,7 +131,7 @@ export function initDB() {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
-
+ 
   const adminExists = db.prepare('SELECT id FROM users WHERE role = ?').get('admin');
   if (!adminExists) {
     const hash = bcrypt.hashSync('admin123', 10);
@@ -134,6 +142,7 @@ export function initDB() {
     console.log('👤 Usuário admin criado: admin@escritorio.com / admin123');
     console.log('⚠️  TROQUE A SENHA após o primeiro login!');
   }
-
+ 
   console.log('🗄️  Banco de dados inicializado');
 }
+ 

@@ -251,7 +251,7 @@ function DocUploadCard({ doc, status, active, onSetActive, onDrop }) {
             {isSending ? 'Enviando...' : 'Toque aqui ou arraste o arquivo'}
           </p>
           <p style={{ fontSize: 11, color: '#9a9a97', margin: 0 }}>
-            JPG, PNG, HEIC ou PDF · Máx. 50MB
+            JPG, PNG, HEIC ou PDF · Máx. 5MB
           </p>
         </div>
       )}

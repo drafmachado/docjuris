@@ -4,12 +4,12 @@ import fileUpload from 'express-fileupload';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { initDB } from './db.js';
-import authRoutes from './rotas/auth.js';
-import clientRoutes from './rotas/clientes.js';
-import documentRoutes from './rotas/documentos.js';
-import templateRoutes from './rotas/templates.js';
-import userRoutes from './rotas/usuários.js';
-import uploadLinkRoutes from './rotas/uploadLinks.js';
+import authRoutes from './routes/auth.js';
+import clientRoutes from './routes/clients.js';
+import documentRoutes from './routes/documents.js';
+import templateRoutes from './routes/templates.js';
+import userRoutes from './routes/users.js';
+import uploadLinkRoutes from './routes/uploadLinks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();

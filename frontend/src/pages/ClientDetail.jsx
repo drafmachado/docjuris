@@ -40,6 +40,21 @@ export default function ClientDetail() {
     finally { setSaving(false); }
   };
 
+  // ✅ Download DOCX com autenticação via token
+  const handleDownloadDocx = async (docId) => {
+    try {
+      const res = await api.get(`/documents/${docId}/download/docx`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `documento_${docId}.docx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch { toast.error('Erro ao baixar documento'); }
+  };
+
   const onDrop = useCallback(async accepted => {
     setUploading(true);
     const fd = new FormData();
@@ -90,7 +105,8 @@ export default function ClientDetail() {
           </div>
         </div>
       </Card>
-            <div style={{ display: 'flex', gap: 0, borderBottom: '0.5px solid rgba(0,0,0,0.1)', marginBottom: '1rem' }}>
+
+      <div style={{ display: 'flex', gap: 0, borderBottom: '0.5px solid rgba(0,0,0,0.1)', marginBottom: '1rem' }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             padding: '8px 16px', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer',
@@ -111,13 +127,26 @@ export default function ClientDetail() {
                 <Td muted>{d.generated_by_name || '—'}</Td>
                 <Td><Badge color={statusColor(d.status)}>{d.status}</Badge></Td>
                 <Td>
-                  {d.pdf_filename && <a href={`/files/pdfs/${d.pdf_filename}`} target="_blank" rel="noreferrer" style={{ color: '#185fa5', fontSize: 12, marginRight: 8 }}>PDF</a>}
-                  {d.docx_filename && <a href={`/api/documents/${d.id}/download/docx`} style={{ color: '#185fa5', fontSize: 12, marginRight: 8 }}>DOCX</a>}
-                  <button onClick={() => handleResend(d.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#185fa5', fontSize: 12, textDecoration: 'underline' }}>Reenviar</button>
+                  {d.pdf_filename && (
+                    <a href={`/files/pdfs/${d.pdf_filename}`} target="_blank" rel="noreferrer"
+                      style={{ color: '#185fa5', fontSize: 12, marginRight: 8 }}>PDF</a>
+                  )}
+                  {d.docx_filename && (
+                    <button onClick={() => handleDownloadDocx(d.id)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#185fa5', fontSize: 12, marginRight: 8, textDecoration: 'underline' }}>
+                      DOCX
+                    </button>
+                  )}
+                  <button onClick={() => handleResend(d.id)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#185fa5', fontSize: 12, textDecoration: 'underline' }}>
+                    Reenviar
+                  </button>
                 </Td>
               </Tr>
             ))}
-            {!client.documents?.length && <tr><td colSpan={5}><EmptyState icon="📄" title="Nenhum documento ainda" subtitle="Clique em 'Gerar Documento'" /></td></tr>}
+            {!client.documents?.length && (
+              <tr><td colSpan={5}><EmptyState icon="📄" title="Nenhum documento ainda" subtitle="Clique em 'Gerar Documento'" /></td></tr>
+            )}
           </Table>
         </Card>
       )}

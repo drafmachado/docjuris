@@ -211,7 +211,7 @@ router.post('/:token/files', async (req, res) => {
           return {
             name: f.original_name,
             mimetype: f.mimetype,
-            data: fs.readFileSync(filePath),
+            tempFilePath: filePath,
             size: f.size,
           };
         })

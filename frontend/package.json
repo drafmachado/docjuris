@@ -15,7 +15,8 @@
     "react-hot-toast": "^2.4.1",
     "react-dropzone": "^14.2.3",
     "date-fns": "^3.6.0",
-    "lucide-react": "^0.383.0"
+    "lucide-react": "^0.383.0",
+    "recharts": "^2.12.7"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.0",

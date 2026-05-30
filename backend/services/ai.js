@@ -49,7 +49,7 @@ Responda APENAS com um JSON válido, sem markdown, sem explicações, no seguint
   "cpf": "000.000.000-00",
   "rg": "00.000.000-0",
   "orgao_expedidor": "SSP-RJ ou similar",
-  "endereco": "Rua, número, bairro",
+  "endereco": "Rua, número, bairro, CEP",
   "cidade": "Cidade",
   "estado": "UF",
   "email": "email@exemplo.com ou null",

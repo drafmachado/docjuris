@@ -1,20 +1,20 @@
 import Anthropic from '@anthropic-ai/sdk';
 import fs from 'fs';
 import path from 'path';
-
+ 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
-
+ 
 // Extrai dados pessoais de documentos do cliente (RG, CPF, comprovante de residência, etc.)
 export async function extractClientData(files) {
   const contentParts = [];
-
+ 
   for (const file of files) {
     const ext = path.extname(file.name).toLowerCase();
     const isImage = ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext);
     const isPDF = ext === '.pdf';
-
+ 
     if (isImage) {
       const data = fs.readFileSync(file.tempFilePath);
       const base64 = data.toString('base64');
@@ -34,11 +34,11 @@ export async function extractClientData(files) {
       contentParts.push({ type: 'text', text: `[Arquivo PDF: ${file.name}]` });
     }
   }
-
+ 
   if (contentParts.length === 0) {
     throw new Error('Nenhum arquivo de imagem ou PDF válido encontrado');
   }
-
+ 
   contentParts.push({
     type: 'text',
     text: `Analise os documentos enviados e extraia os dados pessoais do cliente.
@@ -49,7 +49,7 @@ Responda APENAS com um JSON válido, sem markdown, sem explicações, no seguint
   "cpf": "000.000.000-00",
   "rg": "00.000.000-0",
   "orgao_expedidor": "SSP-RJ ou similar",
-  "endereco": "Rua, número, bairro, CEP",
+  "endereco": "Rua, número, bairro, CEP, Cidade, UF",
   "cidade": "Cidade",
   "estado": "UF",
   "email": "email@exemplo.com ou null",
@@ -57,25 +57,26 @@ Responda APENAS com um JSON válido, sem markdown, sem explicações, no seguint
   "confianca": "alta | media | baixa",
   "observacoes": "qualquer observação relevante sobre a extração ou null"
 }
-Se algum campo não estiver visível, use null. Formate CPF como 000.000.000-00 e RG como padronizado.`
+Se algum campo não estiver visível, use null. Formate CPF como 000.000.000-00 e RG como padronizado.
+IMPORTANTE: O campo "endereco" deve conter o endereço COMPLETO incluindo rua, número, bairro, CEP, cidade e estado (sigla UF), tudo junto separado por vírgulas. Exemplo: "R. Paulo Pereira Camara, 105, Barra da Tijuca, 22610-200, Rio de Janeiro, RJ".`
   });
-
+ 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1000,
     messages: [{ role: 'user', content: contentParts }],
   });
-
+ 
   const text = response.content.map(b => b.text || '').join('');
   const clean = text.replace(/```json|```/g, '').trim();
-
+ 
   try {
     return JSON.parse(clean);
   } catch {
     throw new Error('IA não conseguiu extrair os dados no formato esperado. Tente com documentos mais legíveis.');
   }
 }
-
+ 
 // Preenche os campos de um template com dados do cliente + campos manuais
 export async function fillTemplateFields(templateContent, clientData, manualFields, autoFieldsMap) {
   // Monta o mapeamento de campos automáticos a partir dos dados do cliente
@@ -83,7 +84,7 @@ export async function fillTemplateFields(templateContent, clientData, manualFiel
   for (const [placeholder, clientKey] of Object.entries(autoFieldsMap)) {
     autoValues[placeholder] = clientData[clientKey] || '';
   }
-
+ 
   // Se o template tiver campos que não mapeamos diretamente, usamos IA para inferir
   const unmapped = [];
   const allPlaceholders = extractPlaceholders(templateContent);
@@ -92,40 +93,40 @@ export async function fillTemplateFields(templateContent, clientData, manualFiel
       unmapped.push(ph);
     }
   }
-
+ 
   if (unmapped.length > 0) {
     const inferred = await inferRemainingFields(unmapped, clientData);
     Object.assign(autoValues, inferred);
   }
-
+ 
   return { ...autoValues, ...manualFields };
 }
-
+ 
 // Extrai todos os placeholders {{CAMPO}} de um texto
 export function extractPlaceholders(text) {
   const matches = text.match(/\{\{([^}]+)\}\}/g) || [];
   return [...new Set(matches.map(m => m.replace(/\{\{|\}\}/g, '').trim()))];
 }
-
+ 
 // Usa IA para inferir campos não mapeados a partir dos dados do cliente
 async function inferRemainingFields(fields, clientData) {
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     max_tokens: 500,
     messages: [{
       role: 'user',
       content: `Dados do cliente: ${JSON.stringify(clientData)}
-
+ 
 Preciso preencher os seguintes campos de um documento jurídico:
 ${fields.join('\n')}
-
+ 
 Responda APENAS com JSON sem markdown:
 { "NomeCampo": "valor inferido ou string vazia" }
-
+ 
 Use os dados do cliente para inferir os valores. Para campos que não podem ser inferidos dos dados, retorne string vazia.`
     }]
   });
-
+ 
   const text = response.content.map(b => b.text || '').join('');
   try {
     return JSON.parse(text.replace(/```json|```/g, '').trim());
@@ -133,24 +134,24 @@ Use os dados do cliente para inferir os valores. Para campos que não podem ser 
     return {};
   }
 }
-
+ 
 // Analisa um template .docx e identifica os campos
 export async function analyzeTemplateFields(templateText) {
   const placeholders = extractPlaceholders(templateText);
-
+ 
   if (placeholders.length === 0) return { auto_fields: [], manual_fields: [] };
-
+ 
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     max_tokens: 1000,
     messages: [{
       role: 'user',
       content: `Analise estes campos de um template de documento jurídico e classifique cada um:
 ${placeholders.join(', ')}
-
+ 
 Campos AUTO são dados pessoais do cliente (nome, CPF, RG, endereço, etc.) que podem ser extraídos de documentos.
 Campos MANUAL são dados do serviço/contrato (valores, datas, percentuais, forma de pagamento, etc.) que precisam ser preenchidos manualmente.
-
+ 
 Responda APENAS com JSON válido:
 {
   "auto_fields": ["CAMPO1", "CAMPO2"],
@@ -161,7 +162,7 @@ Responda APENAS com JSON válido:
 }`
     }]
   });
-
+ 
   const text = response.content.map(b => b.text || '').join('');
   try {
     return JSON.parse(text.replace(/```json|```/g, '').trim());
@@ -173,3 +174,4 @@ Responda APENAS com JSON válido:
     };
   }
 }
+ 

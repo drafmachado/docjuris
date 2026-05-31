@@ -8,7 +8,7 @@ import { Resend } from 'resend';
 import { getDB } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { extractClientData } from '../services/ai.js';
-import { enviarParaAssinatura } from '../services/zapsign.js';
+import { createDocument } from '../services/autentique.js';
 
 const router = express.Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

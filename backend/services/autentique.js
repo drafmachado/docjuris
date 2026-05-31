@@ -10,22 +10,6 @@ if (!AUTENTIQUE_API_TOKEN) {
   console.warn('[autentique] AUTENTIQUE_API_TOKEN nao definido. Configure no Railway.');
 }
 
-// Normaliza telefone para o formato +55XXXXXXXXXXX
-function normalizarTelefone(telefone) {
-  if (!telefone) return null;
-  // Remove tudo que nao for digito
-  const digits = telefone.replace(/\D/g, '');
-  // Se ja tem 13 digitos comecando com 55, adiciona o +
-  if (digits.length === 13 && digits.startsWith('55')) return `+${digits}`;
-  // Se tem 11 digitos (DDD + numero), adiciona +55
-  if (digits.length === 11) return `+55${digits}`;
-  // Se tem 10 digitos (DDD + numero sem o 9), adiciona +55
-  if (digits.length === 10) return `+55${digits}`;
-  // Se ja veio com + na frente
-  if (telefone.startsWith('+')) return `+${digits}`;
-  return null;
-}
-
 export async function createDocument({ name, filePath, fileBuffer, fileName, signers, options = {} }) {
   const mutation = `
     mutation CreateDocumentMutation(
@@ -58,25 +42,7 @@ export async function createDocument({ name, filePath, fileBuffer, fileName, sig
 
   const variables = {
     document: { name, ...options },
-    signers: signers.map((s) => {
-      const telefoneNormalizado = normalizarTelefone(s.phone);
-
-      // Se tiver telefone valido, entrega por WhatsApp
-      if (telefoneNormalizado) {
-        return {
-          action: 'SIGN',
-          name: s.name || s.email || 'Signatario',
-          phone: telefoneNormalizado,
-          delivery_method: 'DELIVERY_METHOD_WHATSAPP',
-        };
-      }
-
-      // Fallback: entrega por email
-      return {
-        action: 'SIGN',
-        ...s,
-      };
-    }),
+    signers: signers.map((s) => ({ action: 'SIGN', ...s })),
     file: null,
   };
 

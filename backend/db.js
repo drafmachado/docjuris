@@ -99,3 +99,55 @@ export function initDB() {
     CREATE TABLE IF NOT EXISTS documents (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       client_id INTEGER NOT NULL REFERENCES clients(id),
+      template_id INTEGER NOT NULL REFERENCES templates(id),
+      generated_by INTEGER REFERENCES users(id),
+      pdf_filename TEXT,
+      docx_filename TEXT,
+      manual_values TEXT NOT NULL DEFAULT '{}',
+      auto_values TEXT NOT NULL DEFAULT '{}',
+      email_sent INTEGER NOT NULL DEFAULT 0,
+      email_sent_to TEXT,
+      email_sent_at TEXT,
+      status TEXT NOT NULL DEFAULT 'gerado',
+      zapsign_doc_token TEXT,
+      signed_pdf_filename TEXT,
+      signed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  try { db.exec(`ALTER TABLE documents ADD COLUMN zapsign_doc_token TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE documents ADD COLUMN signed_pdf_filename TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE documents ADD COLUMN signed_at TEXT`); } catch {}
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS upload_links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      token TEXT UNIQUE NOT NULL,
+      client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      template_ids TEXT NOT NULL DEFAULT '[]',
+      required_docs TEXT NOT NULL DEFAULT '[]',
+      manual_values TEXT NOT NULL DEFAULT '{}',
+      message TEXT NOT NULL DEFAULT '',
+      received_docs TEXT NOT NULL DEFAULT '[]',
+      expires_at TEXT NOT NULL,
+      completed_at TEXT,
+      signed_at TEXT,
+      created_by INTEGER REFERENCES users(id),
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  const adminExists = db.prepare('SELECT id FROM users WHERE role = ?').get('admin');
+  if (!adminExists) {
+    const hash = bcrypt.hashSync('admin123', 10);
+    db.prepare(`
+      INSERT INTO users (name, email, password_hash, role)
+      VALUES (?, ?, ?, ?)
+    `).run('Administrador', 'admin@escritorio.com', hash, 'admin');
+    console.log('👤 Usuário admin criado: admin@escritorio.com / admin123');
+    console.log('⚠️  TROQUE A SENHA após o primeiro login!');
+  }
+
+  console.log('🗄️  Banco de dados inicializado');
+}

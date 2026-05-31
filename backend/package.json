@@ -20,6 +20,8 @@
     "pdf-lib": "^1.17.1",
     "pizzip": "^3.1.6",
     "resend": "^4.0.0",
-"googleapis": "^144.0.0"
+"googleapis": "^144.0.0",
+    "axios": "^1.6.0",
+    "form-data": "^4.0.0"
   }
 }

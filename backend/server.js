@@ -10,11 +10,12 @@ import documentRoutes from './routes/documents.js';
 import templateRoutes from './routes/templates.js';
 import userRoutes from './routes/users.js';
 import uploadLinkRoutes from './routes/uploadLinks.js';
-
+import { runBackup } from './services/backup.js';
+ 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
-
+ 
 app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173', credentials: true }));
 app.use(express.json());
 app.use(fileUpload({
@@ -22,28 +23,26 @@ app.use(fileUpload({
   useTempFiles: true,
   tempFileDir: path.join(__dirname, '../uploads_temp'),
 }));
-
+ 
 app.use('/files', express.static(path.join(__dirname, '../storage')));
-
 app.use('/api/auth', authRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/upload-links', uploadLinkRoutes);
-
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.0.0' }));
-
+ 
 // 1. Landing page (tem prioridade sobre o React)
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
-
+ 
 // 2. React app
 const frontendDist = path.join(__dirname, '../frontend/dist');
 app.use(express.static(frontendDist));
-
+ 
 // 3. Catch-all — protege /api e garante landing na raiz
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api')) {
@@ -54,9 +53,30 @@ app.get('*', (req, res) => {
   }
   res.sendFile(path.join(frontendDist, 'index.html'));
 });
-
+ 
 initDB();
+ 
 app.listen(PORT, () => {
   console.log(`✅ DocJuris API rodando em http://localhost:${PORT}`);
   console.log(`📁 Storage: ${path.join(__dirname, '../storage')}`);
 });
+ 
+// ─── Backup automático diário às 3h (horário de Brasília = 6h UTC) ───────────
+function scheduleBackup() {
+  const now = new Date();
+  const next3am = new Date();
+  next3am.setUTCHours(6, 0, 0, 0); // 3h Brasília = 6h UTC
+  if (next3am <= now) next3am.setDate(next3am.getDate() + 1);
+ 
+  const msUntil3am = next3am - now;
+  const horasAte = Math.round(msUntil3am / 1000 / 60 / 60);
+  console.log(`⏰ Próximo backup em ~${horasAte}h (às 3h horário de Brasília)`);
+ 
+  setTimeout(() => {
+    runBackup();
+    setInterval(runBackup, 24 * 60 * 60 * 1000);
+  }, msUntil3am);
+}
+ 
+scheduleBackup();
+ 

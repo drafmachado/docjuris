@@ -9,13 +9,11 @@ const TOKEN = process.env.ZAPSIGN_API_TOKEN;
 const DRA_ANDREIA = {
   name: 'Andreia Machado',
   email: 'dra.andreia@advmachado.adv.br',
-  user_token: process.env.ZAPSIGN_USER_TOKEN_ANDREIA,
 };
 
 const DRA_THAISA = {
   name: 'THAISA DE SOUZA DA SILVA',
   email: 'thaiisa_sousa@hotmail.com',
-  user_token: process.env.ZAPSIGN_USER_TOKEN_THAISA,
 };
 
 // Cenários de assinatura por template
@@ -34,7 +32,7 @@ export const SIGNING_SCENARIO = {
  * @param {string} params.docName  - nome do documento
  * @param {object} params.client   - { nome, email }
  * @param {number} params.templateId
- * @returns {object} { zapToken, signerTokenCliente }
+ * @returns {object} { zapDocToken, signers }
  */
 export async function enviarParaAssinatura({ docxPath, docName, client, templateId }) {
   const scenario = SIGNING_SCENARIO[templateId] ?? 1;
@@ -57,16 +55,17 @@ export async function enviarParaAssinatura({ docxPath, docName, client, template
     custom_message: `Olá ${client.nome}, seu documento está pronto para assinatura. Por favor, assine para prosseguir.`,
   });
 
-  // Doutoras assinam depois (order_group: 2), via API automaticamente
+  // Doutoras recebem link por e-mail para assinar manualmente (order_group: 2)
   if (scenario === 2 || scenario === 3) {
     signers.push({
       name: DRA_ANDREIA.name,
       email: DRA_ANDREIA.email,
       auth_mode: 'assinaturaTela',
-      send_automatic_email: false, // assinará via API automaticamente
+      send_automatic_email: true,
       order_group: 2,
       lock_name: true,
       lock_email: true,
+      custom_message: 'Um cliente assinou o documento. Por favor, assine para concluir.',
     });
   }
 
@@ -75,10 +74,11 @@ export async function enviarParaAssinatura({ docxPath, docName, client, template
       name: DRA_THAISA.name,
       email: DRA_THAISA.email,
       auth_mode: 'assinaturaTela',
-      send_automatic_email: false, // assinará via API automaticamente
+      send_automatic_email: true,
       order_group: 2,
       lock_name: true,
       lock_email: true,
+      custom_message: 'Um cliente assinou o documento. Por favor, assine para concluir.',
     });
   }
 
@@ -107,40 +107,10 @@ export async function enviarParaAssinatura({ docxPath, docName, client, template
 
   const data = await res.json();
 
-  // Pega token do signatário cliente (primeiro da lista)
-  const signerCliente = data.signers.find(s => s.email === client.email || s.name === client.nome);
-
   return {
     zapDocToken: data.token,
-    signerTokenCliente: signerCliente?.token ?? null,
     signers: data.signers,
   };
-}
-
-/**
- * Assina automaticamente como doutora via API
- * @param {string} signerToken - token do signer da doutora no documento
- * @param {string} userToken   - user_token da doutora na ZapSign
- */
-export async function assinarComoDoutora(signerToken, userToken) {
-  const res = await fetch(`${ZAPSIGN_API}/sign/`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      user_token: userToken,
-      signer_tokens: [signerToken],
-    }),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`ZapSign erro ao assinar como doutora: ${err}`);
-  }
-
-  return await res.json();
 }
 
 /**

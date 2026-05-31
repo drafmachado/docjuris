@@ -9,7 +9,7 @@ import clientRoutes from './routes/clients.js';
 import documentRoutes from './routes/documents.js';
 import templateRoutes from './routes/templates.js';
 import userRoutes from './routes/users.js';
-import uploadLinkRoutes from './routes/uploadLinks.js';
+import webhookRouter from './routes/webhook.js';
 import { runBackup } from './services/backup.js';
  
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -30,7 +30,7 @@ app.use('/api/clients', clientRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/upload-links', uploadLinkRoutes);
+app.use('/api/webhook', webhookRouter);
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.0.0' }));
  
 // 1. Landing page (tem prioridade sobre o React)

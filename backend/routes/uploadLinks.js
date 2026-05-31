@@ -1,4 +1,5 @@
-Perfeito! Vou gerar o arquivo completo com a chamada ao ZapSign adicionada na função generateDocumentsAutomatically. Faça o mesmo processo — Ctrl+A, Delete, cola, commit:
+Esse é o webhook.js correto — já está certo! O problema era só no uploadLinks.js.
+Vá no GitHub, abra backend/routes/uploadLinks.js, Ctrl+A, Delete, e cole só o código abaixo (use o botão Copy no canto do bloco):
 javascript// backend/routes/uploadLinks.js
 import express from 'express';
 import { randomBytes } from 'crypto';
@@ -14,7 +15,6 @@ import { enviarParaAssinatura } from '../services/zapsign.js';
 const router = express.Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// ─── Email helper (Resend) ────────────────────────────────────────────────────
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 async function sendNotification({ to, subject, html }) {
@@ -31,17 +31,9 @@ async function sendNotification({ to, subject, html }) {
   }
 }
 
-// ─── POST /api/upload-links — Cria link de upload (autenticado) ──────────────
 router.post('/', authMiddleware, (req, res) => {
   const db = getDB();
-  const {
-    client_id,
-    template_ids,
-    required_docs,
-    manual_values,
-    message,
-    expires_in_days,
-  } = req.body;
+  const { client_id, template_ids, required_docs, manual_values, message, expires_in_days } = req.body;
 
   if (!client_id || !template_ids?.length) {
     return res.status(400).json({ error: 'client_id e template_ids são obrigatórios' });
@@ -58,16 +50,7 @@ router.post('/', authMiddleware, (req, res) => {
     INSERT INTO upload_links
       (token, client_id, template_ids, required_docs, manual_values, message, expires_at, created_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    token,
-    client_id,
-    JSON.stringify(template_ids),
-    JSON.stringify(required_docs || []),
-    JSON.stringify(manual_values || {}),
-    message || '',
-    expiresAt,
-    req.user.id,
-  );
+  `).run(token, client_id, JSON.stringify(template_ids), JSON.stringify(required_docs || []), JSON.stringify(manual_values || {}), message || '', expiresAt, req.user.id);
 
   const baseUrl = process.env.BASE_URL || 'https://docjuris-production.up.railway.app';
   const link = `${baseUrl}/upload/${token}`;
@@ -75,12 +58,10 @@ router.post('/', authMiddleware, (req, res) => {
   res.json({ token, link, expires_at: expiresAt });
 });
 
-// ─── GET /api/upload-links — Lista links (autenticado) ───────────────────────
 router.get('/', authMiddleware, (req, res) => {
   const db = getDB();
   const links = db.prepare(`
-    SELECT ul.*, c.nome as client_nome,
-           u.name as created_by_name
+    SELECT ul.*, c.nome as client_nome, u.name as created_by_name
     FROM upload_links ul
     JOIN clients c ON c.id = ul.client_id
     LEFT JOIN users u ON u.id = ul.created_by
@@ -95,7 +76,6 @@ router.get('/', authMiddleware, (req, res) => {
   })));
 });
 
-// ─── GET /api/upload-links/:token — Dados públicos do link ───────────────────
 router.get('/:token', (req, res) => {
   const db = getDB();
   const link = db.prepare(`
@@ -121,16 +101,12 @@ router.get('/:token', (req, res) => {
     message: link.message,
     required_docs: JSON.parse(link.required_docs || '[]'),
     manual_values: JSON.parse(link.manual_values || '{}'),
-    templates: templates.map(t => ({
-      ...t,
-      manual_fields: JSON.parse(t.manual_fields || '[]'),
-    })),
+    templates: templates.map(t => ({ ...t, manual_fields: JSON.parse(t.manual_fields || '[]') })),
     expires_at: link.expires_at,
     completed: !!link.completed_at,
   });
 });
 
-// ─── POST /api/upload-links/:token/files — Cliente envia arquivos (público) ──
 router.post('/:token/files', async (req, res) => {
   const db = getDB();
   const link = db.prepare(`
@@ -151,15 +127,14 @@ router.post('/:token/files', async (req, res) => {
   }
 
   const fileArray = Object.values(files).flat();
-
   const clientFilesDir = process.env.NODE_ENV === 'production'
     ? '/app/storage/client_files'
     : path.join(__dirname, '../../storage/client_files');
   if (!fs.existsSync(clientFilesDir)) fs.mkdirSync(clientFilesDir, { recursive: true });
 
-  const savedFiles = [];
   const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
   const MAX_SIZE = 10 * 1024 * 1024;
+  const savedFiles = [];
 
   for (const file of fileArray) {
     if (!ALLOWED_TYPES.includes(file.mimetype)) {
@@ -199,25 +174,17 @@ router.post('/:token/files', async (req, res) => {
     db.prepare(`UPDATE upload_links SET completed_at = datetime('now') WHERE token = ?`)
       .run(link.token);
 
-    // ── Extrai dados do cliente a partir dos arquivos enviados via IA ──
     try {
       console.log('🤖 Extraindo dados do cliente via IA...');
       const allClientFiles = db.prepare(
         'SELECT * FROM client_files WHERE client_id = ? ORDER BY uploaded_at DESC LIMIT 10'
       ).all(link.client_id);
 
-      const fileObjects = allClientFiles
-        .map(f => {
-          const filePath = path.join(clientFilesDir, f.filename);
-          if (!fs.existsSync(filePath)) return null;
-          return {
-            name: f.original_name,
-            mimetype: f.mimetype,
-            tempFilePath: filePath,
-            size: f.size,
-          };
-        })
-        .filter(Boolean);
+      const fileObjects = allClientFiles.map(f => {
+        const filePath = path.join(clientFilesDir, f.filename);
+        if (!fs.existsSync(filePath)) return null;
+        return { name: f.original_name, mimetype: f.mimetype, tempFilePath: filePath, size: f.size };
+      }).filter(Boolean);
 
       if (fileObjects.length > 0) {
         const extracted = await extractClientData(fileObjects);
@@ -254,10 +221,8 @@ router.post('/:token/files', async (req, res) => {
       console.error('❌ Erro na extração automática de dados:', err.message);
     }
 
-    // ── Geração automática dos documentos ──
     await generateDocumentsAutomatically(db, link);
 
-    // ── Notificação por email ──
     const baseUrl = process.env.BASE_URL || 'https://docjuris-production.up.railway.app';
     await sendNotification({
       to: 'fmachado.andreia@gmail.com',
@@ -280,12 +245,10 @@ router.post('/:token/files', async (req, res) => {
   res.json({ ok: true, saved: savedFiles, all_sent: allSent });
 });
 
-// ─── Geração automática dos documentos ───────────────────────────────────────
 async function generateDocumentsAutomatically(db, link) {
   try {
     const templateIds = JSON.parse(link.template_ids || '[]');
     const manualValues = JSON.parse(link.manual_values || '{}');
-
     const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(link.client_id);
 
     const storageDir = process.env.NODE_ENV === 'production'
@@ -297,41 +260,32 @@ async function generateDocumentsAutomatically(db, link) {
       if (!template) continue;
 
       const autoValues = {
-        nome:          client.nome            || '',
-        nacionalidade: client.nacionalidade   || '',
-        cpf:           client.cpf             || '',
-        rg:            client.rg              || '',
+        nome:            client.nome            || '',
+        nacionalidade:   client.nacionalidade   || '',
+        cpf:             client.cpf             || '',
+        rg:              client.rg              || '',
         orgao_expedidor: client.orgao_expedidor || '',
-        endereco:      client.endereco        || '',
-        cidade:        client.cidade          || '',
-        estado:        client.estado          || '',
-        cidade_estado: [client.cidade, client.estado].filter(Boolean).join(', ') || '',
-        email:         client.email           || '',
-        telefone:      client.telefone        || '',
-        data_atual:    new Date().toLocaleDateString('pt-BR'),
+        endereco:        client.endereco        || '',
+        cidade:          client.cidade          || '',
+        estado:          client.estado          || '',
+        cidade_estado:   [client.cidade, client.estado].filter(Boolean).join(', ') || '',
+        email:           client.email           || '',
+        telefone:        client.telefone        || '',
+        data_atual:      new Date().toLocaleDateString('pt-BR'),
       };
 
       const allValues = { ...autoValues, ...manualValues };
       const docxFilename = await fillTemplate(template, allValues, client);
 
       if (docxFilename) {
-        // Salva documento no banco
         const result = db.prepare(`
           INSERT INTO documents
             (client_id, template_id, generated_by, docx_filename, manual_values, auto_values, status)
           VALUES (?, ?, ?, ?, ?, ?, 'gerado')
-        `).run(
-          link.client_id,
-          templateId,
-          link.created_by,
-          docxFilename,
-          JSON.stringify(manualValues),
-          JSON.stringify(autoValues),
-        );
+        `).run(link.client_id, templateId, link.created_by, docxFilename, JSON.stringify(manualValues), JSON.stringify(autoValues));
 
         const documentId = result.lastInsertRowid;
 
-        // ── Envia para assinatura na ZapSign ──
         try {
           const docxPath = path.join(storageDir, 'pdfs', docxFilename);
           const zapResult = await enviarParaAssinatura({
@@ -355,7 +309,6 @@ async function generateDocumentsAutomatically(db, link) {
   }
 }
 
-// ─── Preenche template DOCX com os valores ───────────────────────────────────
 async function fillTemplate(template, values, client) {
   try {
     const PizZip = (await import('pizzip')).default;
@@ -391,7 +344,6 @@ async function fillTemplate(template, values, client) {
   }
 }
 
-// ─── POST /api/upload-links/:token/sign ──────────────────────────────────────
 router.post('/:token/sign', async (req, res) => {
   const db = getDB();
   const link = db.prepare('SELECT * FROM upload_links WHERE token = ?').get(req.params.token);

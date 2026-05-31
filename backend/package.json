@@ -19,6 +19,7 @@
     "nodemailer": "^6.9.13",
     "pdf-lib": "^1.17.1",
     "pizzip": "^3.1.6",
-    "resend": "^4.0.0"
+    "resend": "^4.0.0",
+"googleapis": "^144.0.0"
   }
 }

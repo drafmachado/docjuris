@@ -1,6 +1,4 @@
-Esse é o webhook.js correto — já está certo! O problema era só no uploadLinks.js.
-Vá no GitHub, abra backend/routes/uploadLinks.js, Ctrl+A, Delete, e cole só o código abaixo (use o botão Copy no canto do bloco):
-javascript// backend/routes/uploadLinks.js
+// backend/routes/uploadLinks.js
 import express from 'express';
 import { randomBytes } from 'crypto';
 import path from 'path';

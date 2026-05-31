@@ -18,7 +18,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 async function sendNotification({ to, subject, html }) {
   try {
     await resend.emails.send({
-      from: 'DocJuris <onboarding@resend.dev>',
+      from: 'DocJuris <dra.andreia@advmachado.adv.br>',
       to,
       subject,
       html,

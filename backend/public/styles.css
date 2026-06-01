@@ -71,7 +71,7 @@ h1 em, h2 em{ color:var(--gold); font-style:italic; }
   max-width:var(--maxw); margin:0 auto; padding:.75rem 2rem;
   display:flex; align-items:center; justify-content:space-between; gap:1.5rem;
 }
-.nav-logo img{ height:96px; width:auto; }   /* logo com mais destaque */
+.nav-logo img{ height:96px; width:auto; filter:brightness(0) invert(1); }   /* logo branca p/ contraste no marinho. Alternativa champanhe: brightness(0) invert(.9) sepia(.45) saturate(2.6) */
 .nav-links{ display:flex; align-items:center; gap:2rem; }
 .nav-links a{
   font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.82);
@@ -192,7 +192,7 @@ h1 em, h2 em{ color:var(--gold); font-style:italic; }
 /* ---------- Footer ---------- */
 .footer{ background:var(--navy-deep); color:rgba(255,255,255,.7); padding:3rem 0 2rem; }
 .footer-grid{ display:flex; justify-content:space-between; gap:2rem; flex-wrap:wrap; align-items:flex-start; }
-.footer img{ height:64px; margin-bottom:1rem; }
+.footer img{ height:64px; margin-bottom:1rem; filter:brightness(0) invert(1); }
 .footer .oab{ font-size:12px; letter-spacing:.06em; }
 .footer-col h4{ color:var(--gold); font-size:11px; letter-spacing:.14em; text-transform:uppercase; margin-bottom:.8rem; }
 .footer-col a, .footer-col p{ font-size:13.5px; color:rgba(255,255,255,.7); display:block; margin-bottom:.45rem; }

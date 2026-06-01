@@ -108,6 +108,14 @@ h1 em, h2 em{ color:var(--gold); font-style:italic; }
 }
 .hero-cred{ font-size:12.5px; color:rgba(255,255,255,.7); display:flex; align-items:center; gap:.5rem; }
 .hero-cred b{ color:var(--gold); font-weight:600; }
+.hero-auth{
+  list-style:none; margin:0; padding-top:1.6rem; border-top:1px solid rgba(255,255,255,.12);
+  display:grid; grid-template-columns:1fr 1fr; gap:.7rem 1.6rem;
+}
+.hero-auth li{
+  font-size:13px; color:rgba(255,255,255,.82); display:flex; gap:.55rem; align-items:flex-start; line-height:1.4;
+}
+.hero-auth li::before{ content:"\2714"; color:var(--gold); flex-shrink:0; }
 .hero-right{
   background-size:cover; background-position:center top; background-color:var(--navy-soft);
   min-height:420px;
@@ -139,6 +147,17 @@ h1 em, h2 em{ color:var(--gold); font-style:italic; }
 }
 .diff .ck{ color:var(--gold); font-size:20px; line-height:1; flex-shrink:0; }
 .diff p{ font-size:14.5px; color:var(--ink); font-weight:500; }
+.diff-block{ flex-direction:column; gap:.6rem; border-top:3px solid var(--gold); }
+.diff-block h3{ font-size:17px; font-family:var(--serif); color:var(--navy); }
+.diff-block p{ font-weight:400; color:var(--ink-soft); }
+
+/* ---------- Principais demandas ---------- */
+.demandas{ display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; }
+.demanda-col{ background:#fff; border:1px solid var(--line); padding:2rem 2.2rem; }
+.demanda-col h3{ font-size:20px; font-family:var(--serif); color:var(--navy); margin-bottom:1rem; padding-bottom:.6rem; border-bottom:2px solid var(--gold); }
+.demanda-col ul{ list-style:none; display:flex; flex-direction:column; gap:.6rem; }
+.demanda-col li{ font-size:14.5px; color:var(--ink); display:flex; gap:.6rem; align-items:flex-start; }
+.demanda-col li::before{ content:"\2192"; color:var(--gold); flex-shrink:0; }
 
 /* ---------- Cards de Áreas ---------- */
 .areas{ display:grid; grid-template-columns:1fr 1fr; gap:0; }
@@ -220,6 +239,7 @@ h1 em, h2 em{ color:var(--gold); font-style:italic; }
   .svc-grid{ grid-template-columns:repeat(2,1fr); }
   .about{ grid-template-columns:1fr; gap:2rem; }
   .about-photo{ max-width:320px; }
+  .demandas{ grid-template-columns:1fr; }
 }
 @media (max-width: 720px){
   .container{ padding:0 1.25rem; }
@@ -239,6 +259,7 @@ h1 em, h2 em{ color:var(--gold); font-style:italic; }
   .section{ padding:3rem 0; }
   .area{ padding:2rem 1.4rem; }
   .diffs{ grid-template-columns:1fr; }
+  .hero-auth{ grid-template-columns:1fr; }
   .svc-grid{ grid-template-columns:1fr; }
   .hero h1{ font-size:30px; }
   .hero-actions .btn{ width:100%; }

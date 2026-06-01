@@ -1,0 +1,249 @@
+/* ============================================================
+   Andreia Machado · Escritório de Advocacia
+   Folha de estilo compartilhada (styles.css)
+   Servida de /styles.css  (pasta backend/public)
+   ============================================================ */
+
+:root{
+  --navy:        #0d2340;
+  --navy-deep:   #0a1628;
+  --navy-soft:   #14304f;
+  --gold:        #c5a859;
+  --gold-soft:   #d8c08a;
+  --cream:       #f4ede0;
+  --cream-2:     #faf6ee;
+  --ink:         #1c2733;
+  --ink-soft:    #4a5663;
+  --line:        rgba(197,168,89,.18);
+  --wa:          #25d366;
+  --serif:       'Playfair Display', Georgia, serif;
+  --sans:        'Inter', system-ui, -apple-system, sans-serif;
+  --maxw:        1240px;
+}
+
+*{ margin:0; padding:0; box-sizing:border-box; }
+html{ scroll-behavior:smooth; }
+body{
+  font-family:var(--sans);
+  color:var(--ink);
+  background:#fff;
+  line-height:1.6;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+img{ display:block; max-width:100%; }
+a{ color:inherit; text-decoration:none; }
+
+.container{ max-width:var(--maxw); margin:0 auto; padding:0 2rem; }
+
+/* ---------- Tipografia utilitária ---------- */
+.tag{
+  font-size:11px; letter-spacing:.22em; text-transform:uppercase;
+  color:var(--gold); font-weight:600; display:inline-flex; align-items:center; gap:.7rem;
+}
+.tag::before{ content:""; width:34px; height:1px; background:var(--gold); display:inline-block; }
+.tag.center{ justify-content:center; }
+h1,h2,h3{ font-family:var(--serif); font-weight:600; line-height:1.15; color:var(--navy); }
+h1 em, h2 em{ color:var(--gold); font-style:italic; }
+
+/* ---------- Botões ---------- */
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:.6rem;
+  font-family:var(--sans); font-size:12px; font-weight:600; letter-spacing:.12em;
+  text-transform:uppercase; padding:15px 30px; cursor:pointer; border:1px solid transparent;
+  transition:all .22s ease; white-space:nowrap;
+}
+.btn-wa{ background:var(--wa); color:#fff; }
+.btn-wa:hover{ filter:brightness(1.07); transform:translateY(-1px); }
+.btn-gold{ background:var(--gold); color:var(--navy-deep); }
+.btn-gold:hover{ background:var(--gold-soft); transform:translateY(-1px); }
+.btn-outline{ background:transparent; border-color:var(--gold); color:var(--gold); }
+.btn-outline:hover{ background:var(--gold); color:var(--navy-deep); }
+.btn-outline-light{ background:transparent; border-color:rgba(255,255,255,.4); color:#fff; }
+.btn-outline-light:hover{ border-color:var(--gold); color:var(--gold); }
+
+/* ---------- Navbar ---------- */
+.nav{
+  position:sticky; top:0; z-index:1000; background:var(--navy);
+  border-bottom:1px solid rgba(255,255,255,.06);
+}
+.nav-inner{
+  max-width:var(--maxw); margin:0 auto; padding:.75rem 2rem;
+  display:flex; align-items:center; justify-content:space-between; gap:1.5rem;
+}
+.nav-logo img{ height:74px; width:auto; }   /* logo com mais destaque */
+.nav-links{ display:flex; align-items:center; gap:2rem; }
+.nav-links a{
+  font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.82);
+  font-weight:500; transition:color .2s; padding:.4rem 0; position:relative;
+}
+.nav-links a:hover{ color:var(--gold); }
+.nav-links a.active{ color:var(--gold); }
+.nav-cta{ display:flex; align-items:center; gap:.9rem; }
+.nav-docjuris{
+  font-size:11px; letter-spacing:.12em; text-transform:uppercase; font-weight:600;
+  color:var(--gold); border:1px solid var(--gold); padding:10px 20px; transition:all .2s;
+}
+.nav-docjuris:hover{ background:var(--gold); color:var(--navy-deep); }
+
+/* hamburger (checkbox hack) */
+.nav-toggle, .nav-burger{ display:none; }
+
+/* ---------- Hero ---------- */
+.hero{
+  display:grid; grid-template-columns:1fr 1.05fr; min-height:calc(100vh - 92px);
+  background:var(--navy);
+}
+.hero-left{
+  display:flex; flex-direction:column; justify-content:center;  /* centraliza: elimina espaço vazio */
+  padding:3rem 4rem; color:#fff;
+}
+.hero-left .tag{ margin-bottom:1.6rem; }
+.hero h1{ font-size:clamp(34px,4vw,54px); color:#fff; margin-bottom:1.4rem; }
+.hero-sub{ font-size:16px; color:rgba(255,255,255,.78); max-width:30em; margin-bottom:2.2rem; }
+.hero-actions{ display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:2.4rem; }
+.hero-creds{
+  display:flex; flex-wrap:wrap; gap:1.4rem; padding-top:1.6rem;
+  border-top:1px solid rgba(255,255,255,.12);
+}
+.hero-cred{ font-size:12.5px; color:rgba(255,255,255,.7); display:flex; align-items:center; gap:.5rem; }
+.hero-cred b{ color:var(--gold); font-weight:600; }
+.hero-right{
+  background-size:cover; background-position:center top; background-color:var(--navy-soft);
+  min-height:420px;
+}
+
+/* ---------- Faixa de autoridade ---------- */
+.strip{
+  background:var(--navy-deep); color:rgba(255,255,255,.85);
+  text-align:center; padding:1rem 2rem; font-size:13px; letter-spacing:.04em;
+}
+.strip b{ color:var(--gold); }
+
+/* ---------- Seções genéricas ---------- */
+.section{ padding:5rem 0; }
+.section.cream{ background:var(--cream-2); }
+.section.navy{ background:var(--navy); color:#fff; }
+.section-head{ max-width:46rem; margin-bottom:3rem; }
+.section-head.center{ margin-left:auto; margin-right:auto; text-align:center; }
+.section-head h2{ font-size:clamp(26px,3vw,38px); margin-top:.8rem; }
+.section.navy .section-head h2{ color:#fff; }
+.lead{ font-size:15.5px; color:var(--ink-soft); margin-top:1rem; }
+.section.navy .lead{ color:rgba(255,255,255,.8); }
+
+/* ---------- Diferenciais ---------- */
+.diffs{ display:grid; grid-template-columns:repeat(3,1fr); gap:1.5rem; }
+.diff{
+  background:#fff; border:1px solid var(--line); padding:1.8rem;
+  display:flex; gap:1rem; align-items:flex-start;
+}
+.diff .ck{ color:var(--gold); font-size:20px; line-height:1; flex-shrink:0; }
+.diff p{ font-size:14.5px; color:var(--ink); font-weight:500; }
+
+/* ---------- Cards de Áreas ---------- */
+.areas{ display:grid; grid-template-columns:1fr 1fr; gap:0; }
+.area{ padding:3.5rem; border:1px solid var(--line); }
+.area:first-child{ background:#fff; }
+.area:last-child{ background:var(--cream); }
+.area .num{ font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--gold); }
+.area h3{ font-size:27px; margin:.6rem 0 1rem; }
+.area p{ font-size:14.5px; color:var(--ink-soft); margin-bottom:1.4rem; }
+.area ul{ list-style:none; display:flex; flex-direction:column; gap:.6rem; margin-bottom:1.8rem; }
+.area li{ font-size:14px; display:flex; gap:.7rem; align-items:flex-start; }
+.area li::before{ content:"→"; color:var(--gold); flex-shrink:0; }
+.area .more{
+  font-size:12px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--gold);
+  border-bottom:1px solid transparent; transition:border-color .2s; display:inline-block;
+}
+.area .more:hover{ border-color:var(--gold); }
+
+/* ---------- Quem somos (teaser) ---------- */
+.about{ display:grid; grid-template-columns:.8fr 1.2fr; gap:3.5rem; align-items:center; }
+.about-photo{ aspect-ratio:3/4; background-size:cover; background-position:center top; border:1px solid var(--line); }
+.about h2{ font-size:clamp(26px,3vw,36px); margin:.7rem 0 1.2rem; }
+.about p{ font-size:15px; color:var(--ink-soft); margin-bottom:1rem; }
+.about .formacao{ list-style:none; margin:1.2rem 0 1.8rem; display:flex; flex-direction:column; gap:.55rem; }
+.about .formacao li{ font-size:14px; display:flex; gap:.6rem; }
+.about .formacao li::before{ content:"✔"; color:var(--gold); }
+
+/* ---------- CTA / contato ---------- */
+.cta-box{ text-align:center; max-width:42rem; margin:0 auto; }
+.cta-box h2{ font-size:clamp(26px,3vw,38px); color:#fff; margin-bottom:1rem; }
+.cta-box p{ color:rgba(255,255,255,.8); font-size:16px; margin-bottom:2rem; }
+.cta-actions{ display:flex; gap:1rem; justify-content:center; flex-wrap:wrap; margin-bottom:2.5rem; }
+.contacts{ display:flex; gap:2.5rem; justify-content:center; flex-wrap:wrap; padding-top:2rem; border-top:1px solid rgba(255,255,255,.12); }
+.contact{ font-size:13.5px; color:rgba(255,255,255,.82); }
+.contact b{ display:block; color:var(--gold); font-size:11px; letter-spacing:.14em; text-transform:uppercase; margin-bottom:.3rem; }
+
+/* ---------- Página de serviço (interna) ---------- */
+.page-hero{ background:var(--navy); color:#fff; padding:4.5rem 0; }
+.page-hero .tag{ margin-bottom:1.2rem; }
+.page-hero h1{ color:#fff; font-size:clamp(30px,3.6vw,46px); max-width:18em; }
+.page-hero .sub{ color:rgba(255,255,255,.8); font-size:17px; max-width:40em; margin-top:1.2rem; }
+.svc-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:1.5rem; margin-top:1rem; }
+.svc{ background:#fff; border:1px solid var(--line); padding:2rem; }
+.svc h3{ font-size:19px; margin-bottom:.7rem; }
+.svc p{ font-size:14px; color:var(--ink-soft); }
+.svc .ico{ color:var(--gold); font-size:13px; letter-spacing:.18em; text-transform:uppercase; margin-bottom:1rem; display:block; }
+.prose{ max-width:50rem; }
+.prose p{ font-size:15.5px; color:var(--ink-soft); margin-bottom:1.1rem; }
+.prose h3{ font-size:22px; margin:1.8rem 0 .8rem; }
+
+/* ---------- Footer ---------- */
+.footer{ background:var(--navy-deep); color:rgba(255,255,255,.7); padding:3rem 0 2rem; }
+.footer-grid{ display:flex; justify-content:space-between; gap:2rem; flex-wrap:wrap; align-items:flex-start; }
+.footer img{ height:64px; margin-bottom:1rem; }
+.footer .oab{ font-size:12px; letter-spacing:.06em; }
+.footer-col h4{ color:var(--gold); font-size:11px; letter-spacing:.14em; text-transform:uppercase; margin-bottom:.8rem; }
+.footer-col a, .footer-col p{ font-size:13.5px; color:rgba(255,255,255,.7); display:block; margin-bottom:.45rem; }
+.footer-col a:hover{ color:var(--gold); }
+.footer-bottom{ margin-top:2.5rem; padding-top:1.5rem; border-top:1px solid rgba(255,255,255,.1); font-size:12px; color:rgba(255,255,255,.45); text-align:center; }
+
+/* ---------- WhatsApp flutuante ---------- */
+.wa-float{
+  position:fixed; bottom:24px; right:24px; z-index:9999; width:58px; height:58px;
+  background:var(--wa); border-radius:50%; display:flex; align-items:center; justify-content:center;
+  box-shadow:0 6px 22px rgba(37,211,102,.45); transition:transform .2s;
+}
+.wa-float:hover{ transform:scale(1.08); }
+.wa-float svg{ width:30px; height:30px; fill:#fff; }
+
+/* ============================================================
+   RESPONSIVO / MOBILE
+   ============================================================ */
+@media (max-width: 960px){
+  .hero{ grid-template-columns:1fr; }
+  .hero-right{ order:-1; min-height:300px; }
+  .hero-left{ padding:2.5rem 1.5rem; }
+  .areas{ grid-template-columns:1fr; }
+  .diffs{ grid-template-columns:repeat(2,1fr); }
+  .svc-grid{ grid-template-columns:repeat(2,1fr); }
+  .about{ grid-template-columns:1fr; gap:2rem; }
+  .about-photo{ max-width:320px; }
+}
+@media (max-width: 720px){
+  .container{ padding:0 1.25rem; }
+  .nav-inner{ flex-wrap:wrap; padding:.6rem 1.25rem; }
+  .nav-logo img{ height:56px; }
+  .nav-links{
+    display:none; width:100%; flex-direction:column; align-items:flex-start;
+    gap:.2rem; padding:.6rem 0 .4rem;
+  }
+  .nav-links a{ padding:.7rem 0; width:100%; border-bottom:1px solid rgba(255,255,255,.07); }
+  .nav-toggle:checked ~ .nav-links{ display:flex; }
+  .nav-burger{
+    display:flex; flex-direction:column; gap:5px; cursor:pointer; padding:8px; margin-left:auto;
+  }
+  .nav-burger span{ width:24px; height:2px; background:var(--gold); display:block; }
+  .nav-cta .nav-docjuris{ padding:8px 14px; font-size:10px; }
+  .section{ padding:3rem 0; }
+  .area{ padding:2rem 1.4rem; }
+  .diffs{ grid-template-columns:1fr; }
+  .svc-grid{ grid-template-columns:1fr; }
+  .hero h1{ font-size:30px; }
+  .hero-actions .btn{ width:100%; }
+  .cta-actions .btn{ width:100%; }
+  .contacts{ flex-direction:column; gap:1.2rem; }
+  .footer-grid{ flex-direction:column; }
+  .page-hero{ padding:3rem 0; }
+}

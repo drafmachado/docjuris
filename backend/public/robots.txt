@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /login
+Disallow: /obrigado.html
+Disallow: /politica-de-privacidade.html
+
+Sitemap: https://advmachado.adv.br/sitemap.xml

@@ -159,6 +159,14 @@ h1 em, h2 em{ color:var(--gold); font-style:italic; }
 .demanda-col li{ font-size:14.5px; color:var(--ink); display:flex; gap:.6rem; align-items:flex-start; }
 .demanda-col li::before{ content:"\2192"; color:var(--gold); flex-shrink:0; }
 
+/* ---------- Atuação técnica (chips) ---------- */
+.tecnica{ display:flex; flex-wrap:wrap; gap:.8rem; justify-content:center; max-width:52rem; margin:0 auto; }
+.tec-item{
+  font-size:14px; color:var(--navy); background:#fff; border:1px solid var(--line);
+  padding:.7rem 1.3rem; border-radius:2px; font-weight:500;
+}
+.tec-item::before{ content:"\2714"; color:var(--gold); margin-right:.5rem; }
+
 /* ---------- Cards de Áreas ---------- */
 .areas{ display:grid; grid-template-columns:1fr 1fr; gap:0; }
 .area{ padding:3.5rem; border:1px solid var(--line); }
@@ -212,7 +220,8 @@ h1 em, h2 em{ color:var(--gold); font-style:italic; }
 .footer{ background:var(--navy-deep); color:rgba(255,255,255,.7); padding:3rem 0 2rem; }
 .footer-grid{ display:flex; justify-content:space-between; gap:2rem; flex-wrap:wrap; align-items:flex-start; }
 .footer img{ height:64px; margin-bottom:1rem; filter:brightness(0) invert(1); }
-.footer .oab{ font-size:12px; letter-spacing:.06em; }
+.footer-name{ font-family:var(--serif); color:#fff; font-size:15px; margin-bottom:.35rem; }
+.footer .oab{ font-size:12px; letter-spacing:.06em; line-height:1.6; }
 .footer-col h4{ color:var(--gold); font-size:11px; letter-spacing:.14em; text-transform:uppercase; margin-bottom:.8rem; }
 .footer-col a, .footer-col p{ font-size:13.5px; color:rgba(255,255,255,.7); display:block; margin-bottom:.45rem; }
 .footer-col a:hover{ color:var(--gold); }

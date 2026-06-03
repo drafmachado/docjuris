@@ -20,7 +20,7 @@
   // >>> PREENCHA AQUI <<<
   var GA4_ID        = "G-X2768ZFL0X";      // Google Analytics 4
   var GOOGLE_ADS_ID = "AW-XXXXXXXXX";      // Google Ads (conversões)
-  var META_PIXEL_ID = "000000000000000";   // Meta Pixel
+  var META_PIXEL_ID = "2059743271551815";   // Meta Pixel
 
   var hasGoogle = GA4_ID !== "G-XXXXXXXXXX";
   var hasAds    = GOOGLE_ADS_ID !== "AW-XXXXXXXXX";

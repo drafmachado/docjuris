@@ -14,10 +14,24 @@ import { createDocument, buildSigners } from '../services/autentique.js';
 const router = express.Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
  
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Instanciação lazy — não crasha se RESEND_API_KEY não estiver configurada
+let _resend = null;
+function getResend() {
+  if (!process.env.RESEND_API_KEY) {
+    console.warn('[resend] RESEND_API_KEY não configurada. Envio de email desabilitado.');
+    return null;
+  }
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY);
+  return _resend;
+}
  
 async function sendNotification({ to, subject, html }) {
   try {
+    const resend = getResend();
+    if (!resend) {
+      console.warn('[resend] Email não enviado — RESEND_API_KEY ausente.');
+      return;
+    }
     await resend.emails.send({
       from: 'DocJuris <dra.andreia@advmachado.adv.br>',
       to,

@@ -24,7 +24,7 @@ router.post('/', (req, res) => {
   const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase().trim());
   if (existing) return res.status(409).json({ error: 'Email já cadastrado' });
 
-  const hash = bcrypt.hashSync(password, 10);
+  const hash = bcrypt.hashSync(password, 12);
   const result = db.prepare(`
     INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)
   `).run(name, email.toLowerCase().trim(), hash, role || 'colaborador');
@@ -49,7 +49,7 @@ router.put('/:id', (req, res) => {
   if (password) {
     if (password.length < 6) return res.status(400).json({ error: 'Senha deve ter ao menos 6 caracteres' });
     updateSql += ', password_hash = ?';
-    params.push(bcrypt.hashSync(password, 10));
+    params.push(bcrypt.hashSync(password, 12));
   }
 
   updateSql += ' WHERE id = ?';

@@ -109,7 +109,7 @@ router.post('/extract', async (req, res) => {
     res.json({ success: true, data: extracted });
   } catch (err) {
     console.error('Erro na extração:', err);
-    res.status(500).json({ error: 'Erro ao extrair dados: ' + err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Erro interno ao processar dados do cliente' : 'Erro ao extrair dados: ' + err.message });
   }
 });
 

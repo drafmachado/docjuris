@@ -25,6 +25,25 @@ export async function generateDocument(templateFilename, values, outputBasename)
   // Lê e processa o template
   const content = fs.readFileSync(templatePath, 'binary');
   const zip = new PizZip(content);
+  // ── Fix: reunir chaves duplas fragmentadas pelo Word ─────────────────────
+  // O Word fragmenta {{campo}} em múltiplas tags XML, criando "duplicate open/close tags".
+  // Solução: processar o XML do ZIP e juntar as chaves antes de criar o Docxtemplater.
+  const xmlFiles = ['word/document.xml', 'word/header1.xml', 'word/footer1.xml',
+                    'word/header2.xml', 'word/footer2.xml'];
+  for (const xmlFile of xmlFiles) {
+    if (!zip.files[xmlFile]) continue;
+    let xml = zip.files[xmlFile].asText();
+    // Juntar {{ fragmentados entre tags XML: { seguido de espaços/tags e {
+    // Padrão: { (tags xml opcionais) { → {{
+    xml = xml.replace(/\{(<[^>]+>)*\{/g, '{{');
+    // Padrão: } (tags xml opcionais) } → }}
+    xml = xml.replace(/\}(<[^>]+>)*\}/g, '}}');
+    // Também limpar formatação que quebra o placeholder no meio
+    // ex: {{nom<w:rPr>...</w:rPr>e}} → {{nome}}
+    xml = xml.replace(/\{\{([^}]*?)<[^>]+>([^}]*?)\}\}/g, '{{$1$2}}');
+    zip.file(xmlFile, xml);
+  }
+
   // Monta valores normalizados — cobre variações de maiúsculas e underscores
   const normalizedValues = {};
   for (const [key, val] of Object.entries(values)) {

@@ -42,7 +42,7 @@ router.post('/change-password', authMiddleware, (req, res) => {
     return res.status(401).json({ error: 'Senha atual incorreta' });
   }
 
-  const hash = bcrypt.hashSync(newPassword, 10);
+  const hash = bcrypt.hashSync(newPassword, 12);
   db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.user.id);
   res.json({ success: true });
 });

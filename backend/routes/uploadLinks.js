@@ -1,5 +1,6 @@
 // backend/routes/uploadLinks.js
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import { randomBytes } from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -74,6 +75,14 @@ router.get('/', authMiddleware, (req, res) => {
   })));
 });
  
+// Rate limit público — previne enumeração de tokens
+const uploadLinkLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutos
+  max: 30,
+  message: { error: 'Muitas requisições. Aguarde um momento.' },
+});
+router.use(uploadLinkLimiter);
+
 router.get('/:token', (req, res) => {
   const db = getDB();
   const link = db.prepare(`
@@ -134,12 +143,30 @@ router.post('/:token/files', async (req, res) => {
   const MAX_SIZE = 10 * 1024 * 1024;
   const savedFiles = [];
  
+  // Validar MIME type declarado + magic bytes reais (previne spoofing)
+  const MAGIC_BYTES = {
+    'image/jpeg':      [0xFF, 0xD8, 0xFF],
+    'image/png':       [0x89, 0x50, 0x4E, 0x47],
+    'image/webp':      [0x52, 0x49, 0x46, 0x46],  // RIFF
+    'image/gif':       [0x47, 0x49, 0x46],          // GIF
+    'application/pdf': [0x25, 0x50, 0x44, 0x46],   // %PDF
+  };
+
   for (const file of fileArray) {
     if (!ALLOWED_TYPES.includes(file.mimetype)) {
       return res.status(400).json({ error: `Tipo não permitido: ${file.name}. Envie apenas imagens ou PDF.` });
     }
     if (file.size > MAX_SIZE) {
       return res.status(400).json({ error: `Arquivo muito grande: ${file.name}. Máximo 10MB.` });
+    }
+    // Verificar magic bytes reais do arquivo
+    const expected = MAGIC_BYTES[file.mimetype];
+    if (expected && file.data) {
+      const actual = Array.from(file.data.slice(0, expected.length));
+      const match = expected.every((b, i) => actual[i] === b);
+      if (!match) {
+        return res.status(400).json({ error: `Arquivo inválido: ${file.name}. O conteúdo não corresponde ao tipo declarado.` });
+      }
     }
   }
  

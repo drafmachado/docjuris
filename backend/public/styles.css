@@ -309,10 +309,16 @@ flex-shrink:0;
 }
 .cookie-bar button:hover{ background:var(--gold-soft); }
 
+/* ---------- Grid de 2 colunas (contato/formulário) ---------- */
+.two-col{
+display:grid; grid-template-columns:1fr 1fr; gap:4rem; align-items:start;
+}
+
 /* ============================================================
 RESPONSIVO / MOBILE
 ============================================================ */
 @media (max-width: 960px){
+.two-col{ gap:2.5rem; }
 .hero{ grid-template-columns:1fr; }
 .hero-right{ order:-1; min-height:300px; }
 .hero-left{ padding:2.5rem 1.5rem; }
@@ -324,6 +330,7 @@ RESPONSIVO / MOBILE
 .demandas{ grid-template-columns:1fr; }
 }
 @media (max-width: 720px){
+.two-col{ grid-template-columns:1fr; gap:2rem; }
 .container{ padding:0 1.25rem; }
 .nav-inner{ flex-wrap:wrap; padding:.6rem 1.25rem; }
 .nav-logo img{ height:66px; }

@@ -4,67 +4,111 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { getDB } from '../db.js';
-import { baixarPdfAssinado } from '../services/zapsign.js';
+import { downloadSignedPdf } from '../services/autentique.js';
 
 const router = express.Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// POST /api/webhook/zapsign
-router.post('/zapsign', async (req, res) => {
+// ─── POST /api/webhook/autentique ────────────────────────────────────────────
+//
+// Payload esperado do Autentique (evento document.finished):
+// {
+//   "event": "document.finished",
+//   "document": {
+//     "id": "uuid-do-documento",
+//     "name": "Nome do documento",
+//     "files": { "signed": "https://..." }
+//   }
+// }
+//
+// Variável Railway necessária: AUTENTIQUE_WEBHOOK_SECRET
+// Configure no painel Autentique a URL: https://<seu-dominio>/api/webhook/autentique
+// ────────────────────────────────────────────────────────────────────────────
+router.post('/autentique', async (req, res) => {
   try {
-    const event = req.body;
-    console.log('📩 Webhook ZapSign recebido:', event?.event_type, event?.document?.token);
+    // ── 1. Validar secret ──────────────────────────────────────────────────
+    const secret = process.env.AUTENTIQUE_WEBHOOK_SECRET;
+    if (secret) {
+      const receivedSecret =
+        req.headers['x-autentique-secret'] ||
+        req.headers['x-webhook-secret'] ||
+        req.body?.secret;
 
-    // Responde 200 imediatamente (ZapSign exige resposta rápida)
-    res.json({ ok: true });
-
-    const docToken = event?.document?.token;
-    if (!docToken) return;
-
-    // ── Evento: todos assinaram → baixa PDF e salva na pasta do cliente ──
-    if (event.event_type === 'doc_signed') {
-      const allSigned = (event.document?.signers ?? []).every(s => s.status === 'signed');
-
-      if (!allSigned) return;
-
-      const signedFileUrl = event.document?.signed_file;
-      if (!signedFileUrl) return;
-
-      const db = getDB();
-      const docRecord = db.prepare(
-        'SELECT * FROM documents WHERE zapsign_doc_token = ?'
-      ).get(docToken);
-
-      if (!docRecord) {
-        console.warn('⚠️ Webhook ZapSign: documento não encontrado no DB:', docToken);
-        return;
-      }
-
-      const storageDir = process.env.NODE_ENV === 'production'
-        ? '/app/storage'
-        : path.join(__dirname, '../../storage');
-
-      const pdfFilename = docRecord.docx_filename.replace('.docx', '_assinado.pdf');
-      const pdfPath = path.join(storageDir, 'pdfs', pdfFilename);
-
-      try {
-        await baixarPdfAssinado(signedFileUrl, pdfPath);
-
-        db.prepare(`
-          UPDATE documents
-          SET signed_pdf_filename = ?, status = 'assinado', signed_at = datetime('now')
-          WHERE zapsign_doc_token = ?
-        `).run(pdfFilename, docToken);
-
-        console.log(`✅ PDF assinado salvo: ${pdfFilename}`);
-      } catch (err) {
-        console.error('❌ Erro ao baixar PDF assinado:', err.message);
+      if (receivedSecret !== secret) {
+        console.warn('⚠️  Webhook Autentique: secret inválido');
+        return res.status(401).json({ error: 'Unauthorized' });
       }
     }
 
+    const event = req.body;
+    console.log('📩 Webhook Autentique recebido:', event?.event, event?.document?.id);
+
+    // Responde 200 imediatamente (Autentique exige resposta rápida)
+    res.json({ ok: true });
+
+    // ── 2. Processar apenas evento de documento finalizado ─────────────────
+    if (event?.event !== 'document.finished') return;
+
+    const documentId = event?.document?.id;
+    if (!documentId) return;
+
+    const signedUrl = event?.document?.files?.signed;
+    if (!signedUrl) {
+      console.warn('⚠️  Webhook Autentique: URL do PDF assinado não encontrada no payload');
+      return;
+    }
+
+    // ── 3. Buscar registro no banco pelo autentique_doc_id ─────────────────
+    const db = getDB();
+
+    // O campo zapsign_doc_token guarda o ID do Autentique (campo reutilizado na migração)
+    const docRecord = db.prepare(
+      'SELECT * FROM documents WHERE zapsign_doc_token = ?'
+    ).get(documentId);
+
+    if (!docRecord) {
+      console.warn('⚠️  Webhook Autentique: documento não encontrado no DB:', documentId);
+      return;
+    }
+
+    // ── 4. Baixar e salvar o PDF assinado ──────────────────────────────────
+    const storageDir = process.env.NODE_ENV === 'production'
+      ? '/app/storage'
+      : path.join(__dirname, '../../storage');
+
+    const pdfFilename = docRecord.docx_filename
+      ? docRecord.docx_filename.replace('.docx', '_assinado.pdf')
+      : `doc_${documentId}_assinado.pdf`;
+
+    const pdfPath = path.join(storageDir, 'pdfs', pdfFilename);
+
+    try {
+      await downloadSignedPdf(signedUrl, pdfPath);
+
+      db.prepare(`
+        UPDATE documents
+        SET signed_pdf_filename = ?,
+            status = 'assinado',
+            signed_at = datetime('now')
+        WHERE zapsign_doc_token = ?
+      `).run(pdfFilename, documentId);
+
+      console.log(`✅ PDF assinado salvo: ${pdfFilename} (doc DB id=${docRecord.id})`);
+    } catch (err) {
+      console.error('❌ Erro ao baixar PDF assinado do Autentique:', err.message);
+    }
+
   } catch (err) {
-    console.error('❌ Erro no webhook ZapSign:', err.message);
+    console.error('❌ Erro no webhook Autentique:', err.message);
+    // Não relança — já respondeu 200 acima ou nunca chegou a responder
   }
+});
+
+// ─── Rota legada ZapSign — mantida para não quebrar caso ainda exista algum
+//     documento antigo em trânsito. Pode ser removida depois.
+router.post('/zapsign', (req, res) => {
+  console.warn('⚠️  Webhook ZapSign chamado — integração encerrada. Ignorando.');
+  res.json({ ok: true, note: 'ZapSign desativado' });
 });
 
 export default router;

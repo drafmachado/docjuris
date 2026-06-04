@@ -12,6 +12,16 @@ const router = Router();
 
 router.use(authMiddleware);
 
+// Sanitiza IDs de rota — previne path traversal
+function sanitizeId(id) {
+  const n = parseInt(id, 10);
+  if (isNaN(n) || n <= 0) return null;
+  return n;
+}
+
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
 // GET /api/clients — lista todos
 router.get('/', (req, res) => {
   const db = getDB();
@@ -30,7 +40,9 @@ router.get('/', (req, res) => {
 // GET /api/clients/:id — detalhes
 router.get('/:id', (req, res) => {
   const db = getDB();
-  const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(req.params.id);
+  const clientId = sanitizeId(req.params.id);
+  if (!clientId) return res.status(400).json({ error: 'ID inválido' });
+  const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(clientId);
   if (!client) return res.status(404).json({ error: 'Cliente não encontrado' });
 
   const files = db.prepare('SELECT * FROM client_files WHERE client_id = ? ORDER BY uploaded_at DESC').all(client.id);
@@ -110,7 +122,20 @@ router.post('/:id/files', async (req, res) => {
   if (!req.files?.files) return res.status(400).json({ error: 'Nenhum arquivo' });
 
   const files = Array.isArray(req.files.files) ? req.files.files : [req.files.files];
-  const clientDir = path.join(CLIENT_FILES_DIR, `client_${req.params.id}`);
+
+  // Validar tipo e tamanho
+  for (const file of files) {
+    if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+      return res.status(400).json({ error: `Tipo não permitido: ${file.name}` });
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      return res.status(400).json({ error: `Arquivo muito grande: ${file.name}. Máximo 10MB.` });
+    }
+  }
+
+  const safeClientId = sanitizeId(req.params.id);
+  if (!safeClientId) return res.status(400).json({ error: 'ID inválido' });
+  const clientDir = path.join(CLIENT_FILES_DIR, `client_${safeClientId}`);
   if (!fs.existsSync(clientDir)) fs.mkdirSync(clientDir, { recursive: true });
 
   const saved = [];

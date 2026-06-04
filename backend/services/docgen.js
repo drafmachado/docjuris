@@ -29,6 +29,11 @@ export async function generateDocument(templateFilename, values, outputBasename)
     paragraphLoop: true,
     linebreaks: true,
     errorLogging: false,
+    // Placeholders não encontrados retornam string vazia em vez de lançar erro
+    nullGetter(part) {
+      if (!part.module) return '';
+      return '';
+    },
   });
 
   // Substitui os campos — docxtemplater usa {CAMPO} (sem duplas chaves)
@@ -107,22 +112,49 @@ export const AUTO_FIELD_MAP = {
 export function buildFillValues(client, manualValues) {
   // Constrói cidade_estado se necessário
   const cidadeEstado = [client.cidade, client.estado].filter(Boolean).join(', ');
+  const enderecoCompleto = [client.endereco, client.cidade, client.estado].filter(Boolean).join(', ');
 
+  // Mapeamento amplo: cobre variações de placeholder nos templates
   const clientFields = {
-    'NOME_CLIENTE': client.nome,
-    'Nome do contratante': client.nome,
-    'Nacionalidade': client.nacionalidade,
-    'Número do documento': client.rg,
-    'Órgão expedidor': client.orgao_expedidor,
-    'Número CPF': client.cpf,
-    'Endereço completo': [client.endereco, client.cidade, client.estado].filter(Boolean).join(', '),
-    'Cidade e Estado': cidadeEstado,
-    'NOME': client.nome,
-    'CPF': client.cpf,
-    'RG': client.rg,
-    'ENDEREÇO': client.endereco,
-    'CIDADE': client.cidade,
-    'ESTADO': client.estado,
+    // Variações de nome
+    'NOME_CLIENTE':        client.nome || '',
+    'Nome do contratante': client.nome || '',
+    'NOME':                client.nome || '',
+    'nome':                client.nome || '',
+    // Nacionalidade
+    'Nacionalidade':       client.nacionalidade || '',
+    'nacionalidade':       client.nacionalidade || '',
+    // RG
+    'Número do documento': client.rg || '',
+    'RG':                  client.rg || '',
+    'rg':                  client.rg || '',
+    // Órgão expedidor
+    'Órgão expedidor':     client.orgao_expedidor || '',
+    'orgao_expedidor':     client.orgao_expedidor || '',
+    'ORGAO_EXPEDIDOR':     client.orgao_expedidor || '',
+    // CPF
+    'Número CPF':          client.cpf || '',
+    'CPF':                 client.cpf || '',
+    'cpf':                 client.cpf || '',
+    // Endereço
+    'Endereço completo':   enderecoCompleto,
+    'ENDEREÇO':            client.endereco || '',
+    'endereco':            client.endereco || '',
+    // Cidade / Estado
+    'Cidade e Estado':     cidadeEstado,
+    'cidade_estado':       cidadeEstado,
+    'CIDADE':              client.cidade || '',
+    'cidade':              client.cidade || '',
+    'ESTADO':              client.estado || '',
+    'estado':              client.estado || '',
+    // Email e telefone
+    'email':               client.email || '',
+    'EMAIL':               client.email || '',
+    'telefone':            client.telefone || '',
+    'TELEFONE':            client.telefone || '',
+    // Data
+    'data_atual':          new Date().toLocaleDateString('pt-BR'),
+    'DATA_ATUAL':          new Date().toLocaleDateString('pt-BR'),
   };
 
   return { ...clientFields, ...manualValues };

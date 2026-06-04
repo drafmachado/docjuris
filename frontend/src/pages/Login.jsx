@@ -70,7 +70,7 @@ export default function Login() {
         </form>
 
         <p style={{ fontSize: 11, color: '#9a9a97', textAlign: 'center', marginTop: '1rem' }}>
-          Login padrão: admin@escritorio.com / admin123
+          DocJuris · Sistema de Documentos Jurídicos
         </p>
       </div>
     </div>

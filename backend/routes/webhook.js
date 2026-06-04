@@ -26,7 +26,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ────────────────────────────────────────────────────────────────────────────
 router.post('/autentique', async (req, res) => {
   try {
-    // ── 1. Validar secret ──────────────────────────────────────────────────
+    // ── 1. Validar secret do Autentique ──────────────────────────────────────
     const secret = process.env.AUTENTIQUE_WEBHOOK_SECRET;
     if (secret) {
       const receivedSecret =

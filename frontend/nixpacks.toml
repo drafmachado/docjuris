@@ -1,5 +1,11 @@
+[phases.setup]
+nixPkgs = ["nodejs_20", "libreoffice-fresh"]
+
+[phases.install]
+cmds = ["cd backend && npm install && cd ../frontend && npm install"]
+
 [phases.build]
-cmds = ["npm install", "npm run build"]
+cmds = ["cd frontend && npm run build"]
 
 [start]
-cmd = "npx serve dist -l $PORT"
+cmd = "node backend/server.js"

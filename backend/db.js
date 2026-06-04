@@ -140,12 +140,18 @@ export function initDB() {
 
   const adminExists = db.prepare('SELECT id FROM users WHERE role = ?').get('admin');
   if (!adminExists) {
-    const hash = bcrypt.hashSync('admin123', 10);
+    const crypto = require('crypto');
+    const initialPassword = process.env.ADMIN_INITIAL_PASSWORD || crypto.randomBytes(16).toString('hex');
+    const hash = bcrypt.hashSync(initialPassword, 12);
     db.prepare(`
       INSERT INTO users (name, email, password_hash, role)
       VALUES (?, ?, ?, ?)
     `).run('Administrador', 'admin@escritorio.com', hash, 'admin');
-    console.log('👤 Usuário admin criado: admin@escritorio.com / admin123');
+    if (process.env.ADMIN_INITIAL_PASSWORD) {
+      console.log('👤 Admin criado com senha da variável ADMIN_INITIAL_PASSWORD');
+    } else {
+      console.warn('⚠️  Senha temporária do admin:', initialPassword);
+    }
     console.log('⚠️  TROQUE A SENHA após o primeiro login!');
   }
 

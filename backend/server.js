@@ -1,6 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import fileUpload from 'express-fileupload';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import { authMiddleware } from './middleware/auth.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { initDB } from './db.js';
@@ -17,15 +20,59 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173', credentials: true }));
-app.use(express.json());
+// ── Segurança: CORS restrito ao domínio real ──────────────────────────────
+const ALLOWED_ORIGINS = [
+  process.env.FRONTEND_URL,
+  'https://docjuris-production.up.railway.app',
+  'https://advmachado.adv.br',
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, cb) => {
+    // Permite sem origin (ex: mobile apps, Postman em dev)
+    if (!origin) return cb(null, true);
+    if (ALLOWED_ORIGINS.includes(origin) || process.env.NODE_ENV !== 'production') {
+      return cb(null, true);
+    }
+    cb(new Error('Origem não permitida pelo CORS'));
+  },
+  credentials: true,
+}));
+// ── Segurança: headers HTTP (Helmet) ──────────────────────────────────────
+app.use(helmet({
+  contentSecurityPolicy: false, // Desabilitado para não quebrar o React/landing
+  crossOriginEmbedderPolicy: false,
+}));
+
+app.use(express.json({ limit: '1mb' })); // Limite no body para prevenir DoS
 app.use(fileUpload({
   limits: { fileSize: 10 * 1024 * 1024 },
   useTempFiles: true,
   tempFileDir: path.join(__dirname, '../uploads_temp'),
 }));
 
-app.use('/files', express.static(path.join(__dirname, '../storage')));
+// ── Segurança: /files protegido por autenticação ──────────────────────────
+// Apenas usuários autenticados podem baixar PDFs, docs e arquivos dos clientes
+app.use('/files', authMiddleware, express.static(path.join(__dirname, '../storage')));
+// ── Segurança: rate limiting ──────────────────────────────────────────────
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 10,                   // máximo 10 tentativas por IP
+  message: { error: 'Muitas tentativas de login. Aguarde 15 minutos.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,  // 1 minuto
+  max: 100,              // 100 req/min por IP
+  message: { error: 'Muitas requisições. Aguarde um momento.' },
+  skip: (req) => req.path.startsWith('/api/health'), // health check não limita
+});
+
+app.use('/api/', apiLimiter);
+app.use('/api/auth/login', loginLimiter);
+
 app.use('/api/auth', authRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/documents', documentRoutes);

@@ -46,7 +46,22 @@ export async function generateDocument(templateFilename, values, outputBasename)
     normalizedValues[key] = val || '';
   }
 
-  doc.render(normalizedValues);
+  try {
+    doc.render(normalizedValues);
+  } catch (renderErr) {
+    // Logar detalhes do Multi error para diagnóstico
+    if (renderErr.properties && renderErr.properties.errors) {
+      const details = renderErr.properties.errors.map(e => ({
+        message: e.message,
+        name: e.name,
+        properties: e.properties,
+      }));
+      console.error('❌ docxtemplater render errors:', JSON.stringify(details, null, 2));
+      const firstMsg = details.map(e => e.properties?.explanation || e.message).join('; ');
+      throw new Error('Erro ao preencher template: ' + firstMsg);
+    }
+    throw renderErr;
+  }
 
   // Salva o .docx preenchido
   const docxFilename = `${outputBasename}.docx`;

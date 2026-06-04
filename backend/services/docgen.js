@@ -102,17 +102,43 @@ export async function generateDocument(templateFilename, values, outputBasename)
   const pdfFilename = `${outputBasename}.pdf`;
   const pdfPath = path.join(PDFS_DIR, pdfFilename);
 
-  try {
-    execSync(
-      `soffice --headless --convert-to pdf --outdir "${PDFS_DIR}" "${docxPath}"`,
-      { timeout: 30000, stdio: 'pipe' }
-    );
-    const generatedPdf = path.join(PDFS_DIR, `${outputBasename}.pdf`);
-    if (!fs.existsSync(generatedPdf)) throw new Error('PDF não gerado');
-  } catch (err) {
-    console.warn('LibreOffice não disponível, retornando apenas .docx:', err.message);
+  // Converte para PDF via LibreOffice (headless).
+  // O LibreOffice precisa de um HOME gravável para criar o perfil de usuário.
+  // No Nix o binário pode se chamar 'soffice' ou 'libreoffice' — tentamos ambos.
+  const loHome = process.env.NODE_ENV === 'production' ? '/app/storage/.lo-profile' : path.join(__dirname, '../../storage/.lo-profile');
+  if (!fs.existsSync(loHome)) fs.mkdirSync(loHome, { recursive: true });
+
+  const loCommands = ['soffice', 'libreoffice'];
+  let pdfOk = false;
+  let lastErr = null;
+
+  for (const cmd of loCommands) {
+    try {
+      execSync(
+        `${cmd} --headless --convert-to pdf --outdir "${PDFS_DIR}" "${docxPath}"`,
+        {
+          timeout: 60000,
+          stdio: 'pipe',
+          env: { ...process.env, HOME: loHome },
+        }
+      );
+      const generatedPdf = path.join(PDFS_DIR, `${outputBasename}.pdf`);
+      if (fs.existsSync(generatedPdf)) {
+        pdfOk = true;
+        break;
+      }
+      lastErr = new Error('PDF não foi gerado pelo comando ' + cmd);
+    } catch (err) {
+      lastErr = err;
+      // tenta o próximo comando
+    }
+  }
+
+  if (!pdfOk) {
+    console.warn('⚠️  LibreOffice indisponível, retornando apenas .docx:', lastErr?.message);
     return { docxFilename, pdfFilename: null, docxPath };
   }
+  console.log('✅ PDF gerado:', pdfFilename);
 
   return { docxFilename, pdfFilename, docxPath, pdfPath };
 }

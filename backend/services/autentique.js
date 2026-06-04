@@ -10,6 +10,40 @@ if (!AUTENTIQUE_API_TOKEN) {
   console.warn('[autentique] AUTENTIQUE_API_TOKEN nao definido. Configure no Railway.');
 }
 
+// ─── Signatários por template ────────────────────────────────────────────────
+// Templates 5 e 6: só o cliente assina
+// Templates 4 e 7: cliente + Dra. Andreia (cliente assina primeiro)
+// Outros / desconhecidos: só o cliente (comportamento padrão seguro)
+export function buildSigners(templateId, clientEmail) {
+  const ANDREIA_EMAIL = 'dra.andreia@advmachado.adv.br';
+  const THAISA_EMAIL  = 'thaiisa_sousa@hotmail.com';
+
+  const id = Number(templateId);
+
+  // Só cliente
+  if (id === 5 || id === 6) {
+    return [
+      { email: clientEmail, action: 'SIGN' },
+    ];
+  }
+
+  // Cliente + Andreia (cliente assina primeiro)
+  if (id === 4 || id === 7) {
+    return [
+      { email: clientEmail,   action: 'SIGN' },
+      { email: ANDREIA_EMAIL, action: 'SIGN' },
+    ];
+  }
+
+  // Casos especiais futuros: cliente + Andreia + Thaisa
+  // if (id === X) { return [..., { email: THAISA_EMAIL, action: 'SIGN' }]; }
+
+  // Padrão: só cliente
+  console.warn(`[autentique] Template ${templateId} sem regra de signatários definida. Usando padrão: só cliente.`);
+  return [{ email: clientEmail, action: 'SIGN' }];
+}
+
+// ─── Criar documento e enviar para assinatura ────────────────────────────────
 export async function createDocument({ name, filePath, fileBuffer, fileName, signers, options = {} }) {
   const mutation = `
     mutation CreateDocumentMutation(
@@ -69,6 +103,7 @@ export async function createDocument({ name, filePath, fileBuffer, fileName, sig
   return response.data.data.createDocument;
 }
 
+// ─── Consultar documento ─────────────────────────────────────────────────────
 export async function getDocument(documentId) {
   const query = `
     query {
@@ -96,6 +131,14 @@ export async function getDocument(documentId) {
   return response.data.data.document;
 }
 
+// ─── Baixar PDF assinado a partir da URL pública do Autentique ───────────────
+export async function downloadSignedPdf(signedUrl, destPath) {
+  const response = await axios.get(signedUrl, { responseType: 'arraybuffer' });
+  fs.writeFileSync(destPath, Buffer.from(response.data));
+  return destPath;
+}
+
+// ─── Reenviar assinatura ─────────────────────────────────────────────────────
 export async function resendSignature(signaturePublicId) {
   const mutation = `
     mutation {
@@ -110,6 +153,7 @@ export async function resendSignature(signaturePublicId) {
   return response.data.data.resendSignature;
 }
 
+// ─── Deletar documento ────────────────────────────────────────────────────────
 export async function deleteDocument(documentId) {
   const mutation = `
     mutation {
@@ -122,6 +166,7 @@ export async function deleteDocument(documentId) {
   return response.data.data.deleteDocument;
 }
 
+// ─── Helpers internos ────────────────────────────────────────────────────────
 function authHeaders() {
   return {
     'Content-Type': 'application/json',

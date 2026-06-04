@@ -8,7 +8,7 @@ import { Resend } from 'resend';
 import { getDB } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { extractClientData } from '../services/ai.js';
-import { createDocument } from '../services/autentique.js';
+import { createDocument, buildSigners } from '../services/autentique.js';
  
 const router = express.Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -287,10 +287,12 @@ async function generateDocumentsAutomatically(db, link) {
         // ── Autentique (substitui ZapSign) ──────────────────────────────
         try {
           const docxPath = path.join(storageDir, 'pdfs', docxFilename);
+          // D1: signatários conforme o template (4/7 = cliente+Andreia; 5/6 = só cliente)
+          const signers = buildSigners(templateId, client.email);
           const autDoc = await createDocument({
             name: `${template.name} - ${client.nome}`,
             filePath: docxPath,
-            signers: [{ email: client.email, action: 'SIGN' }],
+            signers,
           });
  
           db.prepare(`UPDATE documents SET zapsign_doc_token = ? WHERE id = ?`)

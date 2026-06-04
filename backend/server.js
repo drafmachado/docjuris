@@ -18,6 +18,10 @@ import { runBackup } from './services/backup.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+
+// Railway usa proxy reverso — necessário para rate limit funcionar com IP real
+// Sem isso, express-rate-limit vê sempre o IP do proxy, não do usuário
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 
 // ── Segurança: CORS restrito ao domínio real ──────────────────────────────

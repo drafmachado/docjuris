@@ -25,40 +25,69 @@ export async function generateDocument(templateFilename, values, outputBasename)
   // Lê e processa o template
   const content = fs.readFileSync(templatePath, 'binary');
   const zip = new PizZip(content);
-  const doc = new Docxtemplater(zip, {
-    paragraphLoop: true,
-    linebreaks: true,
-    errorLogging: false,
-    // Placeholders não encontrados retornam string vazia em vez de lançar erro
-    nullGetter(part) {
-      if (!part.module) return '';
-      return '';
-    },
-  });
-
-  // Substitui os campos — docxtemplater usa {CAMPO} (sem duplas chaves)
-  // mas nossos templates usam {{CAMPO}}, então convertemos
+  // Monta valores normalizados — cobre variações de maiúsculas e underscores
   const normalizedValues = {};
   for (const [key, val] of Object.entries(values)) {
-    const normalKey = key.replace(/\s+/g, '_').toUpperCase();
-    normalizedValues[normalKey] = val || '';
-    // Também mantém a chave original para compatibilidade
-    normalizedValues[key] = val || '';
+    const v = val || '';
+    normalizedValues[key] = v;
+    normalizedValues[key.toUpperCase()] = v;
+    normalizedValues[key.toLowerCase()] = v;
+    normalizedValues[key.replace(/\s+/g, '_')] = v;
+    normalizedValues[key.replace(/\s+/g, '_').toUpperCase()] = v;
+  }
+
+  // Construtor com tratamento robusto de erros de parsing
+  let doc;
+  try {
+    doc = new Docxtemplater(zip, {
+      paragraphLoop: true,
+      linebreaks: true,
+      errorLogging: false,
+      // Placeholders não encontrados retornam string vazia
+      nullGetter(part) {
+        return '';
+      },
+      // Parser customizado: ignora erros de sintaxe nos placeholders
+      parser(tag) {
+        return {
+          get(scope) {
+            if (tag === '.') return scope['.'];
+            // Busca case-insensitive
+            const keyNormal = tag.replace(/\s+/g, '_');
+            return scope[tag]
+              ?? scope[tag.toUpperCase()]
+              ?? scope[tag.toLowerCase()]
+              ?? scope[keyNormal]
+              ?? scope[keyNormal.toUpperCase()]
+              ?? '';
+          }
+        };
+      },
+    });
+  } catch (compileErr) {
+    // Erro no construtor = placeholders com sintaxe inválida no .docx
+    // Logar para diagnóstico e relançar com mensagem útil
+    if (compileErr.properties?.errors) {
+      const details = compileErr.properties.errors
+        .map(e => e.properties?.explanation || e.properties?.tag || e.message)
+        .filter(Boolean)
+        .join('; ');
+      console.error('❌ docxtemplater compile error:', details);
+      throw new Error('Template com placeholders inválidos: ' + details);
+    }
+    throw compileErr;
   }
 
   try {
     doc.render(normalizedValues);
   } catch (renderErr) {
-    // Logar detalhes do Multi error para diagnóstico
-    if (renderErr.properties && renderErr.properties.errors) {
-      const details = renderErr.properties.errors.map(e => ({
-        message: e.message,
-        name: e.name,
-        properties: e.properties,
-      }));
-      console.error('❌ docxtemplater render errors:', JSON.stringify(details, null, 2));
-      const firstMsg = details.map(e => e.properties?.explanation || e.message).join('; ');
-      throw new Error('Erro ao preencher template: ' + firstMsg);
+    if (renderErr.properties?.errors) {
+      const details = renderErr.properties.errors
+        .map(e => e.properties?.explanation || e.properties?.tag || e.message)
+        .filter(Boolean)
+        .join('; ');
+      console.error('❌ docxtemplater render error:', details);
+      throw new Error('Erro ao preencher template: ' + details);
     }
     throw renderErr;
   }

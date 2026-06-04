@@ -35,6 +35,29 @@ app.use('/api/upload-links', uploadLinkRoutes);
 app.use('/api/webhook', webhookRouter);
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.0.0' }));
 
+// Diagnóstico LibreOffice — pode remover após confirmar funcionamento
+app.get('/api/health/soffice', async (req, res) => {
+  const { execSync } = await import('child_process');
+  const results = {};
+  const loHome = '/app/storage/.lo-profile';
+  for (const cmd of ['soffice', 'libreoffice', 'which soffice', 'which libreoffice']) {
+    try {
+      const out = execSync(cmd + (cmd.startsWith('which') ? '' : ' --version'),
+        { timeout: 10000, stdio: 'pipe', env: { ...process.env, HOME: loHome } }
+      ).toString().trim();
+      results[cmd] = out.substring(0, 120);
+    } catch (e) {
+      results[cmd] = 'ERRO: ' + e.message.substring(0, 80);
+    }
+  }
+  // Listar binários disponíveis no PATH
+  try {
+    results['PATH'] = process.env.PATH;
+    results['ls_nix'] = execSync('ls /nix/store/ | grep libreoffice | head -5', { stdio: 'pipe' }).toString().trim();
+  } catch(e) { results['ls_nix'] = 'N/A'; }
+  res.json(results);
+});
+
 // 1. Landing page (tem prioridade sobre o React)
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => {

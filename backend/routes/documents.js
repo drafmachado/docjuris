@@ -8,6 +8,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { generateDocument, buildFillValues } from '../services/docgen.js';
 import { sendDocumentEmail } from '../services/email.js';
 import { createDocument, buildSigners } from '../services/autentique.js';
+import { notifyDocumentoGerado } from '../services/evolution.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PDFS_DIR = process.env.NODE_ENV === 'production'
@@ -114,6 +115,14 @@ router.post('/generate', async (req, res) => {
         .run(autDoc.id, docId);
 
       console.log(`✅ Documento ${docId} enviado ao Autentique: ${autDoc.id} | signatários: ${signers.map(s => s.email).join(', ')}`);
+
+      // D5: Notificações WhatsApp
+      notifyDocumentoGerado({
+        clienteNome:     client.nome,
+        clienteTelefone: client.telefone,
+        templateNome:    template.name,
+        signatarios:     autentiqueLinks,
+      }).catch(err => console.warn('[whatsapp] Erro na notificação de geração:', err.message));
     } catch (autErr) {
       console.error('❌ Erro ao enviar para Autentique:', autErr.message);
       // Não aborta — documento foi gerado; Autentique pode ser tentado depois

@@ -5,6 +5,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { getDB } from '../db.js';
 import { downloadSignedPdf } from '../services/autentique.js';
+import { notifyDocumentoAssinado } from '../services/evolution.js';
 
 const router = express.Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -94,6 +95,28 @@ router.post('/autentique', async (req, res) => {
       `).run(pdfFilename, documentId);
 
       console.log(`✅ PDF assinado salvo: ${pdfFilename} (doc DB id=${docRecord.id})`);
+
+      // D5: Notificações WhatsApp — buscar dados do cliente
+      try {
+        const db2 = getDB();
+        const clientInfo = db2.prepare(`
+          SELECT c.nome, c.telefone, t.name as template_name
+          FROM documents d
+          JOIN clients c ON c.id = d.client_id
+          JOIN templates t ON t.id = d.template_id
+          WHERE d.id = ?
+        `).get(docRecord.id);
+
+        if (clientInfo) {
+          notifyDocumentoAssinado({
+            clienteNome:     clientInfo.nome,
+            clienteTelefone: clientInfo.telefone,
+            templateNome:    clientInfo.template_name,
+          }).catch(err => console.warn('[whatsapp] Erro na notificação de assinatura:', err.message));
+        }
+      } catch (notifyErr) {
+        console.warn('[whatsapp] Erro ao buscar dados para notificação:', notifyErr.message);
+      }
     } catch (err) {
       console.error('❌ Erro ao baixar PDF assinado do Autentique:', err.message);
     }

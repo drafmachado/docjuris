@@ -321,7 +321,7 @@ RESPONSIVO / MOBILE
 .two-col{ gap:2.5rem; }
 .about{ gap:2.5rem; }
 .hero{ grid-template-columns:1fr; }
-.hero-right{ order:-1; min-height:200px; max-height:220px; }
+.hero-right{ order:1; min-height:280px; max-height:320px; }
 .hero-left{ padding:2.5rem 1.5rem; }
 .areas{ grid-template-columns:1fr; }
 .diffs{ grid-template-columns:repeat(2,1fr); }

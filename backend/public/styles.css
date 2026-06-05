@@ -319,6 +319,7 @@ RESPONSIVO / MOBILE
 ============================================================ */
 @media (max-width: 960px){
 .two-col{ gap:2.5rem; }
+.about{ gap:2.5rem; }
 .hero{ grid-template-columns:1fr; }
 .hero-right{ order:-1; min-height:300px; }
 .hero-left{ padding:2.5rem 1.5rem; }
@@ -331,6 +332,12 @@ RESPONSIVO / MOBILE
 }
 @media (max-width: 720px){
 .two-col{ grid-template-columns:1fr; gap:2rem; }
+.form-lead{ max-width:100%; padding:1.5rem 1.2rem; }
+.about-photo{ min-height:280px; max-height:320px; aspect-ratio:auto; }
+.about{ grid-template-columns:1fr; gap:2rem; }
+.page-hero h1{ font-size:26px; }
+.page-hero .sub{ font-size:15px; }
+.prose p{ font-size:14.5px; }
 .container{ padding:0 1.25rem; }
 .nav-inner{ flex-wrap:wrap; padding:.6rem 1.25rem; }
 .nav-logo img{ height:66px; }

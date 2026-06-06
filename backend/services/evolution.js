@@ -6,7 +6,7 @@ import axios from 'axios';
 
 const EVOLUTION_URL      = process.env.EVOLUTION_API_URL;
 const EVOLUTION_KEY      = process.env.EVOLUTION_API_KEY;
-const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'advmachado';
+const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'docjuris';
 const ANDREIA_WA         = process.env.ANDREIA_WHATSAPP || '5511967351199';
 
 // Verificar configuração ao iniciar
@@ -71,7 +71,7 @@ export async function notifyDocumentoGerado({ clienteNome, clienteTelefone, temp
 
   // 2. Enviar link de assinatura ao cliente (se tiver telefone e link)
   if (clienteTelefone && signatarios?.length > 0) {
-    const linkCliente = signatarios.find(s => s.email !== 'dra.andreia@advmachado.adv.br')?.link;
+    const linkCliente = signatarios.find(s => s.email !== 'dra.andreia@docjuris.adv.br')?.link;
     if (linkCliente) {
       const msgCliente =
         `Olá, *${clienteNome}*! 👋\n\n` +

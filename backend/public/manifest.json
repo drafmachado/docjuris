@@ -1,0 +1,26 @@
+{
+  "name": "Andreia Machado Advocacia",
+  "short_name": "Adv. Machado",
+  "description": "Advocacia especializada em Direito Médico, Saúde e Inventários",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d2340",
+  "theme_color": "#0d2340",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Falar pelo WhatsApp",
+      "url": "https://wa.me/5511967351199?text=Ol%C3%A1,%20gostaria%20de%20orienta%C3%A7%C3%A3o%20jur%C3%ADdica.",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Solicitar análise do caso",
+      "url": "/#contato",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

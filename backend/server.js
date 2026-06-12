@@ -87,7 +87,7 @@ app.use('/api/webhook', webhookRouter);
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.0.0' }));
 
 // 1. Landing page (tem prioridade sobre o React)
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });

@@ -190,6 +190,11 @@
       .footer a   { color: #555; }
     }
   </style>
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#0d2340" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js');}</script>
 </head>
 <body>
   <div class="page">

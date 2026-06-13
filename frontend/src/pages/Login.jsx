@@ -31,7 +31,7 @@ export default function Login() {
           <div style={{ width: 48, height: 48, background: '#0f2035', borderRadius: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.75rem' }}>
             <Scale size={22} color="white" />
           </div>
-          <h1 style={{ fontSize: 20, fontWeight: 600, color: '#1a1a18' }}>DocJuris</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 600, color: '#1a1a18' }}>Veredo</h1>
           <p style={{ fontSize: 13, color: '#6b6b68', marginTop: 4 }}>Sistema de Documentos Jurídicos</p>
         </div>
 
@@ -70,7 +70,7 @@ export default function Login() {
         </form>
 
         <p style={{ fontSize: 11, color: '#9a9a97', textAlign: 'center', marginTop: '1rem' }}>
-          DocJuris · Sistema de Documentos Jurídicos
+          Veredo · Sistema de Gestão Jurídica
         </p>
       </div>
     </div>

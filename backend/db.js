@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import Database from 'better-sqlite3';
 import bcrypt from 'bcryptjs';
 import path from 'path';
@@ -175,7 +176,7 @@ export function initDB() {
 
   const adminExists = db.prepare('SELECT id FROM users WHERE role = ?').get('admin');
   if (!adminExists) {
-    const crypto = require('crypto');
+    
     const initialPassword = process.env.ADMIN_INITIAL_PASSWORD || crypto.randomBytes(16).toString('hex');
     const hash = bcrypt.hashSync(initialPassword, 12);
     db.prepare(`

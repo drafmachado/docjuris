@@ -56,7 +56,7 @@ export async function verificarPrazosProximos() {
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto">
       <div style="background:#0f2035;padding:20px;border-radius:8px 8px 0 0">
-        <h2 style="color:white;margin:0">⚠️ Alerta de Prazos — DocJuris</h2>
+        <h2 style="color:white;margin:0">⚠️ Alerta de Prazos — Veredo</h2>
       </div>
       <div style="padding:20px;background:#f9fafb;border:1px solid #e5e7eb">
         <p>Você tem <strong>${prazos.length} prazo(s)</strong> vencendo nos próximos 3 dias:</p>
@@ -71,7 +71,7 @@ export async function verificarPrazosProximos() {
           </thead>
           <tbody>${linhas}</tbody>
         </table>
-        <p style="margin-top:20px;color:#666;font-size:12px">Acesse o DocJuris para visualizar os detalhes.</p>
+        <p style="margin-top:20px;color:#666;font-size:12px">Acesse o Veredo para visualizar os detalhes.</p>
       </div>
     </div>`;
 
@@ -80,7 +80,7 @@ export async function verificarPrazosProximos() {
     const { data, error } = await resend.emails.send({
       from: `${senderName} <docjuris@advmachado.adv.br>`,
       to: destinatario,
-      subject: `⚠️ ${prazos.length} prazo(s) vencendo em breve — DocJuris`,
+      subject: `⚠️ ${prazos.length} prazo(s) vencendo em breve — Veredo`,
       html,
     });
 

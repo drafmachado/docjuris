@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
-import { LayoutDashboard, Users, FileText, FileStack, UserPlus, LogOut, Scale, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, FileStack, UserPlus, LogOut, Scale, Menu, X, Gavel } from 'lucide-react';
 import styles from './Layout.module.css';
 
 export default function Layout() {
@@ -16,12 +16,10 @@ export default function Layout() {
   return (
     <div className={styles.app}>
 
-      {/* Botão hambúrguer — só aparece no mobile */}
       <button className={styles.menuBtn} onClick={() => setSidebarOpen(o => !o)} aria-label="Menu">
         {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
       </button>
 
-      {/* Overlay escuro quando sidebar aberta */}
       <div className={`${styles.overlay} ${sidebarOpen ? styles.open : ''}`} onClick={close} />
 
       <aside className={`${styles.sidebar} ${sidebarOpen ? styles.open : ''}`}>
@@ -39,6 +37,9 @@ export default function Layout() {
           </NavLink>
           <NavLink to="/clients" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
             <Users size={16} /> Clientes
+          </NavLink>
+          <NavLink to="/processos" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+            <Gavel size={16} /> Processos
           </NavLink>
           <NavLink to="/documents" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
             <FileText size={16} /> Documentos

@@ -17,6 +17,7 @@ import webhookRouter from './routes/webhook.js';
 import processosRoutes from './routes/processos.js';
 import { runBackup } from './services/backup.js';
 import { verificarPrazosProximos } from './services/prazos-alert.js';
+import { monitorarProcessos } from './services/monitoramento.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -138,3 +139,10 @@ scheduleBackup();
 verificarPrazosProximos(); // roda imediatamente ao iniciar
 setInterval(verificarPrazosProximos, 60 * 60 * 1000); // repete a cada 1h
 console.log('⏰ Verificação de prazos agendada (a cada 1h)');
+
+// ─── Monitoramento de andamentos — roda a cada 6h ─────────────────────────
+setTimeout(() => {
+  monitorarProcessos();
+  setInterval(monitorarProcessos, 6 * 60 * 60 * 1000);
+}, 30 * 1000); // aguarda 30s após iniciar para não sobrecarregar o boot
+console.log('🔍 Monitoramento de andamentos agendado (a cada 6h)');

@@ -78,7 +78,7 @@ export async function verificarPrazosProximos() {
   try {
     const resend = await getResend();
     const { data, error } = await resend.emails.send({
-      from: `${senderName} <onboarding@resend.dev>`,
+      from: `${senderName} <docjuris@advmachado.adv.br>`,
       to: destinatario,
       subject: `⚠️ ${prazos.length} prazo(s) vencendo em breve — DocJuris`,
       html,

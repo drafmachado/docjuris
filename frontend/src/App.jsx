@@ -12,6 +12,7 @@ import Users from './pages/Users.jsx';
 import UploadPage from './pages/UploadPage.jsx';
 import Processos from './pages/Processos.jsx';
 import ProcessoDetail from './pages/ProcessoDetail.jsx';
+import IdentificarClientes from './pages/IdentificarClientes.jsx';
 
 function ProtectedRoute({ children, adminOnly }) {
   const { user, loading } = useAuth();
@@ -35,6 +36,7 @@ function AppRoutes() {
         <Route path="templates" element={<Templates />} />
         <Route path="processos" element={<Processos />} />
         <Route path="processos/:id" element={<ProcessoDetail />} />
+        <Route path="identificar-clientes" element={<IdentificarClientes />} />
         <Route path="users" element={<ProtectedRoute adminOnly><Users /></ProtectedRoute>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

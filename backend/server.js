@@ -14,6 +14,7 @@ import templateRoutes from './routes/templates.js';
 import userRoutes from './routes/users.js';
 import uploadLinkRoutes from './routes/uploadLinks.js';
 import webhookRouter from './routes/webhook.js';
+import processosRoutes from './routes/processos.js';
 import { runBackup } from './services/backup.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -80,6 +81,7 @@ app.use('/api/templates', templateRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/upload-links', uploadLinkRoutes);
 app.use('/api/webhook', webhookRouter);
+app.use('/api/processos', processosRoutes);
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.0.0' }));
 
 // 1. Landing page (tem prioridade sobre o React)

@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 const API = '/api';
 
 function getToken() {
-  return localStorage.getItem('token');
+  return localStorage.getItem('docjuris_token');
 }
 
 const TIPOS = ['Cível', 'Criminal', 'Trabalhista', 'Família', 'Previdenciário', 'Tributário', 'Administrativo', 'Outro'];

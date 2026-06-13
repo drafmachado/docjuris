@@ -52,7 +52,7 @@ async function sendText(phone, message) {
   }
 }
 
-// ── Notificações específicas do DocJuris ─────────────────────────────────────
+// ── Notificações específicas do Veredo ─────────────────────────────────────
 
 // Ao gerar documento: notifica Andreia + envia link de assinatura ao cliente
 export async function notifyDocumentoGerado({ clienteNome, clienteTelefone, templateNome, signatarios }) {
@@ -96,7 +96,7 @@ export async function notifyDocumentoAssinado({ clienteNome, clienteTelefone, te
     `✅ *Documento assinado!*\n\n` +
     `👤 Cliente: ${clienteNome}\n` +
     `📋 Documento: ${templateNome}\n\n` +
-    `O PDF assinado já está disponível no DocJuris.`;
+    `O PDF assinado já está disponível no Veredo.`;
 
   tasks.push(sendText(ANDREIA_WA, msgAndreia));
 

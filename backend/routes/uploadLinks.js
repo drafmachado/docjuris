@@ -33,7 +33,7 @@ async function sendNotification({ to, subject, html }) {
       return;
     }
     await resend.emails.send({
-      from: 'DocJuris <dra.andreia@advmachado.adv.br>',
+      from: 'Veredo <dra.andreia@advmachado.adv.br>',
       to,
       subject,
       html,
@@ -265,7 +265,7 @@ router.post('/:token/files', async (req, res) => {
     const baseUrl = process.env.BASE_URL || 'https://docjuris-production.up.railway.app';
     await sendNotification({
       to: 'fmachado.andreia@gmail.com',
-      subject: `📄 DocJuris — ${link.client_nome} enviou todos os documentos`,
+      subject: `📄 Veredo — ${link.client_nome} enviou todos os documentos`,
       html: `
         <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
           <h2 style="color:#1a3a5c">Documentos recebidos!</h2>
@@ -275,7 +275,7 @@ router.post('/:token/files', async (req, res) => {
              style="display:inline-block;background:#1a3a5c;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:16px">
             Ver pasta do cliente
           </a>
-          <p style="color:#999;font-size:12px;margin-top:32px">DocJuris · Escritório Andreia Machado</p>
+          <p style="color:#999;font-size:12px;margin-top:32px">Veredo · Escritório Andreia Machado</p>
         </div>
       `,
     });
@@ -399,7 +399,7 @@ router.post('/:token/sign', async (req, res) => {
  
   await sendNotification({
     to: 'fmachado.andreia@gmail.com',
-    subject: `✍️ DocJuris — ${client.nome} assinou o contrato`,
+    subject: `✍️ Veredo — ${client.nome} assinou o contrato`,
     html: `
       <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
         <h2 style="color:#1a3a5c">Contrato assinado!</h2>
@@ -408,7 +408,7 @@ router.post('/:token/sign', async (req, res) => {
            style="display:inline-block;background:#1a3a5c;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:16px">
           Ver pasta do cliente
         </a>
-        <p style="color:#999;font-size:12px;margin-top:32px">DocJuris · Escritório Andreia Machado</p>
+        <p style="color:#999;font-size:12px;margin-top:32px">Veredo · Escritório Andreia Machado</p>
       </div>
     `,
   });

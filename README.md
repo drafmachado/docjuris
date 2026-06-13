@@ -199,3 +199,5 @@ docjuris/
     ├── pdfs/              # Documentos gerados
     └── client_files/      # Arquivos dos clientes
 ```
+
+<!-- redeploy Sat Jun 13 14:13:25 UTC 2026 -->

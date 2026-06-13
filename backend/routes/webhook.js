@@ -134,4 +134,15 @@ router.post('/zapsign', (req, res) => {
   res.json({ ok: true, note: 'ZapSign desativado' });
 });
 
+// POST /api/webhook/judit — recebe notificações do Judit
+router.post('/judit', async (req, res) => {
+  try {
+    console.log('📡 Webhook Judit recebido');
+    res.json({ ok: true }); // responder imediatamente
+    await processarWebhookJudit(req.body);
+  } catch(e) {
+    console.error('Erro webhook Judit:', e.message);
+  }
+});
+
 export default router;

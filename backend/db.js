@@ -175,6 +175,17 @@ export function initDB() {
     );
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS andamentos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      processo_id INTEGER NOT NULL REFERENCES processos(id) ON DELETE CASCADE,
+      data TEXT NOT NULL,
+      descricao TEXT NOT NULL,
+      tipo TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
   // Migração: adiciona coluna alerta_enviado se não existir
   try { db.exec('ALTER TABLE prazos ADD COLUMN alerta_enviado INTEGER NOT NULL DEFAULT 0'); } catch {}
 

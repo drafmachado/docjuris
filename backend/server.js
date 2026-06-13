@@ -14,15 +14,15 @@ import templateRoutes from './routes/templates.js';
 import userRoutes from './routes/users.js';
 import uploadLinkRoutes from './routes/uploadLinks.js';
 import webhookRouter from './routes/webhook.js';
+import processosRoutes from './routes/processos.js';
 import { runBackup } from './services/backup.js';
+import { verificarPrazosProximos } from './services/prazos-alert.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-
-// Railway usa proxy reverso — necessário para rate limit funcionar com IP real
-// Sem isso, express-rate-limit vê sempre o IP do proxy, não do usuário
-app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
+
+app.set('trust proxy', 1); // Railway reverse proxy
 
 // ── Segurança: CORS restrito ao domínio real ──────────────────────────────
 const ALLOWED_ORIGINS = [
@@ -84,10 +84,11 @@ app.use('/api/templates', templateRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/upload-links', uploadLinkRoutes);
 app.use('/api/webhook', webhookRouter);
+app.use('/api/processos', processosRoutes);
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.0.0' }));
 
 // 1. Landing page (tem prioridade sobre o React)
-app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
+app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -132,3 +133,8 @@ function scheduleBackup() {
 }
 
 scheduleBackup();
+
+// ─── Verificação de prazos — roda a cada hora ─────────────────────────────
+verificarPrazosProximos(); // roda imediatamente ao iniciar
+setInterval(verificarPrazosProximos, 60 * 60 * 1000); // repete a cada 1h
+console.log('⏰ Verificação de prazos agendada (a cada 1h)');

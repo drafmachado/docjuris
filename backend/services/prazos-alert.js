@@ -5,14 +5,20 @@ let transporter = null;
 
 async function getTransporter() {
   if (transporter) return transporter;
+  console.log('📧 SMTP_HOST:', process.env.SMTP_HOST || 'NÃO DEFINIDO');
+  console.log('📧 SMTP_USER:', process.env.SMTP_USER || 'NÃO DEFINIDO');
   if (process.env.SMTP_HOST) {
     transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: process.env.SMTP_SECURE === 'true',
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
     });
+    console.log('📧 Transporter SMTP criado');
   } else {
+    console.log('📧 Sem SMTP configurado — usando Ethereal');
     const testAccount = await nodemailer.createTestAccount();
     transporter = nodemailer.createTransport({
       host: 'smtp.ethereal.email',

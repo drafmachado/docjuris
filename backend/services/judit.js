@@ -73,7 +73,7 @@ export async function processarWebhookJudit(payload) {
   `).get(numeroCNJ);
 
   if (!proc) {
-    console.log(`Webhook Judit: processo ${numeroCNJ} não encontrado no DocJuris`);
+    console.log(`Webhook Judit: processo ${numeroCNJ} não encontrado no Veredo`);
     return;
   }
 
@@ -215,7 +215,7 @@ async function notificarDJE(processo, analise, textoCompleto) {
       `*Processo:* ${processo.numero_cnj}\n` +
       `*Cliente:* ${processo.client_nome || 'N/A'}\n\n` +
       `*Resumo:* ${analise.resumo_simples}\n\n` +
-      (analise.tem_prazo ? `*⏰ Prazo:* ${analise.tipo_prazo} — ${analise.data_prazo}\n_Prazo criado automaticamente no DocJuris._` : '');
+      (analise.tem_prazo ? `*⏰ Prazo:* ${analise.tipo_prazo} — ${analise.data_prazo}\n_Prazo criado automaticamente no Veredo._` : '');
 
     try {
       await fetch(`${evolutionUrl}/message/sendText/${instance}`, {
@@ -248,7 +248,7 @@ async function notificarDJE(processo, analise, textoCompleto) {
             ${analise.tem_prazo ? `
             <div style="background:#fef3c7;border:1px solid #fbbf24;padding:12px;border-radius:6px">
               <strong>⏰ Prazo:</strong> ${analise.tipo_prazo} — <strong>${analise.data_prazo}</strong>
-              <br><small>Criado automaticamente no DocJuris.</small>
+              <br><small>Criado automaticamente no Veredo.</small>
             </div>` : ''}
           </div>
         </div>`,

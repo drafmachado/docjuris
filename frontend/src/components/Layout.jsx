@@ -24,7 +24,7 @@ export default function Layout() {
 
       <aside className={`${styles.sidebar} ${sidebarOpen ? styles.open : ''}`}>
         <div className={styles.logo}>
-          <Scale size={20} color="white" />
+          <svg width="22" height="22" viewBox="0 0 100 100"><path d="M 30 30 L 50 74 L 70 30" fill="none" stroke="#c5a859" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round"/><rect x="34" y="23" width="32" height="5" rx="2.5" fill="#ffffff" opacity="0.9"/></svg>
           <div>
             <span className={styles.logoTitle}>Veredo</span>
             <span className={styles.logoSub}>Sistema Jurídico</span>

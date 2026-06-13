@@ -195,19 +195,34 @@ export default function ProcessoDetail() {
             {andamentos?.erro && <div style={{ color: '#ef4444', fontSize: '14px', padding: '10px', background: '#fff1f2', borderRadius: '6px' }}>{andamentos.erro}</div>}
             {andamentos && !andamentos.erro && (
               <>
-                <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '12px' }}>
-                  {andamentos.classe && <span style={{ marginRight: '12px' }}>Classe: <strong>{andamentos.classe}</strong></span>}
-                  {andamentos.assunto && <span>Assunto: <strong>{andamentos.assunto}</strong></span>}
-                  <span style={{ marginLeft: '12px' }}>Total: <strong>{andamentos.totalMovimentos} movimentos</strong></span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {(andamentos.movimentos || []).map((m, i) => (
-                    <div key={i} style={{ display: 'flex', gap: '12px', padding: '10px', background: '#f9fafb', borderRadius: '6px', fontSize: '13px' }}>
-                      <span style={{ color: '#9ca3af', whiteSpace: 'nowrap' }}>{new Date(m.data).toLocaleDateString('pt-BR')}</span>
-                      <span style={{ color: '#374151' }}>{m.descricao}</span>
-                    </div>
-                  ))}
-                </div>
+                {(() => {
+                  const movs = andamentos.movimentos || [];
+                  return (
+                    <>
+                      <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '12px' }}>
+                        {andamentos.classe && <span style={{ marginRight: '12px' }}>Classe: <strong>{andamentos.classe}</strong></span>}
+                        {andamentos.assunto && <span style={{ marginRight: '12px' }}>Assunto: <strong>{andamentos.assunto}</strong></span>}
+                        <span><strong>{movs.length}</strong> movimentação(ões){andamentos.fonte === 'cache' ? ' (cache)' : ''}</span>
+                      </div>
+                      {movs.length === 0 ? (
+                        <div style={{ color: '#9ca3af', fontSize: '13px', textAlign: 'center', padding: '20px' }}>Nenhuma movimentação encontrada</div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {movs.map((m, i) => {
+                            let dataStr = '';
+                            try { dataStr = new Date(m.data).toLocaleDateString('pt-BR'); } catch {}
+                            return (
+                              <div key={i} style={{ display: 'flex', gap: '12px', padding: '10px', background: '#f9fafb', borderRadius: '6px', fontSize: '13px' }}>
+                                <span style={{ color: '#9ca3af', whiteSpace: 'nowrap', minWidth: '80px' }}>{dataStr}</span>
+                                <span style={{ color: '#374151' }}>{m.descricao}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </>
             )}
           </div>

@@ -1,0 +1,17 @@
+{
+  "name": "Veredo — Gestão Jurídica",
+  "short_name": "Veredo",
+  "description": "Sistema de gestão jurídica do escritório Andreia Machado",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d2340",
+  "theme_color": "#0d2340",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

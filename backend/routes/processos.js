@@ -48,12 +48,15 @@ router.post('/', (req, res) => {
 
 // PUT /api/processos/:id
 router.put('/:id', (req, res) => {
-  const { numero_cnj, vara, comarca, tribunal, tipo, polo_ativo, polo_passivo, observacoes, status } = req.body;
+  const { numero_cnj, vara, comarca, tribunal, tipo, polo_ativo, polo_passivo, observacoes, status, client_id } = req.body;
   const db = getDB();
-  db.prepare(`
-    UPDATE processos SET numero_cnj=?, vara=?, comarca=?, tribunal=?, tipo=?, polo_ativo=?, polo_passivo=?, observacoes=?, status=?, updated_at=datetime('now')
-    WHERE id=?
-  `).run(numero_cnj, vara||null, comarca||null, tribunal||null, tipo||null, polo_ativo||null, polo_passivo||null, observacoes||null, status||'ativo', req.params.id);
+  if (client_id) {
+    db.prepare(`UPDATE processos SET client_id=?, numero_cnj=?, vara=?, comarca=?, tribunal=?, tipo=?, polo_ativo=?, polo_passivo=?, observacoes=?, status=?, updated_at=datetime('now') WHERE id=?`)
+      .run(client_id, numero_cnj, vara||null, comarca||null, tribunal||null, tipo||null, polo_ativo||null, polo_passivo||null, observacoes||null, status||'ativo', req.params.id);
+  } else {
+    db.prepare(`UPDATE processos SET numero_cnj=?, vara=?, comarca=?, tribunal=?, tipo=?, polo_ativo=?, polo_passivo=?, observacoes=?, status=?, updated_at=datetime('now') WHERE id=?`)
+      .run(numero_cnj, vara||null, comarca||null, tribunal||null, tipo||null, polo_ativo||null, polo_passivo||null, observacoes||null, status||'ativo', req.params.id);
+  }
   res.json({ ok: true });
 });
 

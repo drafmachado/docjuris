@@ -16,6 +16,7 @@ import uploadLinkRoutes from './routes/uploadLinks.js';
 import webhookRouter from './routes/webhook.js';
 import processosRoutes from './routes/processos.js';
 import { runBackup } from './services/backup.js';
+import { verificarPrazosProximos } from './services/prazos-alert.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -132,3 +133,8 @@ function scheduleBackup() {
 }
 
 scheduleBackup();
+
+// ─── Verificação de prazos — roda a cada hora ─────────────────────────────
+verificarPrazosProximos(); // roda imediatamente ao iniciar
+setInterval(verificarPrazosProximos, 60 * 60 * 1000); // repete a cada 1h
+console.log('⏰ Verificação de prazos agendada (a cada 1h)');

@@ -48,7 +48,7 @@ async function notificarNovoAndamento(processo, andamento) {
     const { Resend } = await import('resend');
     const resend = new Resend(process.env.RESEND_API_KEY);
     const destinatario = process.env.ALERT_EMAIL || 'dra.andreia@advmachado.adv.br';
-    const senderName = process.env.SENDER_NAME || 'DocJuris';
+    const senderName = process.env.SENDER_NAME || 'Veredo';
     const data = new Date(andamento.data).toLocaleDateString('pt-BR');
 
     await resend.emails.send({

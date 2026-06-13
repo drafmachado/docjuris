@@ -96,11 +96,19 @@ router.delete('/:id/prazos/:prazo_id', (req, res) => {
   res.json({ ok: true });
 });
 
-// GET /api/processos/:id/andamentos — busca andamentos no DataJud
+// GET /api/processos/:id/andamentos — retorna andamentos salvos + consulta ao vivo se vazio
 router.get('/:id/andamentos', async (req, res) => {
   const db = getDB();
   const processo = db.prepare('SELECT * FROM processos WHERE id = ?').get(req.params.id);
   if (!processo) return res.status(404).json({ error: 'Processo não encontrado' });
+  
+  // Tentar andamentos salvos primeiro
+  const salvos = db.prepare('SELECT * FROM andamentos WHERE processo_id = ? ORDER BY data DESC').all(req.params.id);
+  if (salvos.length > 0) {
+    return res.json({ movimentos: salvos.map(a => ({ data: a.data, descricao: a.descricao })), fonte: 'cache' });
+  }
+  
+  // Se não tem salvos, consultar DataJud ao vivo
   const resultado = await consultarProcesso(processo.numero_cnj, processo.tribunal);
   res.json(resultado);
 });

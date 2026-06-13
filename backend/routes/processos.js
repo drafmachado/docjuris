@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { consultarProcesso } from '../services/datajud.js';
 import { getDB } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 
@@ -90,6 +91,15 @@ router.delete('/:id/prazos/:prazo_id', (req, res) => {
   const db = getDB();
   db.prepare('DELETE FROM prazos WHERE id = ?').run(req.params.prazo_id);
   res.json({ ok: true });
+});
+
+// GET /api/processos/:id/andamentos — busca andamentos no DataJud
+router.get('/:id/andamentos', async (req, res) => {
+  const db = getDB();
+  const processo = db.prepare('SELECT * FROM processos WHERE id = ?').get(req.params.id);
+  if (!processo) return res.status(404).json({ error: 'Processo não encontrado' });
+  const resultado = await consultarProcesso(processo.numero_cnj, processo.tribunal);
+  res.json(resultado);
 });
 
 export default router;

@@ -21,6 +21,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+app.set('trust proxy', 1); // Railway reverse proxy
+
 // ── Segurança: CORS restrito ao domínio real ──────────────────────────────
 const ALLOWED_ORIGINS = [
   process.env.FRONTEND_URL,

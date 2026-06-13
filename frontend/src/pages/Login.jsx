@@ -28,11 +28,11 @@ export default function Login() {
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f0', padding: '1rem' }}>
       <div style={{ background: 'white', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: '12px', padding: '2.5rem', width: '100%', maxWidth: '380px' }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{ width: 48, height: 48, background: '#0f2035', borderRadius: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.75rem' }}>
-            <Scale size={22} color="white" />
+          <div style={{ width: 56, height: 56, background: '#0d2340', borderRadius: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.75rem' }}>
+            <svg width="32" height="32" viewBox="0 0 100 100"><path d="M 30 30 L 50 74 L 70 30" fill="none" stroke="#c5a859" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round"/><rect x="34" y="23" width="32" height="5" rx="2.5" fill="#ffffff" opacity="0.9"/></svg>
           </div>
           <h1 style={{ fontSize: 20, fontWeight: 600, color: '#1a1a18' }}>Veredo</h1>
-          <p style={{ fontSize: 13, color: '#6b6b68', marginTop: 4 }}>Sistema de Documentos Jurídicos</p>
+          <p style={{ fontSize: 13, color: '#6b6b68', marginTop: 4 }}>Sistema de Gestão Jurídica</p>
         </div>
 
         <form onSubmit={handleSubmit}>

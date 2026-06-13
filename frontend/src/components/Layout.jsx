@@ -26,7 +26,7 @@ export default function Layout() {
         <div className={styles.logo}>
           <Scale size={20} color="white" />
           <div>
-            <span className={styles.logoTitle}>DocJuris</span>
+            <span className={styles.logoTitle}>Veredo</span>
             <span className={styles.logoSub}>Sistema Jurídico</span>
           </div>
         </div>

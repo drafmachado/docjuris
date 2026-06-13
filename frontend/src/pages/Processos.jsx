@@ -33,8 +33,14 @@ export default function Processos() {
   }
 
   async function fetchClientes() {
-    const r = await fetch(`${API}/clients`, { headers: { Authorization: `Bearer ${getToken()}` } });
-    if (r.ok) { const d = await r.json(); setClientes(d.clients || d); }
+    try {
+      const r = await fetch(`${API}/clients`, { headers: { Authorization: `Bearer ${getToken()}` } });
+      if (r.ok) {
+        const d = await r.json();
+        const lista = Array.isArray(d) ? d : (d.clients || []);
+        setClientes(lista);
+      }
+    } catch(e) { console.error('fetchClientes erro:', e); }
   }
 
   async function fetchPrazosProximos() {

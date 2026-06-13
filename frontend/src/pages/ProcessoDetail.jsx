@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, CheckCircle, Circle, Calendar, Gavel } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, CheckCircle, Circle, Calendar, Gavel, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const API = '/api';
@@ -13,9 +13,26 @@ export default function ProcessoDetail() {
   const navigate = useNavigate();
   const [processo, setProcesso] = useState(null);
   const [showPrazoModal, setShowPrazoModal] = useState(false);
+  const [andamentos, setAndamentos] = useState(null);
+  const [loadingAndamentos, setLoadingAndamentos] = useState(false);
+  const [showAndamentos, setShowAndamentos] = useState(false);
   const [prazoForm, setPrazoForm] = useState({ titulo: '', tipo: 'Prazo', data_limite: '', observacoes: '' });
 
   useEffect(() => { fetchProcesso(); }, [id]);
+
+  async function buscarAndamentos() {
+    setLoadingAndamentos(true);
+    setShowAndamentos(true);
+    try {
+      const r = await fetch(`${API}/processos/${id}/andamentos`, { headers: { Authorization: `Bearer ${getToken()}` } });
+      const d = await r.json();
+      setAndamentos(d);
+    } catch(e) {
+      setAndamentos({ erro: 'Erro ao consultar DataJud.' });
+    } finally {
+      setLoadingAndamentos(false);
+    }
+  }
 
   async function fetchProcesso() {
     const r = await fetch(`${API}/processos/${id}`, { headers: { Authorization: `Bearer ${getToken()}` } });
@@ -162,7 +179,42 @@ export default function ProcessoDetail() {
         )}
       </div>
 
-      {/* Modal prazo */}
+      {/* Andamentos DataJud */}
+      <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px', marginTop: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ margin: 0, fontSize: '16px', color: '#0f2035' }}>Andamentos (DataJud)</h2>
+          <button onClick={buscarAndamentos} disabled={loadingAndamentos} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '8px 12px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
+            <RefreshCw size={14} className={loadingAndamentos ? 'spin' : ''} />
+            {loadingAndamentos ? 'Consultando...' : 'Consultar CNJ'}
+          </button>
+        </div>
+
+        {showAndamentos && (
+          <div style={{ marginTop: '16px' }}>
+            {loadingAndamentos && <div style={{ textAlign: 'center', color: '#9ca3af', padding: '20px' }}>Consultando DataJud...</div>}
+            {andamentos?.erro && <div style={{ color: '#ef4444', fontSize: '14px', padding: '10px', background: '#fff1f2', borderRadius: '6px' }}>{andamentos.erro}</div>}
+            {andamentos && !andamentos.erro && (
+              <>
+                <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '12px' }}>
+                  {andamentos.classe && <span style={{ marginRight: '12px' }}>Classe: <strong>{andamentos.classe}</strong></span>}
+                  {andamentos.assunto && <span>Assunto: <strong>{andamentos.assunto}</strong></span>}
+                  <span style={{ marginLeft: '12px' }}>Total: <strong>{andamentos.totalMovimentos} movimentos</strong></span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {(andamentos.movimentos || []).map((m, i) => (
+                    <div key={i} style={{ display: 'flex', gap: '12px', padding: '10px', background: '#f9fafb', borderRadius: '6px', fontSize: '13px' }}>
+                      <span style={{ color: '#9ca3af', whiteSpace: 'nowrap' }}>{new Date(m.data).toLocaleDateString('pt-BR')}</span>
+                      <span style={{ color: '#374151' }}>{m.descricao}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Modal prazo */}}
       {showPrazoModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ background: 'white', borderRadius: '12px', padding: '24px', width: '100%', maxWidth: '440px' }}>

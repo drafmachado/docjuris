@@ -10,6 +10,8 @@ import Documents from './pages/Documents.jsx';
 import Templates from './pages/Templates.jsx';
 import Users from './pages/Users.jsx';
 import UploadPage from './pages/UploadPage.jsx';
+import Processos from './pages/Processos.jsx';
+import ProcessoDetail from './pages/ProcessoDetail.jsx';
 
 function ProtectedRoute({ children, adminOnly }) {
   const { user, loading } = useAuth();
@@ -31,6 +33,8 @@ function AppRoutes() {
         <Route path="clients/:id" element={<ClientDetail />} />
         <Route path="documents" element={<Documents />} />
         <Route path="templates" element={<Templates />} />
+        <Route path="processos" element={<Processos />} />
+        <Route path="processos/:id" element={<ProcessoDetail />} />
         <Route path="users" element={<ProtectedRoute adminOnly><Users /></ProtectedRoute>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

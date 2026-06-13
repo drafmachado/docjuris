@@ -38,7 +38,7 @@ export async function verificarPrazosProximos() {
   console.log(`⚠️  ${prazos.length} prazo(s) próximo(s) encontrado(s)`);
 
   const destinatario = process.env.ALERT_EMAIL || process.env.SMTP_USER || 'dra.andreia@advmachado.adv.br';
-  const senderName = process.env.SENDER_NAME || 'DocJuris';
+  const senderName = process.env.SENDER_NAME || 'Veredo';
 
   const linhas = prazos.map(pz => {
     const d = new Date(pz.data_limite + 'T00:00:00');

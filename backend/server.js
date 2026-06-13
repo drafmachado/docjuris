@@ -18,6 +18,7 @@ import processosRoutes from './routes/processos.js';
 import { runBackup } from './services/backup.js';
 import { verificarPrazosProximos } from './services/prazos-alert.js';
 import { monitorarProcessos } from './services/monitoramento.js';
+import { monitorarDJE } from './services/dje-monitor.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -146,3 +147,18 @@ setTimeout(() => {
   setInterval(monitorarProcessos, 6 * 60 * 60 * 1000);
 }, 30 * 1000); // aguarda 30s após iniciar para não sobrecarregar o boot
 console.log('🔍 Monitoramento de andamentos agendado (a cada 6h)');
+
+// ─── Monitoramento DJE — roda diariamente às 7h ───────────────────────────
+function agendarDJE() {
+  const agora = new Date();
+  const alvo = new Date();
+  alvo.setHours(7, 0, 0, 0);
+  if (alvo <= agora) alvo.setDate(alvo.getDate() + 1);
+  const diff = alvo - agora;
+  setTimeout(() => {
+    monitorarDJE();
+    setInterval(monitorarDJE, 24 * 60 * 60 * 1000);
+  }, diff);
+  console.log(`📰 Monitoramento DJE agendado para ${alvo.toLocaleTimeString('pt-BR')}`);
+}
+agendarDJE();

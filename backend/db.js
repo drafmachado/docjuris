@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import Database from 'better-sqlite3';
 import bcrypt from 'bcryptjs';
 import path from 'path';
@@ -138,9 +139,48 @@ export function initDB() {
     );
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS processos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      numero_cnj TEXT NOT NULL,
+      vara TEXT,
+      comarca TEXT,
+      tribunal TEXT,
+      tipo TEXT,
+      polo_ativo TEXT,
+      polo_passivo TEXT,
+      observacoes TEXT,
+      status TEXT NOT NULL DEFAULT 'ativo',
+      created_by INTEGER REFERENCES users(id),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS prazos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      processo_id INTEGER NOT NULL REFERENCES processos(id) ON DELETE CASCADE,
+      client_id INTEGER NOT NULL REFERENCES clients(id),
+      titulo TEXT NOT NULL,
+      tipo TEXT NOT NULL DEFAULT 'prazo',
+      data_limite TEXT NOT NULL,
+      responsavel_id INTEGER REFERENCES users(id),
+      concluido INTEGER NOT NULL DEFAULT 0,
+      alerta_enviado INTEGER NOT NULL DEFAULT 0,
+      observacoes TEXT,
+      created_by INTEGER REFERENCES users(id),
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  // Migração: adiciona coluna alerta_enviado se não existir
+  try { db.exec('ALTER TABLE prazos ADD COLUMN alerta_enviado INTEGER NOT NULL DEFAULT 0'); } catch {}
+
   const adminExists = db.prepare('SELECT id FROM users WHERE role = ?').get('admin');
   if (!adminExists) {
-    const crypto = require('crypto');
+    
     const initialPassword = process.env.ADMIN_INITIAL_PASSWORD || crypto.randomBytes(16).toString('hex');
     const hash = bcrypt.hashSync(initialPassword, 12);
     db.prepare(`

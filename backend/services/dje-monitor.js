@@ -163,7 +163,7 @@ async function notificarPrazoDetectado(processo, publicacao, analise) {
     const resend = new Resend(process.env.RESEND_API_KEY);
 
     await resend.emails.send({
-      from: `DocJuris <docjuris@advmachado.adv.br>`,
+      from: `Veredo <docjuris@advmachado.adv.br>`,
       to: 'dra.andreia@advmachado.adv.br',
       subject: `${analise.urgente ? '🔴 URGENTE' : '📋'} Publicação DJE — ${processo.numero_cnj}`,
       html: `

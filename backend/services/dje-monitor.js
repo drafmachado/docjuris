@@ -144,7 +144,7 @@ async function notificarPrazoDetectado(processo, publicacao, analise) {
         `*Cliente:* ${processo.client_nome || 'N/A'}\n\n` +
         `*Resumo:* ${analise.resumo_simples}\n\n` +
         (analise.tem_prazo ? `*⏰ Prazo detectado:* ${analise.tipo_prazo} — ${analise.data_prazo}\n\n` : '') +
-        `_Prazo criado automaticamente no DocJuris._`;
+        `_Prazo criado automaticamente no Veredo._`;
 
       await fetch(`${evolutionUrl}/message/sendText/${instance}`, {
         method: 'POST',
@@ -180,7 +180,7 @@ async function notificarPrazoDetectado(processo, publicacao, analise) {
             ${analise.tem_prazo ? `
             <div style="background:#fef3c7;border:1px solid #fbbf24;padding:12px;border-radius:6px;margin-top:12px">
               <strong>⏰ Prazo detectado:</strong> ${analise.tipo_prazo} — <strong>${analise.data_prazo}</strong>
-              <br><small>Prazo criado automaticamente no DocJuris.</small>
+              <br><small>Prazo criado automaticamente no Veredo.</small>
             </div>` : ''}
             <details style="margin-top:16px">
               <summary style="cursor:pointer;color:#6b7280;font-size:13px">Ver texto completo da publicação</summary>

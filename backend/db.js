@@ -168,11 +168,15 @@ export function initDB() {
       data_limite TEXT NOT NULL,
       responsavel_id INTEGER REFERENCES users(id),
       concluido INTEGER NOT NULL DEFAULT 0,
+      alerta_enviado INTEGER NOT NULL DEFAULT 0,
       observacoes TEXT,
       created_by INTEGER REFERENCES users(id),
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
+
+  // Migração: adiciona coluna alerta_enviado se não existir
+  try { db.exec('ALTER TABLE prazos ADD COLUMN alerta_enviado INTEGER NOT NULL DEFAULT 0'); } catch {}
 
   const adminExists = db.prepare('SELECT id FROM users WHERE role = ?').get('admin');
   if (!adminExists) {

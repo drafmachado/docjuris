@@ -4,7 +4,7 @@ import { ArrowLeft, Plus, Trash2, CheckCircle, Circle, Calendar, Gavel } from 'l
 import toast from 'react-hot-toast';
 
 const API = '/api';
-function getToken() { return localStorage.getItem('token'); }
+function getToken() { return localStorage.getItem('docjuris_token'); }
 
 const TIPOS_PRAZO = ['Prazo', 'Audiência', 'Petição', 'Recurso', 'Diligência', 'Outro'];
 

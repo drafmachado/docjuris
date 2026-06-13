@@ -68,7 +68,7 @@ async function notificarNovoAndamento(processo, andamento) {
             <div style="background:white;border-left:4px solid #0f2035;padding:12px;margin:12px 0;border-radius:4px">
               <strong>${andamento.descricao}</strong>
             </div>
-            <p style="font-size:12px;color:#6b7280">Acesse o DocJuris para mais detalhes.</p>
+            <p style="font-size:12px;color:#6b7280">Acesse o Veredo para mais detalhes.</p>
           </div>
         </div>`,
     });

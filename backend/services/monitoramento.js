@@ -1,0 +1,162 @@
+import { getDB } from '../db.js';
+
+const ESCAVADOR_TOKEN = process.env.ESCAVADOR_API_TOKEN;
+const DATAJUD_KEY = 'cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==';
+const BASE_URL_DATAJUD = 'https://api-publica.datajud.cnj.jus.br';
+
+const ENDPOINTS_DATAJUD = {
+  'TJRJ': 'api_publica_tjrj',
+  'TJSP': 'api_publica_tjsp',
+  'TRF1': 'api_publica_trf1',
+  'TRF2': 'api_publica_trf2',
+  'TRF3': 'api_publica_trf3',
+  'TRT2': 'api_publica_trt2',
+  'TRT1': 'api_publica_trt1',
+};
+
+async function consultarEscavador(numeroCNJ) {
+  if (!ESCAVADOR_TOKEN) return null;
+  try {
+    const r = await fetch(`https://api.escavador.com/api/v2/processos/numero_cnj/${encodeURIComponent(numeroCNJ)}`, {
+      headers: { 'Authorization': `Bearer ${ESCAVADOR_TOKEN}`, 'Accept': 'application/json' }
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+
+async function consultarDataJud(numeroCNJ, tribunal) {
+  const endpoint = ENDPOINTS_DATAJUD[tribunal];
+  if (!endpoint) return null;
+  const numeroLimpo = numeroCNJ.replace(/[.\-]/g, '');
+  try {
+    const r = await fetch(`${BASE_URL_DATAJUD}/${endpoint}/_search`, {
+      method: 'POST',
+      headers: { 'Authorization': `APIKey ${DATAJUD_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: { match: { numeroProcesso: numeroLimpo } } }),
+    });
+    if (!r.ok) return null;
+    const data = await r.json();
+    const hits = data?.hits?.hits || [];
+    return hits.length > 0 ? hits[0]._source : null;
+  } catch { return null; }
+}
+
+async function notificarNovoAndamento(processo, andamento) {
+  // Email via Resend
+  try {
+    const { Resend } = await import('resend');
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const destinatario = process.env.ALERT_EMAIL || 'dra.andreia@advmachado.adv.br';
+    const senderName = process.env.SENDER_NAME || 'DocJuris';
+    const data = new Date(andamento.data).toLocaleDateString('pt-BR');
+
+    await resend.emails.send({
+      from: `${senderName} <docjuris@advmachado.adv.br>`,
+      to: destinatario,
+      subject: `📋 Nova movimentação — ${processo.numero_cnj}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+          <div style="background:#0f2035;padding:20px;border-radius:8px 8px 0 0">
+            <h2 style="color:white;margin:0">📋 Nova Movimentação Processual</h2>
+          </div>
+          <div style="padding:20px;background:#f9fafb;border:1px solid #e5e7eb">
+            <p><strong>Processo:</strong> ${processo.numero_cnj}</p>
+            <p><strong>Cliente:</strong> ${processo.client_nome || 'N/A'}</p>
+            <p><strong>Tribunal:</strong> ${processo.tribunal}</p>
+            <p><strong>Data:</strong> ${data}</p>
+            <div style="background:white;border-left:4px solid #0f2035;padding:12px;margin:12px 0;border-radius:4px">
+              <strong>${andamento.descricao}</strong>
+            </div>
+            <p style="font-size:12px;color:#6b7280">Acesse o DocJuris para mais detalhes.</p>
+          </div>
+        </div>`,
+    });
+    console.log(`  📧 Email enviado: ${andamento.descricao}`);
+  } catch(e) {
+    console.error('  Erro email:', e.message);
+  }
+
+  // WhatsApp via Evolution API
+  try {
+    const evolutionUrl = process.env.EVOLUTION_API_URL;
+    const evolutionKey = process.env.EVOLUTION_API_KEY;
+    const instance = process.env.EVOLUTION_INSTANCE || 'docjuris';
+    const whatsappNumber = process.env.ALERT_WHATSAPP;
+    
+    if (evolutionUrl && evolutionKey && whatsappNumber) {
+      const data = new Date(andamento.data).toLocaleDateString('pt-BR');
+      const msg = `📋 *Nova movimentação*\n\n*Processo:* ${processo.numero_cnj}\n*Cliente:* ${processo.client_nome || 'N/A'}\n*Data:* ${data}\n\n_${andamento.descricao}_`;
+      
+      await fetch(`${evolutionUrl}/message/sendText/${instance}`, {
+        method: 'POST',
+        headers: { 'apikey': evolutionKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number: whatsappNumber, text: msg }),
+      });
+      console.log(`  💬 WhatsApp enviado`);
+    }
+  } catch(e) {
+    console.error('  Erro WhatsApp:', e.message);
+  }
+}
+
+export async function monitorarProcessos() {
+  const db = getDB();
+  
+  // Garantir coluna ultima_consulta
+  try { db.exec('ALTER TABLE processos ADD COLUMN ultima_consulta TEXT'); } catch {}
+
+  const ativos = db.prepare("SELECT p.*, c.nome as client_nome FROM processos p LEFT JOIN clients c ON c.id = p.client_id WHERE p.status = 'ativo'").all();
+  
+  console.log(`🔍 Monitorando ${ativos.length} processos ativos...`);
+  let novosAndamentos = 0;
+
+  for (const proc of ativos) {
+    try {
+      // Usar Escavador se disponível, senão DataJud
+      let movimentos = [];
+      
+      if (ESCAVADOR_TOKEN) {
+        const dados = await consultarEscavador(proc.numero_cnj);
+        movimentos = (dados?.movimentos || dados?.fontes?.[0]?.movimentos || [])
+          .map(m => ({ data: m.data || m.dataHora, descricao: m.descricao || m.nome || 'Movimentação' }));
+      } else {
+        const dados = await consultarDataJud(proc.numero_cnj, proc.tribunal);
+        movimentos = (dados?.movimentos || [])
+          .map(m => ({ data: m.dataHora, descricao: m.nome || 'Movimentação' }))
+          .sort((a, b) => new Date(b.data) - new Date(a.data))
+          .slice(0, 20);
+      }
+
+      if (movimentos.length === 0) {
+        await new Promise(r => setTimeout(r, 300));
+        continue;
+      }
+
+      // Verificar andamentos novos (não salvos ainda)
+      const salvos = db.prepare('SELECT data, descricao FROM andamentos WHERE processo_id = ?').all(proc.id);
+      const salvoSet = new Set(salvos.map(a => `${a.data}|${a.descricao}`));
+
+      const insert = db.prepare('INSERT OR IGNORE INTO andamentos (processo_id, data, descricao) VALUES (?, ?, ?)');
+      
+      for (const m of movimentos) {
+        const key = `${m.data}|${m.descricao}`;
+        if (!salvoSet.has(key)) {
+          insert.run(proc.id, m.data, m.descricao);
+          novosAndamentos++;
+          console.log(`  ✨ NOVO: ${proc.numero_cnj} — ${m.descricao}`);
+          await notificarNovoAndamento(proc, m);
+        }
+      }
+
+      // Atualizar timestamp da última consulta
+      db.prepare("UPDATE processos SET ultima_consulta = datetime('now') WHERE id = ?").run(proc.id);
+      
+      await new Promise(r => setTimeout(r, 400));
+    } catch(e) {
+      console.error(`  Erro em ${proc.numero_cnj}:`, e.message);
+    }
+  }
+
+  console.log(`✅ Monitoramento concluído — ${novosAndamentos} novo(s) andamento(s)`);
+}

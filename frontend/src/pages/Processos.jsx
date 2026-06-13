@@ -19,6 +19,7 @@ export default function Processos() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ client_id: '', numero_cnj: '', vara: '', comarca: '', tribunal: '', tipo: '', polo_ativo: '', polo_passivo: '', observacoes: '' });
   const [prazosProximos, setPrazosProximos] = useState([]);
+  const [filtroStatus, setFiltroStatus] = useState('ativo');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -82,11 +83,13 @@ export default function Processos() {
     }
   }
 
-  const filtered = processos.filter(p =>
-    p.numero_cnj?.toLowerCase().includes(search.toLowerCase()) ||
-    p.client_nome?.toLowerCase().includes(search.toLowerCase()) ||
-    p.tipo?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = processos.filter(p => {
+    const matchSearch = p.numero_cnj?.toLowerCase().includes(search.toLowerCase()) ||
+      p.client_nome?.toLowerCase().includes(search.toLowerCase()) ||
+      p.tipo?.toLowerCase().includes(search.toLowerCase());
+    const matchStatus = filtroStatus === 'todos' || p.status === filtroStatus;
+    return matchSearch && matchStatus;
+  });
 
   const hoje = new Date();
 
@@ -120,6 +123,19 @@ export default function Processos() {
         <button onClick={() => setShowModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#0f2035', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 16px', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}>
           <Plus size={16} /> Novo Processo
         </button>
+      </div>
+
+      {/* Filtro de status */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+        {[['ativo', 'Ativos'], ['arquivado', 'Arquivados'], ['todos', 'Todos']].map(([val, label]) => (
+          <button key={val} onClick={() => setFiltroStatus(val)} style={{
+            padding: '6px 14px', borderRadius: '20px', border: '1px solid',
+            borderColor: filtroStatus === val ? '#0f2035' : '#e5e7eb',
+            background: filtroStatus === val ? '#0f2035' : 'white',
+            color: filtroStatus === val ? 'white' : '#6b7280',
+            fontSize: '13px', fontWeight: 500, cursor: 'pointer'
+          }}>{label} {filtroStatus === val && `(${processos.filter(p => val === 'todos' || p.status === val).length})`}</button>
+        ))}
       </div>
 
       <div style={{ position: 'relative', marginBottom: '20px' }}>

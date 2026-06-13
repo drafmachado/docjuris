@@ -2,31 +2,54 @@ import { getDB } from '../db.js';
 
 const DJERJ_BASE = 'https://www3.tjrj.jus.br/consultadje';
 
-// Busca publicações do DJERJ por OAB ou nome
+// Busca publicações no DJEN (CNJ) e DJERJ por OAB/nome
 async function buscarDJERJ(data) {
-  const dataFormatada = data.toISOString().split('T')[0].split('-').reverse().join('/'); // DD/MM/YYYY
-  
+  const dataISO = data.toISOString().split('T')[0]; // YYYY-MM-DD
+  const resultados = [];
+
+  // 1. Buscar no DJEN (CNJ) - onde vão as intimações judiciais do TJRJ desde nov/2024
   try {
-    // API pública de busca do DJERJ
-    const url = `https://www3.tjrj.jus.br/consultadje/faces/index.xhtml`;
-    const params = new URLSearchParams({
-      'txtPalavraChave': 'Andreia Ferreira Machado',
-      'dtInicio': dataFormatada,
-      'dtFim': dataFormatada,
-      'caderno': 'todos',
-    });
-
-    const r = await fetch(`https://www3.tjrj.jus.br/consultadje/api/search?${params}`, {
-      headers: { 'Accept': 'application/json', 'User-Agent': 'DocJuris/1.0' }
-    });
-
-    if (!r.ok) return [];
-    const data_resp = await r.json();
-    return data_resp.results || data_resp.hits || [];
+    const r = await fetch(
+      `https://djen.cnj.jus.br/pesquisar-publicacao?` +
+      `data=${dataISO}&` +
+      `tipoPesquisa=OAB&` +
+      `oabNumero=218586&` +
+      `oabEstado=RJ`,
+      { headers: { 'Accept': 'application/json', 'User-Agent': 'DocJuris/1.0' } }
+    );
+    if (r.ok) {
+      const d = await r.json();
+      const pubs = d.publicacoes || d.data || d.results || [];
+      pubs.forEach(p => resultados.push({ ...p, fonte: 'DJEN' }));
+      console.log(`  DJEN: ${pubs.length} publicação(ões)`);
+    }
   } catch(e) {
-    console.error('Erro DJERJ:', e.message);
-    return [];
+    console.log('  DJEN indisponível:', e.message);
   }
+
+  // 2. Buscar também no DJERJ (matérias administrativas)
+  try {
+    const dataFormatada = dataISO.split('-').reverse().join('/');
+    const r = await fetch(
+      `https://www3.tjrj.jus.br/consultadje/consultarDiarioJustica.do?` +
+      `metodo=pesquisar&` +
+      `oab=218586&` +
+      `uf=RJ&` +
+      `dtInicio=${dataFormatada}&` +
+      `dtFim=${dataFormatada}`,
+      { headers: { 'Accept': 'application/json', 'User-Agent': 'DocJuris/1.0' } }
+    );
+    if (r.ok) {
+      const d = await r.json();
+      const pubs = d.publicacoes || d.results || [];
+      pubs.forEach(p => resultados.push({ ...p, fonte: 'DJERJ' }));
+      console.log(`  DJERJ: ${pubs.length} publicação(ões)`);
+    }
+  } catch(e) {
+    console.log('  DJERJ indisponível:', e.message);
+  }
+
+  return resultados;
 }
 
 // Usa Claude API para extrair prazo da publicação
@@ -186,7 +209,7 @@ export async function monitorarDJE() {
     return;
   }
 
-  console.log(`  ${publicacoes.length} publicação(ões) encontrada(s)`);
+  console.log(`  ${publicacoes.length} publicação(ões) encontrada(s) no total`);
 
   // Buscar processos ativos para cruzar
   const processos = db.prepare(`

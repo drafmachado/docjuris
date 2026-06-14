@@ -7,6 +7,7 @@ import { getDB } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { generateDocument, buildFillValues } from '../services/docgen.js';
 import { sendDocumentEmail } from '../services/email.js';
+import { sincronizarAutentique } from '../services/autentique-sync.js';
 import { createDocument, buildSigners } from '../services/autentique.js';
 import { notifyDocumentoGerado } from '../services/evolution.js';
 

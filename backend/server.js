@@ -161,9 +161,10 @@ console.log('📧 Monitoramento de emails de tribunais agendado (a cada 6h)');
 // ─── Sync Autentique — busca documentos assinados (a cada 6h) ─────────────
 setTimeout(() => {
   sincronizarAutentique();
-  setInterval(sincronizarAutentique, 6 * 60 * 60 * 1000);
+  setInterval(sincronizarAutentique, 6 * 60 * 60 * 1000);  // completo a cada 6h
+  setInterval(() => sincronizarAutentique(true), 30 * 60 * 1000); // docs recentes a cada 30min
 }, 60 * 1000); // 60s após boot
-console.log('📝 Sync Autentique agendado (a cada 6h)');
+console.log('📝 Sync Autentique agendado (6h completo + 30min para docs recentes)');
 
 // ─── Monitoramento DJE — roda diariamente às 7h ───────────────────────────
 function agendarDJE() {

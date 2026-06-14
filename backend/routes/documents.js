@@ -91,15 +91,17 @@ router.post('/generate', async (req, res) => {
     let autentiqueLinks = [];
 
     try {
-      // Usa o docx gerado (Autentique aceita .docx diretamente)
+      // Envia o PDF (preserva cabeçalho/rodapé). Fallback para DOCX se PDF não gerou.
       const docxPath = path.join(PDFS_DIR, docxFilename);
+      const pdfPathForSign = pdfFilename ? path.join(PDFS_DIR, pdfFilename) : null;
+      const fileToSign = (pdfPathForSign && fs.existsSync(pdfPathForSign)) ? pdfPathForSign : docxPath;
 
       // D1: monta a lista de signatários conforme o template
       const signers = buildSigners(template_id, client.email);
 
       const autDoc = await createDocument({
         name: `${template.name} - ${client.nome}`,
-        filePath: docxPath,
+        filePath: fileToSign,
         signers,
       });
 

@@ -82,9 +82,9 @@ async function notificarNovoAndamento(processo, andamento) {
     const evolutionUrl = process.env.EVOLUTION_API_URL;
     const evolutionKey = process.env.EVOLUTION_API_KEY;
     const instance = process.env.EVOLUTION_INSTANCE || 'docjuris';
-    const whatsappNumber = process.env.ALERT_WHATSAPP;
+    const whatsappNumber = process.env.ANDREIA_WHATSAPP || '5511967351199';
     
-    if (evolutionUrl && evolutionKey && whatsappNumber) {
+    if (evolutionUrl && evolutionKey) {
       const data = new Date(andamento.data).toLocaleDateString('pt-BR');
       const msg = `📋 *Nova movimentação*\n\n*Processo:* ${processo.numero_cnj}\n*Cliente:* ${processo.client_nome || 'N/A'}\n*Data:* ${data}\n\n_${andamento.descricao}_`;
       

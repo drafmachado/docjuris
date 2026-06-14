@@ -1,10 +1,41 @@
 import { getDB } from '../db.js';
 
 const GMAIL_REMETENTES = [
-  'tjrj.pjeadm-LD@tjrj.jus.br',   // Push PJe TJRJ
-  'eproc@tjsp.jus.br',              // eproc TJSP
-  'nao.responda.12946977@tjrj.jus.br', // notificações TJRJ
+  'tjrj.pjeadm-LD@tjrj.jus.br',
+  'eproc@tjsp.jus.br',
+  'nao.responda.12946977@tjrj.jus.br',
 ];
+
+// Obtém access token usando refresh token OAuth2
+async function getGmailAccessToken() {
+  const clientId = process.env.GMAIL_CLIENT_ID;
+  const clientSecret = process.env.GMAIL_CLIENT_SECRET;
+  const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
+
+  if (!clientId || !clientSecret || !refreshToken) return null;
+
+  try {
+    const r = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: 'refresh_token',
+      }),
+    });
+    if (!r.ok) {
+      console.error('Erro ao obter access token Gmail:', await r.text());
+      return null;
+    }
+    const data = await r.json();
+    return data.access_token;
+  } catch(e) {
+    console.error('Erro OAuth Gmail:', e.message);
+    return null;
+  }
+}
 
 // Extrai número CNJ do assunto ou corpo do email
 function extrairNumeroCNJ(texto) {
@@ -105,16 +136,17 @@ async function notificarNovoAndamentoEmail(processo, andamento) {
 
 export async function monitorarEmailsTribunal() {
   const db = getDB();
-  const GMAIL_TOKEN = process.env.GMAIL_ACCESS_TOKEN;
+
+  // Obter access token via OAuth refresh token
+  const GMAIL_TOKEN = await getGmailAccessToken();
 
   if (!GMAIL_TOKEN) {
-    console.log('⚠️  GMAIL_ACCESS_TOKEN não configurado — pulando monitoramento por email');
+    console.log('⚠️  Gmail OAuth não configurado — pulando monitoramento por email');
     return;
   }
 
   console.log('📧 Monitorando emails dos tribunais...');
 
-  // Buscar emails das últimas 7h (um pouco mais que o intervalo de 6h para não perder)
   const query = encodeURIComponent(
     `from:(${GMAIL_REMETENTES.join(' OR ')}) newer_than:1d`
   );

@@ -29,7 +29,12 @@ export default function ClientDetail() {
     catch { toast.error('Erro ao carregar cliente'); navigate('/clients'); }
   };
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => {
+    load();
+    // Polling automático a cada 2 minutos — atualiza documentos assinados, etc.
+    const interval = setInterval(load, 2 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [id]);
 
   const set = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
 

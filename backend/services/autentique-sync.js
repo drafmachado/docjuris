@@ -9,33 +9,25 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Verifica documentos pendentes de assinatura no Autentique e baixa os assinados
 // Assinar documento automaticamente pela Dra. Andreia via API Autentique
-async function autoAssinarAndreia(documentId, sig) {
-  const TOKEN = process.env.AUTENTIQUE_API_TOKEN;
-  if (!TOKEN) return;
+// Documentação: https://docs.autentique.com.br/api/mutations/assinando-um-documento
+// Só funciona com a conta vinculada ao token da API (conta da Andreia)
+async function autoAssinarAndreia(documentId) {
+  const ATOKEN = process.env.AUTENTIQUE_API_TOKEN;
+  if (!ATOKEN) return;
 
-  // Usar o link de assinatura da Andreia para assinar via API
-  const mutation = `
-    mutation SignDocument($id: UUID!, $data: SignatoryDataInput) {
-      sign(document_id: $id, data: $data) {
-        signed
-      }
-    }
-  `;
+  const mutation = `mutation { signDocument(id: "${documentId}") }`;
 
   try {
     const resp = await fetch('https://api.autentique.com.br/v2/graphql', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
-      body: JSON.stringify({
-        query: mutation,
-        variables: { id: documentId, data: {} }
-      })
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ATOKEN}` },
+      body: JSON.stringify({ query: mutation })
     });
     const data = await resp.json();
     if (data.errors) {
       console.error('  ❌ Erro auto-assinatura:', JSON.stringify(data.errors));
     } else {
-      console.log('  ✅ Assinatura Andreia enviada via API');
+      console.log('  ✅ Auto-assinatura Dra. Andreia concluída');
     }
   } catch(e) {
     console.error('  ❌ Erro auto-assinatura:', e.message);
@@ -100,7 +92,7 @@ export async function sincronizarAutentique(recentOnly = false) {
 
       if (clienteAssinou && !andreiaAssinou && andreiaSig) {
         console.log(`  🖊️  ${doc.client_nome}: cliente assinou — iniciando auto-assinatura da Dra. Andreia...`);
-        await autoAssinarAndreia(doc.zapsign_doc_token, andreiaSig);
+        await autoAssinarAndreia(doc.zapsign_doc_token);
         // Aguardar Autentique processar
         await new Promise(r => setTimeout(r, 3000));
         // Buscar novamente para pegar o PDF assinado

@@ -20,6 +20,7 @@ import { runBackup } from './services/backup.js';
 import { verificarPrazosProximos } from './services/prazos-alert.js';
 import { monitorarProcessos } from './services/monitoramento.js';
 import { monitorarEmailsTribunal } from './services/gmail-monitor.js';
+import { sincronizarAutentique } from './services/autentique-sync.js';
 import { monitorarDJE } from './services/dje-monitor.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -156,6 +157,13 @@ setTimeout(() => {
   setInterval(monitorarEmailsTribunal, 6 * 60 * 60 * 1000);
 }, 45 * 1000); // 45s após o boot
 console.log('📧 Monitoramento de emails de tribunais agendado (a cada 6h)');
+
+// ─── Sync Autentique — busca documentos assinados (a cada 6h) ─────────────
+setTimeout(() => {
+  sincronizarAutentique();
+  setInterval(sincronizarAutentique, 6 * 60 * 60 * 1000);
+}, 60 * 1000); // 60s após boot
+console.log('📝 Sync Autentique agendado (a cada 6h)');
 
 // ─── Monitoramento DJE — roda diariamente às 7h ───────────────────────────
 function agendarDJE() {

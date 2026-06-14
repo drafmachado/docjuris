@@ -25,7 +25,7 @@ async function autoAssinarAndreia(documentId, sig) {
   try {
     const resp = await fetch('https://api.autentique.com.br/v2/graphql', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: \`Bearer \${TOKEN}\` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
       body: JSON.stringify({
         query: mutation,
         variables: { id: documentId, data: {} }

@@ -42,19 +42,28 @@ router.post('/autentique', async (req, res) => {
       }
     }
 
-    const event = req.body;
-    console.log('📩 Webhook Autentique recebido:', event?.event, event?.document?.id);
+    // Formato real do Autentique: { event: { type, data: { object } } }
+    const payload = req.body;
+    const evt = payload?.event || payload;  // tolera ambos os formatos
+    const eventType = evt?.type;
+    const docObject = evt?.data?.object || evt?.data;
+
+    console.log('📩 Webhook Autentique recebido:', eventType, docObject?.id);
 
     // Responde 200 imediatamente (Autentique exige resposta rápida)
     res.json({ ok: true });
 
-    // ── 2. Processar apenas evento de documento finalizado ─────────────────
-    if (event?.event !== 'document.finished') return;
+    // ── 2. Processar apenas quando o documento está finalizado ─────────────
+    // document.finished = todas as assinaturas concluídas
+    if (eventType !== 'document.finished') {
+      console.log(`   Evento ${eventType} ignorado (aguardando document.finished)`);
+      return;
+    }
 
-    const documentId = event?.document?.id;
+    const documentId = docObject?.id;
     if (!documentId) return;
 
-    const signedUrl = event?.document?.files?.signed;
+    const signedUrl = docObject?.files?.signed;
     if (!signedUrl) {
       console.warn('⚠️  Webhook Autentique: URL do PDF assinado não encontrada no payload');
       return;

@@ -26,6 +26,12 @@ export default function Processos() {
     fetchProcessos();
     fetchClientes();
     fetchPrazosProximos();
+    // Polling automático a cada 3 minutos — atualiza andamentos e prazos
+    const interval = setInterval(() => {
+      fetchProcessos();
+      fetchPrazosProximos();
+    }, 3 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   async function fetchProcessos() {

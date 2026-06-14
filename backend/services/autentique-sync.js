@@ -46,12 +46,19 @@ export async function sincronizarAutentique() {
       const autDoc = await getDocument(doc.zapsign_doc_token);
       if (!autDoc) continue;
 
-      // Verificar se TODOS assinaram
+      // Verificar se TODOS os signatarios com acao SIGN assinaram
       const assinaturas = autDoc.signatures || [];
-      const todosAssinaram = assinaturas.length > 0 &&
-        assinaturas.every(s => s.signed?.created_at || s.action?.name !== 'Sign');
+      const signatarios = assinaturas.filter(s => (s.action?.name || '').toUpperCase() === 'SIGN');
+      const todosAssinaram = signatarios.length > 0 &&
+        signatarios.every(s => s.signed?.created_at);
 
       const signedUrl = autDoc.files?.signed;
+
+      if (!todosAssinaram) {
+        const faltam = signatarios.filter(s => !s.signed?.created_at).map(s => s.email).join(', ');
+        console.log(`  ⏳ ${doc.client_nome}: aguardando assinatura de ${faltam || 'signatários'}`);
+        continue;
+      }
 
       if (todosAssinaram && signedUrl) {
         const pdfFilename = doc.docx_filename

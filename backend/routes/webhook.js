@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { getDB } from '../db.js';
 import { downloadSignedPdf } from '../services/autentique.js';
 import { notifyDocumentoAssinado } from '../services/evolution.js';
+import { processarWebhookJudit } from '../services/judit.js';
 
 const router = express.Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

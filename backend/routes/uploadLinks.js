@@ -173,13 +173,25 @@ router.post('/:token/files', async (req, res) => {
     if (file.size > MAX_SIZE) {
       return res.status(400).json({ error: `Arquivo muito grande: ${file.name}. Máximo 10MB.` });
     }
-    // Verificar magic bytes reais do arquivo
+    // Verificar magic bytes reais do arquivo (compatível com useTempFiles)
     const expected = MAGIC_BYTES[file.mimetype];
-    if (expected && file.data) {
-      const actual = Array.from(file.data.slice(0, expected.length));
-      const match = expected.every((b, i) => actual[i] === b);
-      if (!match) {
-        return res.status(400).json({ error: `Arquivo inválido: ${file.name}. O conteúdo não corresponde ao tipo declarado.` });
+    if (expected) {
+      let head = null;
+      if (file.data && file.data.length > 0) {
+        head = file.data.slice(0, expected.length);
+      } else if (file.tempFilePath && fs.existsSync(file.tempFilePath)) {
+        const fd = fs.openSync(file.tempFilePath, 'r');
+        const buf = Buffer.alloc(expected.length);
+        fs.readSync(fd, buf, 0, expected.length, 0);
+        fs.closeSync(fd);
+        head = buf;
+      }
+      if (head) {
+        const actual = Array.from(head);
+        const match = expected.every((b, i) => actual[i] === b);
+        if (!match) {
+          return res.status(400).json({ error: `Arquivo inválido: ${file.name}. O conteúdo não corresponde ao tipo declarado.` });
+        }
       }
     }
   }

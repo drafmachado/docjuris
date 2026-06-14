@@ -48,17 +48,14 @@ export async function sincronizarAutentique(recentOnly = false) {
       const autDoc = await getDocument(doc.zapsign_doc_token);
       if (!autDoc) continue;
 
-      // Verificar se TODOS os signatarios com acao SIGN assinaram
-      const assinaturas = autDoc.signatures || [];
-      const signatarios = assinaturas.filter(s => (s.action?.name || '').toUpperCase() === 'SIGN');
-      const todosAssinaram = signatarios.length > 0 &&
-        signatarios.every(s => s.signed?.created_at);
-
+      // Verificar conclusão: se Autentique gerou o PDF assinado, todos assinaram
       const signedUrl = autDoc.files?.signed;
 
-      if (!todosAssinaram) {
-        const faltam = signatarios.filter(s => !s.signed?.created_at).map(s => s.email).join(', ');
-        console.log(`  ⏳ ${doc.client_nome}: aguardando assinatura de ${faltam || 'signatários'}`);
+      if (!signedUrl) {
+        // Fallback: verificar assinaturas individuais
+        const assinaturas = autDoc.signatures || [];
+        const pendentes = assinaturas.filter(s => !s.signed?.created_at).map(s => s.email).join(', ');
+        console.log(`  ⏳ ${doc.client_nome}: PDF assinado não disponível ainda (pendentes: ${pendentes || 'verificando'})`);
         continue;
       }
 

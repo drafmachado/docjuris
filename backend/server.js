@@ -18,6 +18,7 @@ import processosRoutes from './routes/processos.js';
 import { runBackup } from './services/backup.js';
 import { verificarPrazosProximos } from './services/prazos-alert.js';
 import { monitorarProcessos } from './services/monitoramento.js';
+import { monitorarEmailsTribunal } from './services/gmail-monitor.js';
 import { monitorarDJE } from './services/dje-monitor.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -147,6 +148,13 @@ setTimeout(() => {
   setInterval(monitorarProcessos, 6 * 60 * 60 * 1000);
 }, 30 * 1000); // aguarda 30s após iniciar para não sobrecarregar o boot
 console.log('🔍 Monitoramento de andamentos agendado (a cada 6h)');
+
+// ─── Monitoramento emails tribunal — roda junto com andamentos (a cada 6h) ─
+setTimeout(() => {
+  monitorarEmailsTribunal();
+  setInterval(monitorarEmailsTribunal, 6 * 60 * 60 * 1000);
+}, 45 * 1000); // 45s após o boot
+console.log('📧 Monitoramento de emails de tribunais agendado (a cada 6h)');
 
 // ─── Monitoramento DJE — roda diariamente às 7h ───────────────────────────
 function agendarDJE() {

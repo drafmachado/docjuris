@@ -100,6 +100,81 @@ async function notificarNovoAndamento(processo, andamento) {
   }
 }
 
+// Analisa andamento com IA e cria prazo automaticamente se detectar
+async function analisarECriarPrazo(db, proc, andamento) {
+  if (!process.env.ANTHROPIC_API_KEY) return;
+  
+  // Palavras-chave que sugerem prazo — vale chamar a IA
+  const temIndicacaoPrazo = /prazo|intima|citar|cita\u00e7|contesta|recurso|apela|embargo|manifest|audiên|audi\u00ea|julgamento|respond/i.test(andamento.descricao);
+  if (!temIndicacaoPrazo) return;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 300,
+        messages: [{
+          role: 'user',
+          content: `Analise esta movimentação processual e responda APENAS em JSON:
+
+Processo: ${proc.numero_cnj}
+Tribunal: ${proc.tribunal}
+Data da movimentação: ${andamento.data}
+Movimentação: ${andamento.descricao}
+
+Identifique se há um prazo processual implícito. Por exemplo:
+- "Expedida intimação" = prazo de 15 dias para manifestação (JEC) ou conforme tipo
+- "Citação" = prazo de 15 dias para contestação (JEC) ou 30 dias (procedimento comum)
+- "Audiência designada" = data da audiência é o prazo
+
+Responda APENAS:
+{
+  "tem_prazo": true/false,
+  "tipo_prazo": "tipo do prazo ou null",
+  "dias_prazo": número de dias a partir da movimentação ou null,
+  "observacao": "explicação breve"
+}`
+        }]
+      })
+    });
+
+    if (!response.ok) return;
+    const data = await response.json();
+    const text = data.content[0]?.text || '';
+    const analise = JSON.parse(text.replace(/\`\`\`json|\`\`\`/g, '').trim());
+
+    if (analise.tem_prazo && analise.dias_prazo) {
+      // Calcular data do prazo
+      const dataBase = new Date(andamento.data);
+      dataBase.setDate(dataBase.getDate() + analise.dias_prazo);
+      const dataISO = dataBase.toISOString().split('T')[0];
+
+      // Verificar se prazo já existe
+      const existe = db.prepare('SELECT id FROM prazos WHERE processo_id = ? AND data_limite = ?').get(proc.id, dataISO);
+      if (!existe) {
+        db.prepare(`INSERT INTO prazos (processo_id, client_id, titulo, tipo, data_limite, observacoes, created_by)
+          VALUES (?, ?, ?, ?, ?, ?, 1)`).run(
+          proc.id,
+          proc.client_id,
+          analise.tipo_prazo || 'Prazo processual',
+          analise.tipo_prazo || 'Prazo',
+          dataISO,
+          `Auto-detectado: ${analise.observacao}. Movimentação: ${andamento.descricao}`
+        );
+        console.log(`  📅 Prazo criado automaticamente: ${analise.tipo_prazo} — ${dataISO}`);
+      }
+    }
+  } catch(e) {
+    // Silencioso — não quebrar o fluxo principal
+  }
+}
+
 export async function monitorarProcessos() {
   const db = getDB();
   

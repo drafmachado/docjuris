@@ -24,6 +24,7 @@ async function autoAssinarAndreia(documentId) {
       body: JSON.stringify({ query: mutation })
     });
     const data = await resp.json();
+    console.log('  Resposta Autentique sign:', JSON.stringify(data));
     if (data.errors) {
       console.error('  ❌ Erro auto-assinatura:', JSON.stringify(data.errors));
     } else {
@@ -92,6 +93,7 @@ export async function sincronizarAutentique(recentOnly = false) {
 
       if (clienteAssinou && !andreiaAssinou && andreiaSig) {
         console.log(`  🖊️  ${doc.client_nome}: cliente assinou — iniciando auto-assinatura da Dra. Andreia...`);
+        console.log(`     doc_id Autentique: ${doc.zapsign_doc_token}`);
         await autoAssinarAndreia(doc.zapsign_doc_token);
         // Aguardar Autentique processar
         await new Promise(r => setTimeout(r, 3000));

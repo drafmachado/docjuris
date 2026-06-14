@@ -15,15 +15,27 @@ export default function UploadPage() {
   const [linkData, setLinkData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [sentDocs, setSentDocs] = useState({});      // { doc_key: 'sending' | 'done' | 'error' }
+  const [sentDocs, setSentDocs] = useState({});
   const [allSent, setAllSent] = useState(false);
-  const [activeDoc, setActiveDoc] = useState(null);  // doc_key atual no dropzone
+  const [activeDoc, setActiveDoc] = useState(null);
+
+  // Dados de contato do cliente
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [contactSaved, setContactSaved] = useState(false);
+  const [savingContact, setSavingContact] = useState(false);
+  const [contactError, setContactError] = useState('');
 
   useEffect(() => {
     publicApi.get(`/upload-links/${token}`)
       .then(r => {
         setLinkData(r.data);
         setAllSent(r.data.completed);
+        // Pré-preencher se já cadastrado
+        if (r.data.client_email) setEmail(r.data.client_email);
+        if (r.data.client_phone) setPhone(r.data.client_phone);
+        // Se já tem os dois, pular etapa de contato
+        if (r.data.client_email && r.data.client_phone) setContactSaved(true);
       })
       .catch(err => {
         if (err.response?.status === 410) setError('expirado');
@@ -31,6 +43,23 @@ export default function UploadPage() {
       })
       .finally(() => setLoading(false));
   }, [token]);
+
+  const saveContact = async () => {
+    setContactError('');
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    const phoneOk = phone.replace(/\D/g,'').length >= 10;
+    if (!emailOk) return setContactError('Informe um e-mail válido.');
+    if (!phoneOk) return setContactError('Informe o telefone com DDD (ex: 11912345678).');
+    setSavingContact(true);
+    try {
+      await publicApi.post(`/upload-links/${token}/contact`, { email, phone: phone.replace(/\D/g,'') });
+      setContactSaved(true);
+    } catch {
+      setContactError('Erro ao salvar. Tente novamente.');
+    } finally {
+      setSavingContact(false);
+    }
+  };
 
   const onDrop = useCallback(async (accepted, docKey) => {
     if (!accepted.length) return;
@@ -142,10 +171,62 @@ export default function UploadPage() {
         </div>
       )}
 
-      {/* Upload dos documentos */}
-      <p style={{ fontSize: 12, fontWeight: 500, color: '#6b6b68', marginBottom: 12 }}>
+      {/* Dados de contato */}
+      {!contactSaved ? (
+        <div style={{ background: '#f8f7f3', border: '1px solid #e5e2d6', borderRadius: 10, padding: '1.2rem', marginBottom: '1.5rem' }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: '#0d2340', marginBottom: 12 }}>
+            📋 CONFIRME SEUS DADOS DE CONTATO
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#6b6b68', display: 'block', marginBottom: 4 }}>E-MAIL</label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="seu@email.com"
+                style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0cfc7', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#6b6b68', display: 'block', marginBottom: 4 }}>TELEFONE COM DDD</label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                placeholder="11912345678"
+                style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0cfc7', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }}
+              />
+            </div>
+            {contactError && <p style={{ color: '#a32d2d', fontSize: 12, margin: 0 }}>{contactError}</p>}
+            <button
+              onClick={saveContact}
+              disabled={savingContact}
+              style={{ background: '#c5a859', color: '#fff', border: 'none', borderRadius: 8, padding: '11px 0', fontWeight: 700, fontSize: 14, cursor: 'pointer', opacity: savingContact ? 0.7 : 1 }}
+            >
+              {savingContact ? 'Salvando...' : 'Confirmar dados →'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>✅</span>
+          <div>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#166534' }}>Dados confirmados</span>
+            <p style={{ margin: 0, fontSize: 12, color: '#166534' }}>{email} · {phone}</p>
+          </div>
+          <button onClick={() => setContactSaved(false)} style={{ marginLeft: 'auto', background: 'none', border: 'none', fontSize: 11, color: '#6b6b68', cursor: 'pointer' }}>Editar</button>
+        </div>
+      )}
+
+      {/* Upload dos documentos — só mostra após confirmar contato */}
+      {contactSaved && <p style={{ fontSize: 12, fontWeight: 500, color: '#6b6b68', marginBottom: 12 }}>
         ENVIE OS DOCUMENTOS ABAIXO
-      </p>
+      </p>}
+      {!contactSaved && <p style={{ fontSize: 12, color: '#6b6b68', textAlign: 'center', marginBottom: 12 }}>
+        ↑ Confirme seus dados para liberar o envio de documentos
+      </p>}
+      {contactSaved && <>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {requiredDocs.map(doc => (
@@ -175,6 +256,8 @@ export default function UploadPage() {
           }} />
         </div>
       </div>
+
+      </> }
 
       <Contact style={{ marginTop: '2rem' }} />
     </Screen>

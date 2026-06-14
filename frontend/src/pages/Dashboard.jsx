@@ -94,7 +94,12 @@ export default function Dashboard() {
     } catch {}
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    // Polling automático a cada 3 minutos
+    const interval = setInterval(load, 3 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const fmt = dateStr => {
     try { return format(new Date(dateStr), 'dd/MM/yyyy', { locale: ptBR }); } catch { return dateStr; }

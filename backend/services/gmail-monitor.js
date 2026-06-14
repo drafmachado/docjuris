@@ -134,6 +134,36 @@ async function notificarNovoAndamentoEmail(processo, andamento) {
   } catch(e) { console.error('Email erro:', e.message); }
 }
 
+async function analisarPrazoIA(db, proc, andamento) {
+  if (!process.env.ANTHROPIC_API_KEY) return;
+  const temIndicacao = /prazo|intima|citar|contesta|recurso|apela|embargo|manifest|audiên|julgamento|respond/i.test(andamento.descricao);
+  if (!temIndicacao) return;
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 300,
+        messages: [{ role: 'user', content: `Analise esta movimentação e responda APENAS em JSON:\nProcesso: ${proc.numero_cnj}\nTribunal: ${proc.tribunal}\nData: ${andamento.data}\nMovimentação: ${andamento.descricao}\n\n{"tem_prazo":true/false,"tipo_prazo":"tipo ou null","dias_prazo":número ou null,"observacao":"breve"}` }]
+      })
+    });
+    if (!response.ok) return;
+    const data = await response.json();
+    const analise = JSON.parse(data.content[0]?.text?.replace(/\`\`\`json|\`\`\`/g,'').trim() || '{"tem_prazo":false}');
+    if (analise.tem_prazo && analise.dias_prazo) {
+      const dataBase = new Date(andamento.data);
+      dataBase.setDate(dataBase.getDate() + analise.dias_prazo);
+      const dataISO = dataBase.toISOString().split('T')[0];
+      const existe = db.prepare('SELECT id FROM prazos WHERE processo_id = ? AND data_limite = ?').get(proc.id, dataISO);
+      if (!existe) {
+        db.prepare('INSERT INTO prazos (processo_id, client_id, titulo, tipo, data_limite, observacoes, created_by) VALUES (?,?,?,?,?,?,1)')
+          .run(proc.id, proc.client_id, analise.tipo_prazo||'Prazo', analise.tipo_prazo||'Prazo', dataISO, `Auto: ${analise.observacao}`);
+        console.log(`  📅 Prazo criado: ${analise.tipo_prazo} — ${dataISO}`);
+      }
+    }
+  } catch(e) {}
+}
+
 export async function monitorarEmailsTribunal() {
   const db = getDB();
 

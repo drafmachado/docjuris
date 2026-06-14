@@ -178,7 +178,7 @@ router.post('/:token/files', async (req, res) => {
     : path.join(__dirname, '../../storage/client_files');
   if (!fs.existsSync(clientFilesDir)) fs.mkdirSync(clientFilesDir, { recursive: true });
  
-  const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
+  const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif', 'application/pdf'];
   const MAX_SIZE = 10 * 1024 * 1024;
   const savedFiles = [];
  
@@ -189,6 +189,9 @@ router.post('/:token/files', async (req, res) => {
     'image/webp':      [0x52, 0x49, 0x46, 0x46],  // RIFF
     'image/gif':       [0x47, 0x49, 0x46],          // GIF
     'application/pdf': [0x25, 0x50, 0x44, 0x46],   // %PDF
+    // HEIC/HEIF: magic bytes variam por encoder — validação por extensão é suficiente
+    'image/heic':      null,
+    'image/heif':      null,
   };
 
   for (const file of fileArray) {
@@ -225,8 +228,13 @@ router.post('/:token/files', async (req, res) => {
     const ext = path.extname(file.name);
     const filename = `${Date.now()}_${randomBytes(8).toString('hex')}${ext}`;
     const dest = path.join(clientFilesDir, filename);
-    await file.mv(dest);
- 
+    try {
+      await file.mv(dest);
+    } catch (mvErr) {
+      console.error('Erro ao mover arquivo:', mvErr.message, '| dest:', dest);
+      return res.status(500).json({ error: `Erro ao salvar arquivo: ${file.name}. Tente novamente.` });
+    }
+
     db.prepare(`
       INSERT INTO client_files (client_id, filename, original_name, mimetype, size)
       VALUES (?, ?, ?, ?, ?)

@@ -76,7 +76,7 @@ export async function createDocument({ name, filePath, fileBuffer, fileName, sig
 
   const variables = {
     document: { name, ...options },
-    signers: signers.map((s) => ({ action: 'SIGN', ...s })),
+    signers: signers.map((s) => ({ ...s, action: s.action || 'SIGN' })),
     file: null,
   };
 

@@ -55,6 +55,19 @@ export default function ClientDetail() {
     } catch { toast.error('Erro ao baixar documento'); }
   };
 
+  // ✅ Abrir PDF (gerado ou assinado) com autenticação via token
+  const handleViewPdf = async (docId, signed = false) => {
+    try {
+      const endpoint = signed
+        ? `/documents/${docId}/download/signed`
+        : `/documents/${docId}/download/pdf`;
+      const res = await api.get(endpoint, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      window.open(url, '_blank');
+      setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+    } catch { toast.error('PDF ainda não disponível'); }
+  };
+
   const onDrop = useCallback(async accepted => {
     setUploading(true);
     const fd = new FormData();
@@ -128,8 +141,12 @@ export default function ClientDetail() {
                 <Td><Badge color={statusColor(d.status)}>{d.status}</Badge></Td>
                 <Td>
                   {d.pdf_filename && (
-                    <a href={`/files/pdfs/${d.pdf_filename}`} target="_blank" rel="noreferrer"
-                      style={{ color: '#185fa5', fontSize: 12, marginRight: 8 }}>PDF</a>
+                    <button onClick={() => handleViewPdf(d.id, false)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#185fa5', fontSize: 12, marginRight: 8, textDecoration: 'underline' }}>PDF</button>
+                  )}
+                  {d.signed_pdf_filename && (
+                    <button onClick={() => handleViewPdf(d.id, true)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#16a34a', fontSize: 12, marginRight: 8, textDecoration: 'underline', fontWeight: 600 }}>PDF Assinado</button>
                   )}
                   {d.docx_filename && (
                     <button onClick={() => handleDownloadDocx(d.id)}

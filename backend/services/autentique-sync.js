@@ -8,6 +8,40 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Verifica documentos pendentes de assinatura no Autentique e baixa os assinados
+// Assinar documento automaticamente pela Dra. Andreia via API Autentique
+async function autoAssinarAndreia(documentId, sig) {
+  const TOKEN = process.env.AUTENTIQUE_API_TOKEN;
+  if (!TOKEN) return;
+
+  // Usar o link de assinatura da Andreia para assinar via API
+  const mutation = `
+    mutation SignDocument($id: UUID!, $data: SignatoryDataInput) {
+      sign(document_id: $id, data: $data) {
+        signed
+      }
+    }
+  `;
+
+  try {
+    const resp = await fetch('https://api.autentique.com.br/v2/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: \`Bearer \${TOKEN}\` },
+      body: JSON.stringify({
+        query: mutation,
+        variables: { id: documentId, data: {} }
+      })
+    });
+    const data = await resp.json();
+    if (data.errors) {
+      console.error('  ❌ Erro auto-assinatura:', JSON.stringify(data.errors));
+    } else {
+      console.log('  ✅ Assinatura Andreia enviada via API');
+    }
+  } catch(e) {
+    console.error('  ❌ Erro auto-assinatura:', e.message);
+  }
+}
+
 export async function sincronizarAutentique(recentOnly = false) {
   if (!process.env.AUTENTIQUE_API_TOKEN) {
     console.log('⚠️  AUTENTIQUE_API_TOKEN não configurado — pulando sync');
@@ -48,18 +82,41 @@ export async function sincronizarAutentique(recentOnly = false) {
       const autDoc = await getDocument(doc.zapsign_doc_token);
       if (!autDoc) continue;
 
-      // Verificar conclusão: se Autentique gerou o PDF assinado, todos assinaram
+      // Verificar estado das assinaturas
+      const assinaturas = autDoc.signatures || [];
       const signedUrl = autDoc.files?.signed;
 
+      // Auto-assinar pela Dra. Andreia se cliente já assinou e Andreia ainda não
+      const andreiaSig = assinaturas.find(s =>
+        s.email?.toLowerCase() === 'fmachado.andreia@gmail.com' ||
+        s.email?.toLowerCase() === 'dra.andreia@advmachado.adv.br'
+      );
+      const clienteSigs = assinaturas.filter(s =>
+        s.email?.toLowerCase() !== 'fmachado.andreia@gmail.com' &&
+        s.email?.toLowerCase() !== 'dra.andreia@advmachado.adv.br'
+      );
+      const clienteAssinou = clienteSigs.length > 0 && clienteSigs.every(s => s.signed?.created_at);
+      const andreiaAssinou = andreiaSig ? !!andreiaSig.signed?.created_at : true; // se não é signatária, ok
+
+      if (clienteAssinou && !andreiaAssinou && andreiaSig) {
+        console.log(`  🖊️  ${doc.client_nome}: cliente assinou — iniciando auto-assinatura da Dra. Andreia...`);
+        await autoAssinarAndreia(doc.zapsign_doc_token, andreiaSig);
+        // Aguardar Autentique processar
+        await new Promise(r => setTimeout(r, 3000));
+        // Buscar novamente para pegar o PDF assinado
+        const autDocAtualizado = await getDocument(doc.zapsign_doc_token);
+        if (autDocAtualizado?.files?.signed) {
+          console.log(`  ✅ Auto-assinatura concluída!`);
+        }
+      }
+
       if (!signedUrl) {
-        // Fallback: verificar assinaturas individuais
-        const assinaturas = autDoc.signatures || [];
         const pendentes = assinaturas.filter(s => !s.signed?.created_at).map(s => s.email).join(', ');
-        console.log(`  ⏳ ${doc.client_nome}: PDF assinado não disponível ainda (pendentes: ${pendentes || 'verificando'})`);
+        console.log(`  ⏳ ${doc.client_nome}: aguardando assinatura de ${pendentes || 'verificando'}`);
         continue;
       }
 
-      if (todosAssinaram && signedUrl) {
+      if (signedUrl) {
         const pdfFilename = doc.docx_filename
           ? doc.docx_filename.replace(/\.docx$/, '_assinado.pdf')
           : `doc_${doc.zapsign_doc_token}_assinado.pdf`;

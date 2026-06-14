@@ -100,7 +100,7 @@ router.use(uploadLinkLimiter);
 router.get('/:token', (req, res) => {
   const db = getDB();
   const link = db.prepare(`
-    SELECT ul.*, c.nome as client_nome, c.email as client_email
+    SELECT ul.*, c.nome as client_nome, c.email as client_email, c.telefone as client_phone
     FROM upload_links ul
     JOIN clients c ON c.id = ul.client_id
     WHERE ul.token = ?
@@ -119,6 +119,8 @@ router.get('/:token', (req, res) => {
   res.json({
     token: link.token,
     client_nome: link.client_nome,
+    client_email: link.client_email || '',
+    client_phone: link.client_phone || '',
     message: link.message,
     required_docs: JSON.parse(link.required_docs || '[]'),
     manual_values: JSON.parse(link.manual_values || '{}'),
@@ -128,6 +130,29 @@ router.get('/:token', (req, res) => {
   });
 });
  
+
+// ─── POST /:token/contact — salva email e telefone do cliente ────────────────
+router.post('/:token/contact', async (req, res) => {
+  const db = getDB();
+  const link = db.prepare('SELECT * FROM upload_links WHERE token = ?').get(req.params.token);
+  if (!link) return res.status(404).json({ error: 'Link não encontrado' });
+  if (new Date(link.expires_at) < new Date()) return res.status(410).json({ error: 'Link expirado' });
+
+  const { email, phone } = req.body;
+  if (!email && !phone) return res.status(400).json({ error: 'Informe email ou telefone' });
+
+  // Atualizar cliente — preserva valores já existentes se o campo vier vazio
+  db.prepare(`
+    UPDATE clients SET
+      email    = CASE WHEN ? != '' THEN ? ELSE email    END,
+      telefone = CASE WHEN ? != '' THEN ? ELSE telefone END,
+      updated_at = datetime('now')
+    WHERE id = ?
+  `).run(email||'', email||'', phone||'', phone||'', link.client_id);
+
+  res.json({ ok: true });
+});
+
 router.post('/:token/files', async (req, res) => {
   const db = getDB();
   const link = db.prepare(`

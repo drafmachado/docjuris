@@ -18,7 +18,12 @@ export function Documents() {
 
   const load = () => api.get('/documents').then(r => setDocs(r.data)).catch(() => {});
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    // Polling a cada 2 minutos — detecta documentos assinados automaticamente
+    const interval = setInterval(load, 2 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleResend = async (docId, e) => {
     e.stopPropagation();

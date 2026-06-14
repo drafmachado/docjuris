@@ -18,7 +18,12 @@ export default function ProcessoDetail() {
   const [showAndamentos, setShowAndamentos] = useState(false);
   const [prazoForm, setPrazoForm] = useState({ titulo: '', tipo: 'Prazo', data_limite: '', observacoes: '' });
 
-  useEffect(() => { fetchProcesso(); }, [id]);
+  useEffect(() => {
+    fetchProcesso();
+    // Polling a cada 3 minutos — atualiza andamentos e prazos do processo
+    const interval = setInterval(fetchProcesso, 3 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [id]);
 
   async function buscarAndamentos() {
     setLoadingAndamentos(true);

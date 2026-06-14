@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Verifica documentos pendentes de assinatura no Autentique e baixa os assinados
-export async function sincronizarAutentique() {
+export async function sincronizarAutentique(recentOnly = false) {
   if (!process.env.AUTENTIQUE_API_TOKEN) {
     console.log('⚠️  AUTENTIQUE_API_TOKEN não configurado — pulando sync');
     return;
@@ -17,6 +17,7 @@ export async function sincronizarAutentique() {
   const db = getDB();
 
   // Buscar documentos enviados para assinatura que ainda não foram baixados
+  const filtroRecente = recentOnly ? "AND d.created_at > datetime('now', '-7 days')" : '';
   const pendentes = db.prepare(`
     SELECT d.*, c.nome as client_nome, c.telefone as client_telefone, t.name as template_name
     FROM documents d
@@ -24,6 +25,7 @@ export async function sincronizarAutentique() {
     LEFT JOIN templates t ON t.id = d.template_id
     WHERE d.zapsign_doc_token IS NOT NULL
       AND (d.signed_pdf_filename IS NULL OR d.status != 'assinado')
+      ${filtroRecente}
   `).all();
 
   if (pendentes.length === 0) {

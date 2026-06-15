@@ -6,18 +6,26 @@ import GenerateModal from '../components/GenerateModal.jsx';
 import UploadLinkModal from '../components/UploadLinkModal.jsx';
 import api from '../utils/api.js';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Upload, Trash2, Download } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Download, DollarSign, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const statusColor = s => s === 'enviado' ? 'green' : s === 'erro' ? 'red' : 'blue';
 const fmt = d => { try { return format(new Date(d), 'dd/MM/yyyy HH:mm', { locale: ptBR }); } catch { return d; } };
 
+const inp = { width:'100%', boxSizing:'border-box', padding:'9px 12px', border:'1px solid #d0cfc7', borderRadius:8, fontSize:14 };
+
 export default function ClientDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [client, setClient] = useState(null);
   const [tab, setTab] = useState('docs');
+  const [honorarios, setHonorarios] = useState([]);
+  const [showHonModal, setShowHonModal] = useState(false);
+  const [honForm, setHonForm] = useState({ descricao:'', valor_total:'', num_parcelas:1, vencimento:'' });
+  const [showExcModal, setShowExcModal] = useState(false);
+  const [excMotivo, setExcMotivo] = useState('');
+  const [excConfirm, setExcConfirm] = useState('');
   const [showGenerate, setShowGenerate] = useState(false);
   const [showUploadLink, setShowUploadLink] = useState(false);
   const [form, setForm] = useState({});
@@ -61,6 +69,36 @@ export default function ClientDetail() {
   };
 
   // ✅ Abrir PDF (gerado ou assinado) com autenticação via token
+  // Carregar honorários
+  const loadHonorarios = async () => {
+    try { const r = await api.get(`/honorarios?client_id=${id}`); setHonorarios(r.data); } catch {}
+  };
+  useEffect(() => { if (tab === 'fin') loadHonorarios(); }, [tab, id]);
+
+  const handleSaveHon = async () => {
+    try {
+      await api.post('/honorarios', { client_id: id, ...honForm, valor_total: parseFloat(honForm.valor_total) });
+      toast.success('Honorário registrado!');
+      setShowHonModal(false);
+      setHonForm({ descricao:'', valor_total:'', num_parcelas:1, vencimento:'' });
+      loadHonorarios();
+    } catch(e) { toast.error(e.response?.data?.error || 'Erro'); }
+  };
+
+  const handleStatusHon = async (honId, status) => {
+    await api.put(`/honorarios/${honId}/status`, { status });
+    loadHonorarios();
+  };
+
+  const handleSolicitarExclusao = async () => {
+    if (excConfirm !== client.nome) return toast.error('Nome do cliente não confere');
+    try {
+      await api.post('/exclusao', { tipo: 'cliente', referencia_id: id, motivo: excMotivo });
+      toast.success('Solicitação enviada! Aguardando aprovação da administração.');
+      setShowExcModal(false); setExcMotivo(''); setExcConfirm('');
+    } catch(e) { toast.error(e.response?.data?.error || 'Erro'); }
+  };
+
   const handleViewPdf = async (docId, signed = false) => {
     try {
       const endpoint = signed
@@ -100,7 +138,7 @@ export default function ClientDetail() {
   if (!client) return <div style={{ padding: '2rem', color: '#6b6b68' }}>Carregando...</div>;
 
   const initials = client.nome?.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
-  const tabs = [{ id: 'docs', label: 'Documentos' }, { id: 'data', label: 'Dados pessoais' }, { id: 'files', label: `Arquivos (${client.files?.length || 0})` }];
+  const tabs = [{ id: 'docs', label: 'Documentos' }, { id: 'data', label: 'Dados pessoais' }, { id: 'files', label: `Arquivos (${client.files?.length || 0})` }, { id: 'fin', label: `💰 Financeiro (${honorarios.length})` }];
 
   return (
     <div>
@@ -120,6 +158,11 @@ export default function ClientDetail() {
           <div style={{ display: 'flex', gap: 8 }}>
             <Btn variant="secondary" onClick={() => setShowUploadLink(true)}>🔗 Link de upload</Btn>
             <Btn onClick={() => setShowGenerate(true)}>+ Gerar Documento</Btn>
+            <button onClick={() => setShowExcModal(true)}
+              style={{ background:'none', border:'1px solid #fca5a5', borderRadius:8, padding:'6px 12px',
+                color:'#dc2626', fontSize:12, cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
+              <AlertTriangle size={13}/> Solicitar Exclusão
+            </button>
           </div>
         </div>
       </Card>

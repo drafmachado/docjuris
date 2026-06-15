@@ -172,9 +172,18 @@ export default function Peticao() {
             {gerando ? 'Pesquisando jurisprudência e redigindo...' : 'Gerar Peça com IA'}
           </button>
 
+          {/* Banner de segurança jurídica */}
+          <div style={{ background:'#fff8f1', border:'1.5px solid #fed7aa', borderRadius:8, padding:'10px 14px', fontSize:12 }}>
+            <p style={{ margin:'0 0 4px', fontWeight:700, color:'#c2410c' }}>⚠️ Segurança jurídica — leia antes de usar</p>
+            <p style={{ margin:0, color:'#7c2d12', lineHeight:1.5 }}>
+              A IA pesquisa jurisprudência real via busca web e cita apenas o que encontra. Onde não encontrar decisão verificada, inserirá <strong>[JURISPRUDÊNCIA PENDENTE]</strong> para você completar manualmente.
+              <strong> Sempre revise as citações antes de protocolar.</strong>
+            </p>
+          </div>
+
           {gerando && (
             <div style={{ background:'#f0f7ff', border:'1px solid #bfdbfe', borderRadius:8, padding:'10px 14px', fontSize:12, color:'#1e40af' }}>
-              ⏳ A IA está pesquisando jurisprudência em tempo real e redigindo a peça. Isso pode levar 30-90 segundos...
+              ⏳ Pesquisando jurisprudência real em tempo real e redigindo a peça. Isso pode levar 30–90 segundos...
             </div>
           )}
 
@@ -193,6 +202,9 @@ export default function Peticao() {
         {/* Resultado */}
         {resultado && (
           <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            <div style={{ background:'#fef9c3', border:'1px solid #fde047', borderRadius:8, padding:'8px 12px', fontSize:12, color:'#854d0e' }}>
+              <strong>Antes de protocolar:</strong> revise cada citação jurisprudencial. Itens marcados como <code>[JURISPRUDÊNCIA PENDENTE]</code> devem ser pesquisados e inseridos por você.
+            </div>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <span style={{ fontSize:14, fontWeight:700, color:'#0d2340' }}>Peça gerada</span>
               <div style={{ display:'flex', gap:8 }}>

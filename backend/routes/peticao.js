@@ -74,7 +74,7 @@ REGRAS OBRIGATÓRIAS:
 5. Linguagem técnica mas objetiva
 6. Adapte ao tribunal e área informados`;
 
-  const userPrompt = `Redija uma ${nomePeca} para o seguinte caso:
+  const userPrompt = `CASO PARA REDAÇÃO DE ${nomePeca.toUpperCase()}
 
 ÁREA: ${nomeArea}
 TRIBUNAL/FORO: ${tribunal || processo?.tribunal || 'Juízo Cível da Comarca'}
@@ -85,12 +85,15 @@ ${fatos}
 PEDIDOS ESPECÍFICOS:
 ${pedidos || 'Proceder conforme o tipo de peça e os fatos expostos'}
 
-INSTRUÇÕES:
-1. Antes de redigir, use a busca web para encontrar jurisprudência recente e relevante para este caso
-2. Redija a peça completa e formal
-3. Inclua os fundamentos legais e jurisprudenciais encontrados
-4. Inclua pedido de assistência judiciária gratuita se pertinente
-5. Finalize com local, data e identificação da advogada (Dra. Andreia Machado, OAB/RJ 218.586 / OAB/SP 532.488)`;
+PASSO 1 — PESQUISE AGORA (obrigatório antes de redigir):
+Execute pelo menos 3 buscas web com termos específicos para este caso.
+Identifique decisões reais com número completo, relator e data.
+Anote quais fontes confirmaram cada decisão.
+
+PASSO 2 — REDIJA a ${nomePeca} completa usando APENAS o que foi encontrado no Passo 1.
+Onde não houver jurisprudência verificada, escreva: [JURISPRUDÊNCIA PENDENTE — inserir manualmente]
+
+PASSO 3 — Ao final, liste todas as citações usadas e onde cada uma foi encontrada.`;
 
   try {
     // Usar streaming para resposta longa — ou await direto

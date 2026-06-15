@@ -1,0 +1,260 @@
+import { useState, useEffect } from 'react';
+import api from '../utils/api.js';
+import toast from 'react-hot-toast';
+import { Sparkles, Copy, Download, Clock, Scale } from 'lucide-react';
+
+const TIPOS = [
+  { id: 'liminar',          label: '⚡ Tutela de Urgência (Liminar)' },
+  { id: 'peticao_inicial',  label: '📄 Petição Inicial' },
+  { id: 'contestacao',      label: '🛡️ Contestação' },
+  { id: 'recurso_inominado',label: '📋 Recurso Inominado (JEC)' },
+  { id: 'recurso_apelacao', label: '⬆️ Recurso de Apelação' },
+  { id: 'embargos',         label: '🔍 Embargos de Declaração' },
+  { id: 'manifestacao',     label: '💬 Manifestação / Impugnação' },
+  { id: 'agravo',           label: '📑 Agravo Regimental' },
+];
+
+const AREAS = [
+  { id: 'medico',      label: '🏥 Direito Médico e da Saúde' },
+  { id: 'inventarios', label: '📜 Inventário e Sucessões' },
+  { id: 'civel',       label: '⚖️ Cível' },
+];
+
+export default function Peticao() {
+  const [clientes, setClientes]     = useState([]);
+  const [processos, setProcessos]   = useState([]);
+  const [historico, setHistorico]   = useState([]);
+
+  const [form, setForm] = useState({
+    client_id: '', processo_id: '', tipo_peca: 'liminar',
+    area: 'medico', fatos: '', pedidos: '', tribunal: '',
+  });
+
+  const [gerando, setGerando]       = useState(false);
+  const [resultado, setResultado]   = useState(null);
+  const [buscas, setBuscas]         = useState([]);
+  const [tokens, setTokens]         = useState(null);
+
+  useEffect(() => {
+    api.get('/clients').then(r => setClientes(r.data || [])).catch(()=>{});
+    api.get('/processos').then(r => setProcessos(r.data?.processos || r.data || [])).catch(()=>{});
+    api.get('/peticao/historico').then(r => setHistorico(r.data || [])).catch(()=>{});
+  }, []);
+
+  const processosFiltrados = form.client_id
+    ? processos.filter(p => String(p.client_id) === String(form.client_id))
+    : processos;
+
+  async function gerar() {
+    if (!form.tipo_peca || !form.fatos.trim()) {
+      return toast.error('Preencha o tipo de peça e os fatos do caso');
+    }
+    setGerando(true);
+    setResultado(null);
+    setBuscas([]);
+    try {
+      const r = await api.post('/peticao/gerar', form);
+      setResultado(r.data.conteudo);
+      setBuscas(r.data.buscas || []);
+      setTokens(r.data.tokens_usados);
+      toast.success('Peça gerada com sucesso!');
+      api.get('/peticao/historico').then(r2 => setHistorico(r2.data || [])).catch(()=>{});
+    } catch(e) {
+      toast.error(e.response?.data?.error || 'Erro ao gerar. Tente novamente.');
+    } finally {
+      setGerando(false);
+    }
+  }
+
+  function copiar() {
+    navigator.clipboard.writeText(resultado);
+    toast.success('Copiado!');
+  }
+
+  function baixar() {
+    const blob = new Blob([resultado], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${form.tipo_peca}_${new Date().toISOString().slice(0,10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '1.5rem 1rem' }}>
+      {/* Header */}
+      <div style={{ marginBottom: '1.5rem' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#0d2340', margin: 0, display:'flex', alignItems:'center', gap:8 }}>
+          <Scale size={20} color="#c5a859" /> Petição Assistida por IA
+        </h2>
+        <p style={{ fontSize: 13, color: '#6b6b68', margin: '4px 0 0' }}>
+          Gera peças completas com jurisprudência real pesquisada em tempo real
+        </p>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: resultado ? '1fr 1fr' : '1fr', gap: '1.5rem' }}>
+        {/* Formulário */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+          {/* Tipo + Área */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <label style={lbl}>TIPO DE PEÇA</label>
+              <select value={form.tipo_peca} onChange={e=>setForm(p=>({...p,tipo_peca:e.target.value}))} style={inp}>
+                {TIPOS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={lbl}>ÁREA DO DIREITO</label>
+              <select value={form.area} onChange={e=>setForm(p=>({...p,area:e.target.value}))} style={inp}>
+                {AREAS.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Cliente + Processo */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <label style={lbl}>CLIENTE (opcional)</label>
+              <select value={form.client_id} onChange={e=>setForm(p=>({...p,client_id:e.target.value,processo_id:''}))} style={inp}>
+                <option value="">Selecionar cliente</option>
+                {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={lbl}>PROCESSO (opcional)</label>
+              <select value={form.processo_id} onChange={e=>setForm(p=>({...p,processo_id:e.target.value}))} style={inp}>
+                <option value="">Selecionar processo</option>
+                {processosFiltrados.map(p => <option key={p.id} value={p.id}>{p.numero_cnj}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Tribunal */}
+          <div>
+            <label style={lbl}>TRIBUNAL / VARA</label>
+            <input placeholder="Ex: 3ª Vara Cível de São Paulo / TJSP / JEC" value={form.tribunal}
+              onChange={e=>setForm(p=>({...p,tribunal:e.target.value}))} style={inp} />
+          </div>
+
+          {/* Fatos */}
+          <div>
+            <label style={lbl}>FATOS DO CASO *</label>
+            <textarea
+              placeholder={`Descreva os fatos em detalhes. Ex:\n"Cliente Maria, 65 anos, possui plano de saúde Amil há 12 anos. Em 15/05/2026, o plano negou cobertura para cirurgia de catarata bilateral, alegando ausência de cobertura. O médico Dr. João prescreveu o procedimento como urgente (CID H25.1). A negativa foi por escrito em 20/05/2026..."`}
+              value={form.fatos}
+              onChange={e=>setForm(p=>({...p,fatos:e.target.value}))}
+              rows={8}
+              style={{...inp, resize:'vertical', lineHeight:1.5}}
+            />
+          </div>
+
+          {/* Pedidos */}
+          <div>
+            <label style={lbl}>PEDIDOS ESPECÍFICOS (opcional)</label>
+            <textarea
+              placeholder="Ex: Liminar para autorizar cirurgia em 48h; condenação em danos morais de R$ 15.000..."
+              value={form.pedidos}
+              onChange={e=>setForm(p=>({...p,pedidos:e.target.value}))}
+              rows={3}
+              style={{...inp, resize:'vertical'}}
+            />
+          </div>
+
+          {/* Botão gerar */}
+          <button onClick={gerar} disabled={gerando}
+            style={{ background: gerando ? '#ccc' : 'linear-gradient(135deg,#0d2340,#1a3a5c)',
+              color:'#fff', border:'none', borderRadius:10, padding:'14px',
+              fontWeight:700, fontSize:15, cursor: gerando ? 'not-allowed' : 'pointer',
+              display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+            <Sparkles size={18} />
+            {gerando ? 'Pesquisando jurisprudência e redigindo...' : 'Gerar Peça com IA'}
+          </button>
+
+          {gerando && (
+            <div style={{ background:'#f0f7ff', border:'1px solid #bfdbfe', borderRadius:8, padding:'10px 14px', fontSize:12, color:'#1e40af' }}>
+              ⏳ A IA está pesquisando jurisprudência em tempo real e redigindo a peça. Isso pode levar 30-90 segundos...
+            </div>
+          )}
+
+          {/* Buscas realizadas */}
+          {buscas.length > 0 && (
+            <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:8, padding:'10px 14px' }}>
+              <p style={{ margin:'0 0 6px', fontSize:12, fontWeight:600, color:'#166534' }}>
+                🔍 Jurisprudência pesquisada em tempo real:
+              </p>
+              {buscas.map((b,i) => <p key={i} style={{ margin:'2px 0', fontSize:11, color:'#166534' }}>• {b}</p>)}
+              {tokens && <p style={{ margin:'6px 0 0', fontSize:10, color:'#6b6b68' }}>{tokens.toLocaleString()} tokens gerados</p>}
+            </div>
+          )}
+        </div>
+
+        {/* Resultado */}
+        {resultado && (
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <span style={{ fontSize:14, fontWeight:700, color:'#0d2340' }}>Peça gerada</span>
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={copiar}
+                  style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 14px',
+                    background:'#f0f0ec', border:'1px solid #d0cfc7', borderRadius:8,
+                    fontSize:12, fontWeight:600, cursor:'pointer' }}>
+                  <Copy size={13}/> Copiar
+                </button>
+                <button onClick={baixar}
+                  style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 14px',
+                    background:'#0d2340', color:'#fff', border:'none', borderRadius:8,
+                    fontSize:12, fontWeight:600, cursor:'pointer' }}>
+                  <Download size={13}/> Baixar .txt
+                </button>
+              </div>
+            </div>
+            <textarea
+              value={resultado}
+              onChange={e=>setResultado(e.target.value)}
+              style={{ flex:1, minHeight:600, padding:'1rem', border:'1px solid #d0cfc7',
+                borderRadius:10, fontSize:12, lineHeight:1.7, fontFamily:'Georgia,serif',
+                resize:'vertical', background:'#fafaf8' }}
+            />
+            <p style={{ fontSize:11, color:'#6b6b68', margin:0 }}>
+              ✏️ Você pode editar o texto diretamente antes de copiar ou baixar.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Histórico */}
+      {historico.length > 0 && !resultado && (
+        <div style={{ marginTop:'2rem' }}>
+          <h3 style={{ fontSize:14, fontWeight:700, color:'#0d2340', marginBottom:10,
+            display:'flex', alignItems:'center', gap:6 }}>
+            <Clock size={14}/> Histórico de peças geradas
+          </h3>
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            {historico.slice(0,5).map(h => (
+              <div key={h.id}
+                style={{ background:'#fff', border:'1px solid #e5e2d6', borderRadius:8,
+                  padding:'10px 14px', display:'flex', justifyContent:'space-between',
+                  alignItems:'center', cursor:'pointer' }}
+                onClick={() => setResultado(h.conteudo)}>
+                <div>
+                  <span style={{ fontSize:13, fontWeight:600 }}>
+                    {TIPOS.find(t=>t.id===h.tipo_peca)?.label || h.tipo_peca}
+                  </span>
+                  {h.cliente_nome && <span style={{ fontSize:12, color:'#6b6b68', marginLeft:8 }}>— {h.cliente_nome}</span>}
+                </div>
+                <span style={{ fontSize:11, color:'#6b6b68' }}>
+                  {new Date(h.created_at).toLocaleDateString('pt-BR')}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const lbl = { fontSize:11, fontWeight:600, color:'#6b6b68', display:'block', marginBottom:4 };
+const inp = { width:'100%', boxSizing:'border-box', padding:'9px 12px', border:'1px solid #d0cfc7', borderRadius:8, fontSize:13, background:'#fff' };

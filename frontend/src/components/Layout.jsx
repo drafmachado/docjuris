@@ -41,12 +41,29 @@ export default function Layout() {
           <NavLink to="/processos" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
             <Gavel size={16} /> Processos
           </NavLink>
-          <NavLink to="/identificar-clientes" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
-            <UserCheck size={16} /> Identificar Clientes
-          </NavLink>
           <NavLink to="/documents" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
             <FileText size={16} /> Documentos
           </NavLink>
+          <NavLink to="/identificar-clientes" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+            <UserCheck size={16} /> Identificar Clientes
+          </NavLink>
+
+          <span className={styles.navSection}>IA Jurídica</span>
+          <NavLink to="/peticao" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+            <Scale size={16} /> Petição IA
+          </NavLink>
+
+          <span className={styles.navSection}>CRM</span>
+          <NavLink to="/leads" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+            <Users size={16} /> Funil de Leads
+          </NavLink>
+          <NavLink to="/analytics" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+            <LayoutDashboard size={16} /> Analytics
+          </NavLink>
+          <NavLink to="/comunicados" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+            <FileText size={16} /> Comunicados
+          </NavLink>
+
           <span className={styles.navSection}>Configurações</span>
           <NavLink to="/templates" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
             <FileStack size={16} /> Templates

@@ -21,6 +21,11 @@ export default function ClientDetail() {
   const [client, setClient] = useState(null);
   const [tab, setTab] = useState('docs');
   const [honorarios, setHonorarios] = useState([]);
+  const [peticoes, setPeticoes] = useState([]);
+  const [petAberta, setPetAberta] = useState(null);
+  const [petConteudo, setPetConteudo] = useState('');
+  const [petTitulo, setPetTitulo] = useState('');
+  const [salvandoPet, setSalvandoPet] = useState(false);
   const [showHonModal, setShowHonModal] = useState(false);
   const [honForm, setHonForm] = useState({ descricao:'', valor_total:'', num_parcelas:1, vencimento:'' });
   const [showExcModal, setShowExcModal] = useState(false);
@@ -70,6 +75,34 @@ export default function ClientDetail() {
 
   // ✅ Abrir PDF (gerado ou assinado) com autenticação via token
   // Carregar honorários
+  const loadPeticoes = async () => {
+    try { const r = await api.get(`/peticao/cliente/${id}`); setPeticoes(r.data || []); } catch {}
+  };
+  useEffect(() => { if (tab === 'pet') loadPeticoes(); }, [tab, id]);
+
+  const abrirPeticao = (pet) => {
+    setPetAberta(pet);
+    setPetConteudo(pet.conteudo);
+    setPetTitulo(pet.titulo);
+  };
+
+  const salvarPeticao = async () => {
+    if (!petAberta) return;
+    setSalvandoPet(true);
+    try {
+      await api.put(`/peticao/${petAberta.id}`, { titulo: petTitulo, conteudo: petConteudo });
+      toast.success('Petição salva!');
+      loadPeticoes();
+    } catch { toast.error('Erro ao salvar'); }
+    finally { setSalvandoPet(false); }
+  };
+
+  const excluirPeticao = async (petId) => {
+    if (!window.confirm('Excluir esta petição?')) return;
+    await api.delete(`/peticao/${petId}`);
+    setPetAberta(null); loadPeticoes();
+  };
+
   const loadHonorarios = async () => {
     try { const r = await api.get(`/honorarios?client_id=${id}`); setHonorarios(r.data); } catch {}
   };
@@ -138,7 +171,7 @@ export default function ClientDetail() {
   if (!client) return <div style={{ padding: '2rem', color: '#6b6b68' }}>Carregando...</div>;
 
   const initials = client.nome?.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
-  const tabs = [{ id: 'docs', label: 'Documentos' }, { id: 'data', label: 'Dados pessoais' }, { id: 'files', label: `Arquivos (${client.files?.length || 0})` }, { id: 'fin', label: `💰 Financeiro (${honorarios.length})` }];
+  const tabs = [{ id: 'docs', label: 'Documentos' }, { id: 'data', label: 'Dados pessoais' }, { id: 'files', label: `Arquivos (${client.files?.length || 0})` }, { id: 'fin', label: `💰 Financeiro (${honorarios.length})` }, { id: 'pet', label: `⚖️ Petições (${peticoes.length})` }];
 
   return (
     <div>

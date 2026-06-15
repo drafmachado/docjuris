@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import api from '../utils/api.js';
 import toast from 'react-hot-toast';
-import { Sparkles, Copy, Download, Clock, Scale } from 'lucide-react';
+import { Sparkles, Copy, Download, Clock, Scale, Save, Folder, FileText, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const TIPOS = [
   { id: 'liminar',          label: '⚡ Tutela de Urgência (Liminar)' },
@@ -30,7 +31,13 @@ export default function Peticao() {
     area: 'medico', fatos: '', pedidos: '', tribunal: '',
   });
 
-  const [gerando, setGerando]       = useState(false);
+  const navigate = useNavigate();
+  const [clientFiles, setClientFiles] = useState([]);
+  const [arquivosContexto, setArquivosContexto] = useState([]);
+  const [peticaoId, setPeticaoId]     = useState(null);
+  const [titulo, setTitulo]           = useState('');
+  const [salvando, setSalvando]       = useState(false);
+  const [gerando, setGerando]         = useState(false);
   const [resultado, setResultado]   = useState(null);
   const [buscas, setBuscas]         = useState([]);
   const [tokens, setTokens]         = useState(null);
@@ -45,25 +52,41 @@ export default function Peticao() {
     ? processos.filter(p => String(p.client_id) === String(form.client_id))
     : processos;
 
+  // Carregar arquivos do cliente selecionado
+  useEffect(() => {
+    if (!form.client_id) { setClientFiles([]); return; }
+    api.get(`/clients/${form.client_id}`)
+      .then(r => setClientFiles(r.data?.files || []))
+      .catch(()=>{});
+  }, [form.client_id]);
+
   async function gerar() {
-    if (!form.tipo_peca || !form.fatos.trim()) {
-      return toast.error('Preencha o tipo de peça e os fatos do caso');
-    }
-    setGerando(true);
-    setResultado(null);
-    setBuscas([]);
+    if (!form.tipo_peca || !form.fatos.trim()) return toast.error('Preencha o tipo de peça e os fatos do caso');
+    setGerando(true); setResultado(null); setBuscas([]); setPeticaoId(null);
     try {
-      const r = await api.post('/peticao/gerar', form);
+      const r = await api.post('/peticao/gerar', { ...form, arquivos_contexto: arquivosContexto });
       setResultado(r.data.conteudo);
       setBuscas(r.data.buscas || []);
       setTokens(r.data.tokens_usados);
-      toast.success('Peça gerada com sucesso!');
+      if (r.data.peticaoId) { setPeticaoId(r.data.peticaoId); }
+      const TIPOS_LABEL = { liminar:'Tutela de Urgência', peticao_inicial:'Petição Inicial',
+        contestacao:'Contestação', recurso_apelacao:'Apelação', embargos:'Embargos',
+        manifestacao:'Manifestação', recurso_inominado:'Recurso Inominado', agravo:'Agravo' };
+      setTitulo(`${TIPOS_LABEL[form.tipo_peca]||form.tipo_peca} — ${new Date().toLocaleDateString('pt-BR')}`);
+      toast.success(form.client_id ? 'Peça gerada e salva na pasta do cliente!' : 'Peça gerada com sucesso!');
       api.get('/peticao/historico').then(r2 => setHistorico(r2.data || [])).catch(()=>{});
-    } catch(e) {
-      toast.error(e.response?.data?.error || 'Erro ao gerar. Tente novamente.');
-    } finally {
-      setGerando(false);
-    }
+    } catch(e) { toast.error(e.response?.data?.error || 'Erro ao gerar. Tente novamente.'); }
+    finally { setGerando(false); }
+  }
+
+  async function salvarEdicao() {
+    if (!peticaoId) return toast.error('Selecione um cliente e gere a peça primeiro');
+    setSalvando(true);
+    try {
+      await api.put(`/peticao/${peticaoId}`, { titulo, conteudo: resultado });
+      toast.success('Peça salva!');
+    } catch(e) { toast.error('Erro ao salvar'); }
+    finally { setSalvando(false); }
   }
 
   function copiar() {
@@ -130,6 +153,35 @@ export default function Peticao() {
               </select>
             </div>
           </div>
+
+          {/* Documentos do cliente como contexto */}
+          {clientFiles.length > 0 && (
+            <div>
+              <label style={lbl}>INCLUIR DOCUMENTOS DO CLIENTE COMO CONTEXTO (máx. 3)</label>
+              <div style={{ display:'flex', flexDirection:'column', gap:6, background:'#f8f7f3', borderRadius:8, padding:10 }}>
+                {clientFiles.map(f => (
+                  <label key={f.id} style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontSize:13 }}>
+                    <input type="checkbox"
+                      checked={arquivosContexto.includes(f.filename)}
+                      disabled={!arquivosContexto.includes(f.filename) && arquivosContexto.length >= 3}
+                      onChange={e => {
+                        if (e.target.checked) setArquivosContexto(prev => [...prev, f.filename]);
+                        else setArquivosContexto(prev => prev.filter(x => x !== f.filename));
+                      }}
+                    />
+                    <FileText size={12} color="#6b6b68"/>
+                    <span style={{ color:'#333' }}>{f.original_filename || f.filename}</span>
+                    <span style={{ fontSize:11, color:'#6b6b68' }}>({f.file_type})</span>
+                  </label>
+                ))}
+                {arquivosContexto.length > 0 && (
+                  <p style={{ margin:'4px 0 0', fontSize:11, color:'#0d2340', fontWeight:600 }}>
+                    ✅ {arquivosContexto.length} arquivo(s) serão enviados à IA como contexto
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Tribunal */}
           <div>
@@ -205,9 +257,30 @@ export default function Peticao() {
             <div style={{ background:'#fef9c3', border:'1px solid #fde047', borderRadius:8, padding:'8px 12px', fontSize:12, color:'#854d0e' }}>
               <strong>Antes de protocolar:</strong> revise cada citação jurisprudencial. Itens marcados como <code>[JURISPRUDÊNCIA PENDENTE]</code> devem ser pesquisados e inseridos por você.
             </div>
+            {/* Título editável */}
+            <input value={titulo} onChange={e=>setTitulo(e.target.value)}
+              placeholder="Título da peça"
+              style={{ width:'100%', boxSizing:'border-box', padding:'8px 12px', border:'1px solid #d0cfc7', borderRadius:8, fontSize:13, fontWeight:600 }} />
+
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <span style={{ fontSize:14, fontWeight:700, color:'#0d2340' }}>Peça gerada</span>
               <div style={{ display:'flex', gap:8 }}>
+                {peticaoId && (
+                  <button onClick={salvarEdicao} disabled={salvando}
+                    style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 14px',
+                      background:'#166534', color:'#fff', border:'none', borderRadius:8,
+                      fontSize:12, fontWeight:600, cursor:'pointer' }}>
+                    <Save size={13}/> {salvando ? 'Salvando...' : 'Salvar edições'}
+                  </button>
+                )}
+                {peticaoId && form.client_id && (
+                  <button onClick={() => navigate(`/clients/${form.client_id}`)}
+                    style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 14px',
+                      background:'#0d2340', color:'#fff', border:'none', borderRadius:8,
+                      fontSize:12, fontWeight:600, cursor:'pointer' }}>
+                    <Folder size={13}/> Ver pasta do cliente
+                  </button>
+                )}
                 <button onClick={copiar}
                   style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 14px',
                     background:'#f0f0ec', border:'1px solid #d0cfc7', borderRadius:8,

@@ -94,12 +94,33 @@ export default function Dashboard() {
     } catch {}
   };
 
+  const [solicitacoes, setSolicitacoes] = useState([]);
+
+  const loadSolicitacoes = async () => {
+    try { const r = await api.get('/exclusao'); setSolicitacoes(r.data); } catch {}
+  };
+
   useEffect(() => {
     load();
-    // Polling automático a cada 3 minutos
-    const interval = setInterval(load, 3 * 60 * 1000);
+    loadSolicitacoes();
+    const interval = setInterval(() => { load(); loadSolicitacoes(); }, 3 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleAprovar = async (id) => {
+    if (!window.confirm('Confirma a EXCLUSÃO permanente deste registro?')) return;
+    try {
+      await api.put(`/exclusao/${id}/aprovar`);
+      toast.success('Exclusão aprovada e executada.');
+      loadSolicitacoes();
+    } catch(e) { toast.error(e.response?.data?.error || 'Erro'); }
+  };
+
+  const handleRejeitar = async (id) => {
+    await api.put(`/exclusao/${id}/rejeitar`);
+    toast.success('Solicitação rejeitada.');
+    loadSolicitacoes();
+  };
 
   const fmt = dateStr => {
     try { return format(new Date(dateStr), 'dd/MM/yyyy', { locale: ptBR }); } catch { return dateStr; }
@@ -221,6 +242,41 @@ export default function Dashboard() {
       </Card>
 
       <GenerateModal open={showGenerate} onClose={() => setShowGenerate(false)} onSuccess={() => { setShowGenerate(false); load(); }} />
+
+      {/* Painel de solicitações de exclusão */}
+      {solicitacoes.length > 0 && (
+        <div style={{ marginTop:'1.5rem', background:'#fff8f1', border:'1.5px solid #fca5a5', borderRadius:12, padding:'1rem 1.2rem' }}>
+          <h3 style={{ fontSize:14, fontWeight:700, color:'#dc2626', margin:'0 0 12px', display:'flex', alignItems:'center', gap:6 }}>
+            ⚠️ Solicitações de Exclusão Pendentes ({solicitacoes.length})
+          </h3>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {solicitacoes.map(s => (
+              <div key={s.id} style={{ background:'#fff', border:'1px solid #fca5a5', borderRadius:8, padding:'10px 14px',
+                display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}>
+                <div>
+                  <p style={{ margin:0, fontWeight:600, fontSize:13 }}>{s.tipo.toUpperCase()}: {s.referencia_nome}</p>
+                  <p style={{ margin:0, fontSize:12, color:'#6b6b68' }}>
+                    Solicitado por: {s.solicitante} · {new Date(s.created_at).toLocaleDateString('pt-BR')}
+                    {s.motivo && ` · "${s.motivo}"`}
+                  </p>
+                </div>
+                <div style={{ display:'flex', gap:6 }}>
+                  <button onClick={() => handleRejeitar(s.id)}
+                    style={{ padding:'6px 14px', borderRadius:8, border:'1px solid #d0cfc7',
+                      background:'#fff', fontSize:12, cursor:'pointer', fontWeight:600 }}>
+                    Rejeitar
+                  </button>
+                  <button onClick={() => handleAprovar(s.id)}
+                    style={{ padding:'6px 14px', borderRadius:8, border:'none',
+                      background:'#dc2626', color:'#fff', fontSize:12, cursor:'pointer', fontWeight:700 }}>
+                    Aprovar Exclusão
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

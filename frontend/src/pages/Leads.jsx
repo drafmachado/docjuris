@@ -84,11 +84,20 @@ export default function Leads() {
   }
 
   async function converter(lead) {
-    if (!window.confirm(`Converter "${lead.nome}" em cliente?`)) return;
-    const r = await api.post(`/leads/${lead.id}/converter`);
-    toast.success('Cliente criado!');
-    setModal(null); carregar();
-    navigate(`/clients/${r.data.clienteId}`);
+    if (!window.confirm(`Converter "${lead.nome}" em cliente?\n\nO sistema irá:\n✅ Criar o cliente no Veredo\n✅ Gerar link de documentos (30 dias)\n✅ Enviar WhatsApp de boas-vindas`)) return;
+    try {
+      const r = await api.post(`/leads/${lead.id}/converter`);
+      if (r.data.uploadLink) {
+        await navigator.clipboard.writeText(r.data.uploadLink).catch(()=>{});
+        toast.success(`Cliente criado! Link de documentos gerado e copiado.`, { duration: 6000 });
+      } else {
+        toast.success('Cliente criado com sucesso!');
+      }
+      setModal(null); carregar();
+      navigate(`/clients/${r.data.clienteId}`);
+    } catch(e) {
+      toast.error(e.response?.data?.error || 'Erro ao converter');
+    }
   }
 
   async function excluir(lead) {

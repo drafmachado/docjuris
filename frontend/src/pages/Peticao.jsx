@@ -287,11 +287,12 @@ export default function Peticao() {
                     fontSize:12, fontWeight:600, cursor:'pointer' }}>
                   <Copy size={13}/> Copiar
                 </button>
-                <button onClick={baixar}
+                <button onClick={() => window.open(api.defaults.baseURL + `/peticao/${peticaoId}/download/docx`, '_blank')}
+                  disabled={!peticaoId}
                   style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 14px',
-                    background:'#0d2340', color:'#fff', border:'none', borderRadius:8,
-                    fontSize:12, fontWeight:600, cursor:'pointer' }}>
-                  <Download size={13}/> Baixar .txt
+                    background: peticaoId ? '#0d2340' : '#ccc', color:'#fff', border:'none', borderRadius:8,
+                    fontSize:12, fontWeight:600, cursor: peticaoId ? 'pointer' : 'not-allowed' }}>
+                  <Download size={13}/> Baixar Word (.docx)
                 </button>
               </div>
             </div>

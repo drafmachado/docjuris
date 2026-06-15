@@ -41,6 +41,10 @@ function AppRoutes() {
         <Route path="processos" element={<Processos />} />
         <Route path="processos/:id" element={<ProcessoDetail />} />
         <Route path="identificar-clientes" element={<IdentificarClientes />} />
+          <Route path="peticao" element={<Peticao />} />
+          <Route path="analytics" element={<Analytics />} />
+          <Route path="leads" element={<Leads />} />
+          <Route path="comunicados" element={<Comunicados />} />
         <Route path="users" element={<ProtectedRoute adminOnly><Users /></ProtectedRoute>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

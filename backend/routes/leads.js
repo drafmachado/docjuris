@@ -80,21 +80,62 @@ router.post('/:id/atividades', authMiddleware, (req, res) => {
   res.json({ ok: true });
 });
 
-// POST /api/leads/:id/converter — converter em cliente
-router.post('/:id/converter', authMiddleware, (req, res) => {
+// POST /api/leads/:id/converter — converter em cliente (Fase 2)
+router.post('/:id/converter', authMiddleware, async (req, res) => {
   const db = getDB();
   const lead = db.prepare('SELECT * FROM leads WHERE id = ?').get(req.params.id);
   if (!lead) return res.status(404).json({ error: 'Lead não encontrado' });
-  // Criar cliente com dados do lead
+
+  // 1. Criar cliente
   const r = db.prepare(`
     INSERT INTO clients (nome, telefone, email, created_by)
     VALUES (?, ?, ?, ?)
   `).run(lead.nome, lead.telefone, lead.email, req.user.id);
-  // Marcar lead como contratado
+  const clienteId = r.lastInsertRowid;
+
+  // 2. Gerar link de upload de documentos (válido por 30 dias)
+  const { randomBytes } = await import('crypto');
+  const token = randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const mensagemBoasVindas = `Olá, ${lead.nome}! Seja bem-vindo(a) ao escritório Andreia Machado Advocacia. Para darmos início ao seu atendimento, precisamos que você envie seus documentos através do link abaixo.`;
+
+  db.prepare(`
+    INSERT INTO upload_links (token, client_id, template_ids, required_docs, manual_values, message, expires_at, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(token, clienteId, JSON.stringify([]), JSON.stringify(['RG ou CNH', 'CPF', 'Comprovante de residência']),
+         JSON.stringify({}), mensagemBoasVindas, expiresAt, req.user.id);
+
+  const baseUrl = process.env.BASE_URL || 'https://advmachado.adv.br';
+  const uploadLink = `${baseUrl}/upload/${token}`;
+
+  // 3. Atualizar lead
   db.prepare(`UPDATE leads SET etapa='contratado', updated_at=datetime('now') WHERE id=?`).run(lead.id);
   db.prepare(`INSERT INTO leads_atividades (lead_id, tipo, descricao, created_by) VALUES (?,?,?,?)`)
-    .run(lead.id, 'conversao', `Convertido em cliente (ID ${r.lastInsertRowid})`, req.user.id);
-  res.json({ ok: true, clienteId: r.lastInsertRowid });
+    .run(lead.id, 'conversao', `Convertido em cliente (ID ${clienteId}). Link de documentos gerado.`, req.user.id);
+
+  // 4. Enviar WhatsApp de boas-vindas (em background)
+  res.json({ ok: true, clienteId, uploadLink });
+
+  if (lead.telefone) {
+    try {
+      const evolutionUrl = process.env.EVOLUTION_API_URL;
+      const evolutionKey = process.env.EVOLUTION_API_KEY;
+      const instance    = process.env.EVOLUTION_INSTANCE || 'docjuris';
+      if (evolutionUrl && evolutionKey) {
+        const number = lead.telefone.replace(/\D/g, '');
+        const fullNumber = number.startsWith('55') ? number : `55${number}`;
+        const msg = `Olá, *${lead.nome}*! 👋\n\nSeja bem-vindo(a) ao escritório *Andreia Machado Advocacia*.\n\nPara iniciarmos seu atendimento, por favor envie seus documentos através do link abaixo:\n\n🔗 ${uploadLink}\n\nQualquer dúvida, estou à disposição!\n\n_Dra. Andreia Machado_`;
+        await fetch(`${evolutionUrl}/message/sendText/${instance}`, {
+          method: 'POST',
+          headers: { apikey: evolutionKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ number: fullNumber, text: msg }),
+        });
+        console.log(`✅ WhatsApp boas-vindas enviado para ${lead.nome}`);
+      }
+    } catch(e) {
+      console.error('Erro WhatsApp boas-vindas:', e.message);
+    }
+  }
 });
 
 // DELETE /api/leads/:id

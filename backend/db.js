@@ -69,6 +69,40 @@ export function initDB() {
   `);
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS honorarios (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      processo_id INTEGER REFERENCES processos(id),
+      descricao TEXT NOT NULL,
+      valor_total REAL NOT NULL,
+      num_parcelas INTEGER DEFAULT 1,
+      valor_parcela REAL,
+      vencimento TEXT,
+      status TEXT DEFAULT 'pendente',
+      data_pagamento TEXT,
+      observacoes TEXT,
+      created_by INTEGER REFERENCES users(id),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS solicitacoes_exclusao (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tipo TEXT NOT NULL,
+      referencia_id INTEGER NOT NULL,
+      referencia_nome TEXT NOT NULL,
+      motivo TEXT,
+      status TEXT DEFAULT 'pendente',
+      solicitado_por INTEGER REFERENCES users(id),
+      aprovado_por INTEGER REFERENCES users(id),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS leads (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       nome TEXT NOT NULL,

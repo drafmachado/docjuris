@@ -234,7 +234,7 @@ export default function ProcessoDetail() {
         )}
       </div>
 
-      {/* Modal prazo */}}
+      {/* Modal prazo */}
       {showPrazoModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ background: 'white', borderRadius: '12px', padding: '24px', width: '100%', maxWidth: '440px' }}>

@@ -69,6 +69,21 @@ export function initDB() {
   `);
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS peticoes_geradas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id INTEGER REFERENCES clients(id),
+      processo_id INTEGER REFERENCES processos(id),
+      tipo_peca TEXT NOT NULL,
+      area TEXT,
+      fatos TEXT,
+      conteudo TEXT,
+      buscas TEXT,
+      created_by INTEGER REFERENCES users(id),
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS honorarios (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,

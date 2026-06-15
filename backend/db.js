@@ -69,6 +69,34 @@ export function initDB() {
   `);
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS leads (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome TEXT NOT NULL,
+      telefone TEXT,
+      email TEXT,
+      area TEXT DEFAULT 'outro',
+      origem TEXT DEFAULT 'outro',
+      etapa TEXT DEFAULT 'contato',
+      valor_estimado REAL,
+      observacoes TEXT,
+      created_by INTEGER REFERENCES users(id),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS leads_atividades (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+      tipo TEXT NOT NULL,
+      descricao TEXT NOT NULL,
+      created_by INTEGER REFERENCES users(id),
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS comunicados (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       mensagem TEXT NOT NULL,

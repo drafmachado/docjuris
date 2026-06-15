@@ -95,6 +95,31 @@ Onde não houver jurisprudência verificada, escreva: [JURISPRUDÊNCIA PENDENTE 
 
 PASSO 3 — Ao final, liste todas as citações usadas e onde cada uma foi encontrada.`;
 
+  // Ler arquivos de contexto do cliente (PDFs, imagens)
+  const { arquivos_contexto } = req.body;
+  const { readFileSync, existsSync } = await import('fs');
+  const { join } = await import('path');
+  const storageDir = process.env.NODE_ENV === 'production' ? '/app/storage' : join(process.cwd(), '../storage');
+
+  const contentBlocks = [];
+  if (arquivos_contexto && arquivos_contexto.length > 0) {
+    for (const filename of arquivos_contexto.slice(0, 3)) { // máx 3 arquivos
+      const filePath = join(storageDir, 'client_files', filename);
+      if (!existsSync(filePath)) continue;
+      try {
+        const fileData = readFileSync(filePath);
+        const ext = filename.split('.').pop().toLowerCase();
+        if (['pdf'].includes(ext)) {
+          contentBlocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: fileData.toString('base64') } });
+        } else if (['jpg','jpeg','png','webp'].includes(ext)) {
+          const mt = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+          contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: mt, data: fileData.toString('base64') } });
+        }
+      } catch(e) { console.error('Erro lendo arquivo contexto:', filename, e.message); }
+    }
+  }
+  contentBlocks.push({ type: 'text', text: userPrompt });
+
   try {
     // Usar streaming para resposta longa — ou await direto
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -109,7 +134,7 @@ PASSO 3 — Ao final, liste todas as citações usadas e onde cada uma foi encon
         max_tokens: 8000,
         system: systemPrompt,
         tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-        messages: [{ role: 'user', content: userPrompt }],
+        messages: [{ role: 'user', content: contentBlocks }],
       }),
     });
 
@@ -132,14 +157,26 @@ PASSO 3 — Ao final, liste todas as citações usadas e onde cada uma foi encon
       .map(b => b.input?.query || '')
       .filter(Boolean);
 
-    // Salvar no histórico
-    db.prepare(`
-      INSERT OR IGNORE INTO peticoes_geradas (client_id, processo_id, tipo_peca, area, fatos, conteudo, buscas, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(client_id||null, processo_id||null, tipo_peca, area||'civel',
-           fatos.substring(0,500), textos, JSON.stringify(buscas), req.user.id);
+    // Salvar na tabela peticoes se client_id informado
+    let peticaoId = null;
+    if (client_id) {
+      const TIPOS_LABEL = {
+        'liminar':'Tutela de Urgência','peticao_inicial':'Petição Inicial',
+        'contestacao':'Contestação','recurso_apelacao':'Apelação',
+        'embargos':'Embargos','manifestacao':'Manifestação',
+        'recurso_inominado':'Recurso Inominado','agravo':'Agravo',
+      };
+      const titulo = `${TIPOS_LABEL[tipo_peca]||tipo_peca} — ${new Date().toLocaleDateString('pt-BR')}`;
+      const r2 = db.prepare(`
+        INSERT INTO peticoes (client_id, processo_id, titulo, tipo_peca, area, fatos, pedidos, tribunal, conteudo, buscas, arquivos_contexto, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(client_id, processo_id||null, titulo, tipo_peca, area||'civel',
+             fatos, pedidos||null, tribunal||null, textos, JSON.stringify(buscas),
+             JSON.stringify(arquivos_contexto||[]), req.user.id);
+      peticaoId = r2.lastInsertRowid;
+    }
 
-    res.json({ conteudo: textos, buscas, tokens_usados: data.usage?.output_tokens });
+    res.json({ conteudo: textos, buscas, tokens_usados: data.usage?.output_tokens, peticaoId });
 
   } catch(e) {
     console.error('Erro geração petição:', e);
@@ -147,17 +184,70 @@ PASSO 3 — Ao final, liste todas as citações usadas e onde cada uma foi encon
   }
 });
 
-// GET /api/peticao/historico
+// GET /api/peticao/historico (legado)
 router.get('/historico', authMiddleware, (req, res) => {
   const db = getDB();
   const historico = db.prepare(`
     SELECT p.*, c.nome as cliente_nome, pr.numero_cnj
-    FROM peticoes_geradas p
+    FROM peticoes p
     LEFT JOIN clients c ON c.id = p.client_id
     LEFT JOIN processos pr ON pr.id = p.processo_id
     ORDER BY p.created_at DESC LIMIT 20
   `).all();
   res.json(historico);
+});
+
+// GET /api/peticao/cliente/:id — listar petições de um cliente
+router.get('/cliente/:id', authMiddleware, (req, res) => {
+  const db = getDB();
+  const peticoes = db.prepare(`
+    SELECT p.*, pr.numero_cnj
+    FROM peticoes p
+    LEFT JOIN processos pr ON pr.id = p.processo_id
+    WHERE p.client_id = ?
+    ORDER BY p.updated_at DESC
+  `).all(req.params.id);
+  res.json(peticoes);
+});
+
+// GET /api/peticao/:id — buscar petição específica
+router.get('/:id', authMiddleware, (req, res) => {
+  const db = getDB();
+  const pet = db.prepare('SELECT * FROM peticoes WHERE id = ?').get(req.params.id);
+  if (!pet) return res.status(404).json({ error: 'Petição não encontrada' });
+  res.json(pet);
+});
+
+// POST /api/peticao/salvar — salvar petição na pasta do cliente
+router.post('/salvar', authMiddleware, (req, res) => {
+  const db = getDB();
+  const { client_id, processo_id, titulo, tipo_peca, area, fatos, pedidos, tribunal, conteudo, buscas, arquivos_contexto } = req.body;
+  if (!client_id || !conteudo) return res.status(400).json({ error: 'client_id e conteudo são obrigatórios' });
+  const r = db.prepare(`
+    INSERT INTO peticoes (client_id, processo_id, titulo, tipo_peca, area, fatos, pedidos, tribunal, conteudo, buscas, arquivos_contexto, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(client_id, processo_id||null, titulo||'Petição', tipo_peca||'outro', area||'civel',
+         fatos||null, pedidos||null, tribunal||null, conteudo, JSON.stringify(buscas||[]),
+         JSON.stringify(arquivos_contexto||[]), req.user.id);
+  res.json({ id: r.lastInsertRowid });
+});
+
+// PUT /api/peticao/:id — atualizar conteúdo (edição)
+router.put('/:id', authMiddleware, (req, res) => {
+  const db = getDB();
+  const { titulo, conteudo } = req.body;
+  const pet = db.prepare('SELECT id FROM peticoes WHERE id = ?').get(req.params.id);
+  if (!pet) return res.status(404).json({ error: 'Petição não encontrada' });
+  db.prepare(`UPDATE peticoes SET titulo=COALESCE(?,titulo), conteudo=COALESCE(?,conteudo), updated_at=datetime('now') WHERE id=?`)
+    .run(titulo||null, conteudo||null, req.params.id);
+  res.json({ ok: true });
+});
+
+// DELETE /api/peticao/:id
+router.delete('/:id', authMiddleware, (req, res) => {
+  const db = getDB();
+  db.prepare('DELETE FROM peticoes WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
 });
 
 export default router;

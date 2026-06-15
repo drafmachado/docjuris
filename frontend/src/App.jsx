@@ -16,6 +16,7 @@ import IdentificarClientes from './pages/IdentificarClientes.jsx';
 import Comunicados from './pages/Comunicados.jsx';
 import Leads from './pages/Leads.jsx';
 import Analytics from './pages/Analytics.jsx';
+import Peticao from './pages/Peticao.jsx';
 
 function ProtectedRoute({ children, adminOnly }) {
   const { user, loading } = useAuth();

@@ -69,6 +69,19 @@ export function initDB() {
   `);
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS comunicados (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      mensagem TEXT NOT NULL,
+      filtro TEXT DEFAULT 'todos',
+      total_destinatarios INTEGER DEFAULT 0,
+      enviados INTEGER DEFAULT 0,
+      erros INTEGER DEFAULT 0,
+      created_by INTEGER REFERENCES users(id),
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS client_files (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,

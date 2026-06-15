@@ -1,4 +1,5 @@
 import express from 'express';
+import { gerarPeticaoDocx } from '../services/peticaoDocx.js';
 import { getDB } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 
@@ -248,6 +249,24 @@ router.delete('/:id', authMiddleware, (req, res) => {
   const db = getDB();
   db.prepare('DELETE FROM peticoes WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
+});
+
+// GET /api/peticao/:id/download/docx — baixar como Word
+router.get('/:id/download/docx', authMiddleware, async (req, res) => {
+  const db = getDB();
+  const pet = db.prepare('SELECT p.*, c.nome as cliente_nome FROM peticoes p LEFT JOIN clients c ON c.id = p.client_id WHERE p.id = ?').get(req.params.id);
+  if (!pet) return res.status(404).json({ error: 'Petição não encontrada' });
+
+  try {
+    const buffer = await gerarPeticaoDocx(pet, { nome: pet.cliente_nome });
+    const filename = `${pet.titulo || 'peticao'}.docx`.replace(/[^a-zA-Z0-9À-ú\s._-]/g, '_');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch(e) {
+    console.error('Erro gerando DOCX:', e);
+    res.status(500).json({ error: 'Erro ao gerar Word: ' + e.message });
+  }
 });
 
 export default router;

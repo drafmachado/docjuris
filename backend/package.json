@@ -20,10 +20,11 @@
     "pdf-lib": "^1.17.1",
     "pizzip": "^3.1.6",
     "resend": "^4.0.0",
-"googleapis": "^144.0.0",
+    "googleapis": "^144.0.0",
     "axios": "^1.6.0",
     "form-data": "^4.0.0",
     "express-rate-limit": "^7.4.0",
-    "helmet": "^8.0.0"
+    "helmet": "^8.0.0",
+    "docx": "^8.5.0"
   }
 }

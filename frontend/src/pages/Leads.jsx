@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import api from '../services/api';
+import api from '../utils/api.js';
 import toast from 'react-hot-toast';
 import { Plus, Phone, Mail, ChevronRight, UserCheck, Trash2, X, MessageCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';

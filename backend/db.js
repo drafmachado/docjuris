@@ -69,6 +69,26 @@ export function initDB() {
   `);
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS peticoes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id INTEGER REFERENCES clients(id) ON DELETE CASCADE,
+      processo_id INTEGER REFERENCES processos(id),
+      titulo TEXT NOT NULL DEFAULT 'Petição',
+      tipo_peca TEXT NOT NULL,
+      area TEXT,
+      fatos TEXT,
+      pedidos TEXT,
+      tribunal TEXT,
+      conteudo TEXT NOT NULL,
+      buscas TEXT,
+      arquivos_contexto TEXT,
+      created_by INTEGER REFERENCES users(id),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS peticoes_geradas (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       client_id INTEGER REFERENCES clients(id),

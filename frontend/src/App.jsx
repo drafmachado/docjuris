@@ -13,6 +13,7 @@ import UploadPage from './pages/UploadPage.jsx';
 import Processos from './pages/Processos.jsx';
 import ProcessoDetail from './pages/ProcessoDetail.jsx';
 import IdentificarClientes from './pages/IdentificarClientes.jsx';
+import Comunicados from './pages/Comunicados.jsx';
 
 function ProtectedRoute({ children, adminOnly }) {
   const { user, loading } = useAuth();

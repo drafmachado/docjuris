@@ -101,12 +101,16 @@ export default function Processos() {
 
   return (
     <div style={{ padding: '24px', maxWidth: '1100px', margin: '0 auto' }}>
+      <style>{`
+        .procRow { transition: background .15s, border-color .15s, transform .15s; }
+        .procRow:hover { background: #fafaf8; border-color: rgba(26,58,92,.2); transform: translateY(-1px); }
+      `}</style>
 
       {/* Alertas de prazos próximos */}
       {prazosProximos.length > 0 && (
-        <div style={{ background: '#fff3cd', border: '1px solid #f0c040', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontWeight: 600, color: '#856404' }}>
-            <AlertCircle size={16} /> {prazosProximos.length} prazo(s) nos próximos 7 dias
+        <div style={{ background: 'linear-gradient(135deg, #fff8f1, #fef3c7)', border: '1px solid #fcd34d', borderRadius: '14px', padding: '16px 18px', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', fontWeight: 700, color: '#92400e', fontFamily: "'Space Grotesk', sans-serif" }}>
+            <AlertCircle size={17} /> {prazosProximos.length} prazo(s) nos próximos 7 dias
           </div>
           {prazosProximos.map(pz => {
             const d = new Date(pz.data_limite + 'T00:00:00');
@@ -123,10 +127,10 @@ export default function Processos() {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '22px', color: '#0f2035' }}>Processos</h1>
+          <h1 style={{ margin: 0, fontSize: '24px', color: '#0f2035', fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, letterSpacing: '-0.02em' }}>Processos</h1>
           <p style={{ margin: '4px 0 0', color: '#6b7280', fontSize: '14px' }}>{processos.length} processo(s) cadastrado(s)</p>
         </div>
-        <button onClick={() => setShowModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#0f2035', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 16px', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}>
+        <button onClick={() => setShowModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#0f2035', color: 'white', border: 'none', borderRadius: '11px', padding: '11px 18px', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}>
           <Plus size={16} /> Novo Processo
         </button>
       </div>
@@ -146,7 +150,7 @@ export default function Processos() {
 
       <div style={{ position: 'relative', marginBottom: '20px' }}>
         <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por número, cliente ou tipo..." style={{ width: '100%', padding: '10px 12px 10px 36px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por número, cliente ou tipo..." style={{ width: '100%', padding: '11px 12px 11px 38px', border: '1px solid rgba(0,0,0,0.1)', borderRadius: '12px', fontSize: '14px', boxSizing: 'border-box', background: '#fbfbf9' }} />
       </div>
 
       {filtered.length === 0 ? (
@@ -157,14 +161,17 @@ export default function Processos() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {filtered.map(p => (
-            <div key={p.id} onClick={() => navigate(`/processos/${p.id}`)} style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '16px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '14px', color: '#0f2035', marginBottom: '4px' }}>{p.numero_cnj}</div>
+            <div key={p.id} className="procRow" onClick={() => navigate(`/processos/${p.id}`)} style={{ background: 'white', border: '1px solid rgba(0,0,0,0.07)', borderRadius: '14px', padding: '16px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(26,58,92,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Gavel size={19} color="#1a3a5c" />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: '14.5px', color: '#0f2035', marginBottom: '3px', fontFamily: "'Space Grotesk', sans-serif" }}>{p.numero_cnj}</div>
                 <div style={{ fontSize: '13px', color: '#6b7280' }}>{p.client_nome} · {p.tipo || 'Sem tipo'} · {p.tribunal || 'Sem tribunal'}</div>
                 {p.vara && <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>{p.vara}{p.comarca ? ` — ${p.comarca}` : ''}</div>}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ background: p.status === 'ativo' ? '#dcfce7' : '#f3f4f6', color: p.status === 'ativo' ? '#166534' : '#6b7280', fontSize: '12px', padding: '2px 8px', borderRadius: '12px', fontWeight: 500 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+                <span style={{ background: p.status === 'ativo' ? '#dcfce7' : '#f3f4f6', color: p.status === 'ativo' ? '#166534' : '#6b7280', fontSize: '11px', padding: '4px 11px', borderRadius: '20px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
                   {p.status}
                 </span>
                 <ChevronRight size={16} color="#9ca3af" />

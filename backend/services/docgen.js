@@ -239,8 +239,12 @@ export function buildFillValues(client, manualValues) {
     'EMAIL':               client.email || '',
     'telefone':            client.telefone || '',
     'TELEFONE':            client.telefone || '',
-    'data_atual':          new Date().toLocaleDateString('pt-BR'),
-    'DATA_ATUAL':          new Date().toLocaleDateString('pt-BR'),
+    'data_atual':          dataExtenso(),
+    'DATA_ATUAL':          dataExtenso(),
+    'data_extenso':        dataExtenso(),
+    'DATA_EXTENSO':        dataExtenso(),
+    'local_data':          localData(client),
+    'LOCAL_DATA':          localData(client),
   };
 
   return { ...clientFields, ...manualValues };

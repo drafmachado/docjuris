@@ -300,6 +300,46 @@ export default function ClientDetail() {
         client={client}
         onClose={() => setShowUploadLink(false)}
       />
+            {/* Modal solicitar exclusão */}
+      {showExcModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:1000,
+          display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+          onClick={e => e.target === e.currentTarget && setShowExcModal(false)}>
+          <div style={{ background:'#fff', borderRadius:12, padding:'1.5rem', width:'100%', maxWidth:440 }}>
+            <h3 style={{ margin:'0 0 0.5rem', fontSize:16, color:'#dc2626' }}>⚠️ Solicitar Exclusão de Cliente</h3>
+            <p style={{ fontSize:13, color:'#6b6b68', margin:'0 0 1rem', lineHeight:1.5 }}>
+              Esta ação precisa ser aprovada pela administração. Após a aprovação, o cliente e todos os seus dados serão excluídos permanentemente.
+            </p>
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              <textarea placeholder="Motivo da exclusão" rows={3} value={excMotivo}
+                onChange={e=>setExcMotivo(e.target.value)}
+                style={{ width:'100%', boxSizing:'border-box', padding:'9px 12px', border:'1px solid #d0cfc7', borderRadius:8, fontSize:14, fontFamily:'inherit', resize:'vertical' }}/>
+              <div>
+                <label style={{ fontSize:12, color:'#6b6b68', display:'block', marginBottom:4 }}>
+                  Para confirmar, digite o nome do cliente: <strong>{client.nome}</strong>
+                </label>
+                <input placeholder="Digite o nome exato do cliente" value={excConfirm}
+                  onChange={e=>setExcConfirm(e.target.value)}
+                  style={{ width:'100%', boxSizing:'border-box', padding:'9px 12px', border:'1px solid #d0cfc7', borderRadius:8, fontSize:14 }}/>
+              </div>
+            </div>
+            <div style={{ display:'flex', gap:8, marginTop:'1rem', justifyContent:'flex-end' }}>
+              <button onClick={() => { setShowExcModal(false); setExcMotivo(''); setExcConfirm(''); }}
+                style={{ padding:'9px 18px', borderRadius:8, border:'1px solid #d0cfc7', background:'#fff', cursor:'pointer' }}>
+                Cancelar
+              </button>
+              <button onClick={handleSolicitarExclusao}
+                disabled={excConfirm !== client.nome}
+                style={{ padding:'9px 18px', borderRadius:8, border:'none',
+                  background: excConfirm === client.nome ? '#dc2626' : '#ccc',
+                  color:'#fff', fontWeight:700, cursor: excConfirm === client.nome ? 'pointer' : 'not-allowed' }}>
+                Enviar Solicitação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <GenerateModal open={showGenerate} preselectedClient={client} onClose={() => setShowGenerate(false)} onSuccess={() => { setShowGenerate(false); load(); }} />
     </div>
   );

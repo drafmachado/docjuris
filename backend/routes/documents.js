@@ -269,4 +269,25 @@ router.delete('/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// DELETE /api/documents/:id — excluir documento
+router.delete('/:id', (req, res) => {
+  const db = getDB();
+  const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(req.params.id);
+  if (!doc) return res.status(404).json({ error: 'Documento não encontrado' });
+
+  // Remover arquivos físicos
+  const { join } = path;
+  const storageDir = process.env.NODE_ENV === 'production' ? '/app/storage' : join(process.cwd(), '../storage');
+  const pdfsDir = join(storageDir, 'pdfs');
+  for (const field of ['docx_filename', 'pdf_filename', 'signed_pdf_filename']) {
+    if (doc[field]) {
+      const fp = join(pdfsDir, doc[field]);
+      try { fs.unlinkSync(fp); } catch(e) { /* ignora se não existir */ }
+    }
+  }
+
+  db.prepare('DELETE FROM documents WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
 export default router;

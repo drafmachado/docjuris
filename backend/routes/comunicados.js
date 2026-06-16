@@ -32,7 +32,7 @@ router.post('/send', authMiddleware, async (req, res) => {
   }
 
   // Buscar clientes com telefone
-  let query = 'SELECT id, nome, telefone FROM clients WHERE telefone IS NOT NULL AND telefone != ''';
+  const query = `SELECT id, nome, telefone FROM clients WHERE telefone IS NOT NULL AND telefone != ''`;
   const clientes = db.prepare(query).all();
 
   if (clientes.length === 0) {

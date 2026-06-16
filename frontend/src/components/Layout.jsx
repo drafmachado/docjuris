@@ -44,6 +44,9 @@ export default function Layout() {
           <NavLink to="/agenda" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
             <Calendar size={16} /> Agenda de Prazos
           </NavLink>
+          <NavLink to="/agenda" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+            <Calendar size={16} /> Agenda de Prazos
+          </NavLink>
           <NavLink to="/documents" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
             <FileText size={16} /> Documentos
           </NavLink>

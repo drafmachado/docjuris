@@ -40,7 +40,7 @@ export default function Comunicados() {
 
   return (
     <div style={{ maxWidth: 700, margin: '0 auto', padding: '1.5rem 1rem' }}>
-      <h2 style={{ fontSize: 20, fontWeight: 700, color: '#0d2340', marginBottom: 4 }}>
+      <h2 style={{ fontSize: 22, fontWeight: 700, color: '#0d2340', marginBottom: 4, fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '-0.02em' }}>
         📣 Comunicados
       </h2>
       <p style={{ fontSize: 13, color: '#6b6b68', marginBottom: '1.5rem' }}>

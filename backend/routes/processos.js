@@ -78,6 +78,7 @@ router.get('/agenda-prazos', (req, res) => {
     JOIN processos pr ON pr.id = pz.processo_id
     JOIN clients c ON c.id = pz.client_id
     WHERE pz.concluido = 0
+      AND pz.data_limite >= date('now')
     ORDER BY pz.data_limite ASC
   `).all();
 

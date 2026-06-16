@@ -108,6 +108,15 @@ export default function ClientDetail() {
   };
   useEffect(() => { if (tab === 'fin') loadHonorarios(); }, [tab, id]);
 
+  const handleDeleteDoc = async (docId, docName) => {
+    if (!window.confirm(`Excluir documento "${docName}"? Esta ação não pode ser desfeita.`)) return;
+    try {
+      await api.delete(`/documents/${docId}`);
+      toast.success('Documento excluído.');
+      load();
+    } catch(e) { toast.error(e.response?.data?.error || 'Erro ao excluir'); }
+  };
+
   const handleSaveHon = async () => {
     try {
       await api.post('/honorarios', { client_id: id, ...honForm, valor_total: parseFloat(honForm.valor_total) });

@@ -41,9 +41,7 @@ export default function Layout() {
           <NavLink to="/processos" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
             <Gavel size={16} /> Processos
           </NavLink>
-          <NavLink to="/agenda" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
-            <Calendar size={16} /> Agenda de Prazos
-          </NavLink>
+
           <NavLink to="/agenda" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
             <Calendar size={16} /> Agenda de Prazos
           </NavLink>

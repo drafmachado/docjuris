@@ -108,7 +108,7 @@ export default function Peticao() {
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '1.5rem 1rem' }}>
       {/* Header */}
       <div style={{ marginBottom: '1.5rem' }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#0d2340', margin: 0, display:'flex', alignItems:'center', gap:8 }}>
+        <h2 style={{ fontSize: 22, fontWeight: 700, color: '#0d2340', margin: 0, display:'flex', alignItems:'center', gap:8, fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '-0.02em' }}>
           <Scale size={20} color="#c5a859" /> Petição Assistida por IA
         </h2>
         <p style={{ fontSize: 13, color: '#6b6b68', margin: '4px 0 0' }}>

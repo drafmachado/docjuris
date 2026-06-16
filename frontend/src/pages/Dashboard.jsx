@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, Topbar, Btn, Table, Tr, Td, Badge, EmptyState } from '../components/UI.jsx';
 import GenerateModal from '../components/GenerateModal.jsx';
 import api from '../utils/api.js';
+import toast from 'react-hot-toast';
 import { Users, FileText, FileStack, Send, Clock, TrendingUp } from 'lucide-react';
 import { format, parseISO, subMonths, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -127,26 +128,31 @@ export default function Dashboard() {
   };
 
   const statCards = [
-    { label: 'Clientes', value: stats.clients, icon: <Users size={15} />, sub: 'cadastrados' },
-    { label: 'Documentos', value: stats.docs, icon: <FileText size={15} />, sub: 'gerados no total' },
-    { label: 'Templates', value: stats.templates, icon: <FileStack size={15} />, sub: 'disponíveis' },
-    { label: 'Enviados', value: stats.sent, icon: <Send size={15} />, sub: 'por email' },
-    { label: 'Links pendentes', value: stats.pending, icon: <Clock size={15} />, sub: 'aguardando cliente' },
+    { label: 'Clientes', value: stats.clients, icon: <Users size={18} />, sub: 'cadastrados', color: '#1a3a5c', bg: 'rgba(26,58,92,0.08)' },
+    { label: 'Documentos', value: stats.docs, icon: <FileText size={18} />, sub: 'gerados no total', color: '#185fa5', bg: 'rgba(24,95,165,0.1)' },
+    { label: 'Templates', value: stats.templates, icon: <FileStack size={18} />, sub: 'disponíveis', color: '#8a6d1f', bg: 'rgba(197,168,89,0.16)' },
+    { label: 'Enviados', value: stats.sent, icon: <Send size={18} />, sub: 'por email', color: '#3b6d11', bg: 'rgba(59,109,17,0.1)' },
+    { label: 'Links pendentes', value: stats.pending, icon: <Clock size={18} />, sub: 'aguardando cliente', color: '#a32d2d', bg: 'rgba(163,45,45,0.1)' },
   ];
 
   return (
     <div>
+      <style>{`
+        .kpiCard { transition: transform .2s, box-shadow .2s; }
+        .kpiCard:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.06); }
+      `}</style>
       <Topbar title="Dashboard">
         <Btn onClick={() => setShowGenerate(true)}>+ Gerar Documento</Btn>
       </Topbar>
 
       {/* Cards de estatísticas */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: '1.5rem' }}>
         {statCards.map((s, i) => (
-          <div key={i} style={{ background: 'white', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 8, padding: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#6b6b68', marginBottom: 6 }}>{s.icon} {s.label}</div>
-            <div style={{ fontSize: 24, fontWeight: 600 }}>{s.value}</div>
-            <div style={{ fontSize: 11, color: '#9a9a97', marginTop: 3 }}>{s.sub}</div>
+          <div key={i} className="kpiCard" style={{ background: '#fbfbf9', border: '1px solid rgba(0,0,0,0.05)', borderRadius: 16, padding: '1.2rem' }}>
+            <div style={{ width: 38, height: 38, borderRadius: 11, background: s.bg, color: s.color, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>{s.icon}</div>
+            <div style={{ fontSize: 12, color: '#999', fontWeight: 500 }}>{s.label}</div>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 28, fontWeight: 700, color: '#0f2035', marginTop: 4, letterSpacing: '-0.02em' }}>{s.value}</div>
+            <div style={{ fontSize: 11.5, color: '#aaa', marginTop: 4 }}>{s.sub}</div>
           </div>
         ))}
       </div>

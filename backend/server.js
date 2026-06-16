@@ -17,6 +17,12 @@ import userRoutes from './routes/users.js';
 import uploadLinkRoutes from './routes/uploadLinks.js';
 import webhookRouter from './routes/webhook.js';
 import processosRoutes from './routes/processos.js';
+import comunicadosRouter from './routes/comunicados.js';
+import leadsRouter from './routes/leads.js';
+import honorariosRouter from './routes/honorarios.js';
+import exclusaoRouter from './routes/exclusao.js';
+import analyticsRouter from './routes/analytics.js';
+import peticaoRouter from './routes/peticao.js';
 import { runBackup } from './services/backup.js';
 import { verificarPrazosProximos } from './services/prazos-alert.js';
 import { monitorarProcessos } from './services/monitoramento.js';
@@ -91,6 +97,12 @@ app.use('/api/users', userRoutes);
 app.use('/api/upload-links', uploadLinkRoutes);
 app.use('/api/webhook', webhookRouter);
 app.use('/api/processos', processosRoutes);
+app.use('/api/comunicados', comunicadosRouter);
+app.use('/api/leads', leadsRouter);
+app.use('/api/honorarios', honorariosRouter);
+app.use('/api/exclusao', exclusaoRouter);
+app.use('/api/analytics', analyticsRouter);
+app.use('/api/peticao', peticaoRouter);
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.0.0' }));
 
 // 1. Landing page (tem prioridade sobre o React)

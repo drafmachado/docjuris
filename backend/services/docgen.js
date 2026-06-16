@@ -115,7 +115,7 @@ export async function generateDocument(templateFilename, values, outputBasename)
   for (const cmd of loCommands) {
     try {
       execSync(
-        `${cmd} --headless --convert-to pdf --outdir "${PDFS_DIR}" "${docxPath}"`,
+        `${cmd} --headless --convert-to "pdf:writer_pdf_Export:EmbedStandardFonts=true,SelectPdfVersion=0" --outdir "${PDFS_DIR}" "${docxPath}"`,
         {
           timeout: 60000,
           stdio: 'pipe',

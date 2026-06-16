@@ -24,10 +24,10 @@ export default function Layout() {
 
       <aside className={`${styles.sidebar} ${sidebarOpen ? styles.open : ''}`}>
         <div className={styles.logo}>
-          <svg width="22" height="22" viewBox="0 0 100 100"><path d="M 30 30 L 50 74 L 70 30" fill="none" stroke="#c5a859" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round"/><rect x="34" y="23" width="32" height="5" rx="2.5" fill="#ffffff" opacity="0.9"/></svg>
+          <div className={styles.logoMark}>V</div>
           <div>
             <span className={styles.logoTitle}>Veredo</span>
-            <span className={styles.logoSub}>Sistema Jurídico</span>
+            <span className={styles.logoSub}>Gestão Jurídica</span>
           </div>
         </div>
         <nav className={styles.nav}>

@@ -11,6 +11,7 @@ import Templates from './pages/Templates.jsx';
 import Users from './pages/Users.jsx';
 import UploadPage from './pages/UploadPage.jsx';
 import Processos from './pages/Processos.jsx';
+import AgendaPrazos from './pages/AgendaPrazos.jsx';
 import ProcessoDetail from './pages/ProcessoDetail.jsx';
 import IdentificarClientes from './pages/IdentificarClientes.jsx';
 import Comunicados from './pages/Comunicados.jsx';
@@ -40,6 +41,7 @@ function AppRoutes() {
         <Route path="documents" element={<Documents />} />
         <Route path="templates" element={<Templates />} />
         <Route path="processos" element={<Processos />} />
+          <Route path="agenda" element={<AgendaPrazos />} />
         <Route path="processos/:id" element={<ProcessoDetail />} />
         <Route path="identificar-clientes" element={<IdentificarClientes />} />
           <Route path="peticao" element={<Peticao />} />

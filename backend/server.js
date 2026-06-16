@@ -23,6 +23,7 @@ import honorariosRouter from './routes/honorarios.js';
 import exclusaoRouter from './routes/exclusao.js';
 import analyticsRouter from './routes/analytics.js';
 import peticaoRouter from './routes/peticao.js';
+import agendaRouter from './routes/agenda.js';
 import { runBackup } from './services/backup.js';
 import { verificarPrazosProximos } from './services/prazos-alert.js';
 import { monitorarProcessos } from './services/monitoramento.js';
@@ -103,6 +104,7 @@ app.use('/api/honorarios', honorariosRouter);
 app.use('/api/exclusao', exclusaoRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/peticao', peticaoRouter);
+app.use('/api/agenda', agendaRouter);
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.0.0' }));
 
 // 1. Landing page (tem prioridade sobre o React)

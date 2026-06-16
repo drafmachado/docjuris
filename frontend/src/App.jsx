@@ -17,6 +17,7 @@ import Comunicados from './pages/Comunicados.jsx';
 import Leads from './pages/Leads.jsx';
 import Analytics from './pages/Analytics.jsx';
 import Peticao from './pages/Peticao.jsx';
+import Agenda from './pages/Agenda.jsx';
 
 function ProtectedRoute({ children, adminOnly }) {
   const { user, loading } = useAuth();
@@ -42,6 +43,7 @@ function AppRoutes() {
         <Route path="processos/:id" element={<ProcessoDetail />} />
         <Route path="identificar-clientes" element={<IdentificarClientes />} />
           <Route path="peticao" element={<Peticao />} />
+          <Route path="agenda" element={<Agenda />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="leads" element={<Leads />} />
           <Route path="comunicados" element={<Comunicados />} />

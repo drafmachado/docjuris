@@ -68,6 +68,40 @@ router.delete('/:id', (req, res) => {
 });
 
 // POST /api/processos/:id/prazos
+// GET /api/processos/agenda-prazos — todos os prazos consolidados de todos os processos
+router.get('/agenda-prazos', (req, res) => {
+  const db = getDB();
+  const prazos = db.prepare(`
+    SELECT pz.*, pr.numero_cnj, pr.tribunal, pr.tipo as processo_tipo,
+           c.nome as cliente_nome, c.telefone as cliente_telefone
+    FROM prazos pz
+    JOIN processos pr ON pr.id = pz.processo_id
+    JOIN clients c ON c.id = pz.client_id
+    WHERE pz.concluido = 0
+    ORDER BY pz.data_limite ASC
+  `).all();
+
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const comStatus = prazos.map(p => {
+    const dl = new Date(p.data_limite + 'T12:00:00');
+    const dias = Math.ceil((dl - hoje) / (1000*60*60*24));
+    let urgencia = 'normal';
+    if (dias < 0) urgencia = 'vencido';
+    else if (dias <= 2) urgencia = 'critico';
+    else if (dias <= 7) urgencia = 'proximo';
+    return { ...p, dias_restantes: dias, urgencia };
+  });
+
+  res.json(comStatus);
+});
+
+// PUT /api/processos/prazos/:prazo_id/concluir — marcar prazo como concluído
+router.put('/prazos/:prazo_id/concluir', (req, res) => {
+  const db = getDB();
+  db.prepare('UPDATE prazos SET concluido = 1 WHERE id = ?').run(req.params.prazo_id);
+  res.json({ ok: true });
+});
+
 router.post('/:id/prazos', (req, res) => {
   const { titulo, tipo, data_limite, responsavel_id, observacoes } = req.body;
   if (!titulo || !data_limite) return res.status(400).json({ error: 'titulo e data_limite são obrigatórios' });

@@ -19,6 +19,38 @@ const PDFS_DIR = process.env.NODE_ENV === 'production'
 });
 
 // Gera documento a partir de um template .docx e valores
+// Data por extenso: "16 de Junho de 2026"
+function dataExtenso() {
+  const d = new Date();
+  const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                  'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  return `${d.getDate()} de ${meses[d.getMonth()]} de ${d.getFullYear()}`;
+}
+
+// Local + data para encerramento: "São Paulo/SP, 16 de Junho de 2026"
+function localData(client) {
+  const cidade = client?.cidade || 'São Paulo';
+  const estado = client?.estado || 'SP';
+  return `${cidade}/${estado}, ${dataExtenso()}`;
+}
+
+// Normalizar fonte para 12pt no DOCX gerado (elimina inconsistências de tamanho)
+function normalizarFonte12(buffer) {
+  try {
+    const conteudo = buffer.toString('binary');
+    // 11pt = w:val="22", 10pt = w:val="20" → trocar por 12pt = w:val="24"
+    const normalizado = conteudo
+      .replace(/w:sz w:val="22"/g, 'w:sz w:val="24"')
+      .replace(/w:szCs w:val="22"/g, 'w:szCs w:val="24"')
+      .replace(/w:sz w:val="20"/g, 'w:sz w:val="24"')
+      .replace(/w:szCs w:val="20"/g, 'w:szCs w:val="24"');
+    return Buffer.from(normalizado, 'binary');
+  } catch(e) {
+    console.warn('normalizarFonte12: erro ao normalizar, usando buffer original:', e.message);
+    return buffer;
+  }
+}
+
 export async function generateDocument(templateFilename, values, outputBasename) {
   const templatePath = path.join(TEMPLATES_DIR, templateFilename);
 
@@ -96,7 +128,8 @@ export async function generateDocument(templateFilename, values, outputBasename)
   const docxFilename = `${outputBasename}.docx`;
   const docxPath = path.join(PDFS_DIR, docxFilename);
   const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
-  fs.writeFileSync(docxPath, buf);
+  const bufNormalizado = normalizarFonte12(buf);
+  fs.writeFileSync(docxPath, bufNormalizado);
 
   // Converte para PDF usando LibreOffice
   const pdfFilename = `${outputBasename}.pdf`;

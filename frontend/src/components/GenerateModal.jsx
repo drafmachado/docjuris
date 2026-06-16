@@ -16,10 +16,11 @@ export default function GenerateModal({ open, onClose, preselectedClient, onSucc
   const [step, setStep] = useState('form'); // 'form' | 'generating' | 'done'
   const [result, setResult] = useState(null);
   const [stepProgress, setStepProgress] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setStep('form'); setResult(null); setStepProgress(0); setManualValues({});
+    setStep('form'); setResult(null); setStepProgress(0); setManualValues({}); setIsSubmitting(false);
     api.get('/clients').then(r => setClients(r.data));
     api.get('/templates').then(r => setTemplates(r.data));
   }, [open]);
@@ -50,6 +51,8 @@ export default function GenerateModal({ open, onClose, preselectedClient, onSucc
 
   const handleGenerate = async () => {
     if (!clientId || !templateId) { toast.error('Selecione cliente e tipo de documento'); return; }
+    if (isSubmitting) return; // bloquear duplo clique
+    setIsSubmitting(true);
 
     setStep('generating');
     const steps = ['Carregando dados do cliente...', 'Preenchendo template...', 'Convertendo para PDF...', 'Enviando por email...'];
@@ -68,14 +71,16 @@ export default function GenerateModal({ open, onClose, preselectedClient, onSucc
         email_to: emailTo || undefined,
       });
       clearInterval(iv);
-      setStepProgress(steps.length);
+      setStepProgress(steps.length); // marcar todos como concluídos
       setResult(res.data);
-      setStep('done');
-      onSuccess?.();
+      setStep('done'); // sair do spinner ANTES de chamar onSuccess
+      try { onSuccess?.(); } catch(e) { /* não deixar erro do parent travar o modal */ }
     } catch (err) {
       clearInterval(iv);
       toast.error(err.response?.data?.error || 'Erro ao gerar documento');
       setStep('form');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

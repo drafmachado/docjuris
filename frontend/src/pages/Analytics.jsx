@@ -50,7 +50,7 @@ export default function Analytics() {
 
   return (
     <div style={{ maxWidth:900, margin:'0 auto', padding:'1.5rem 1rem' }}>
-      <h2 style={{ fontSize:20, fontWeight:700, color:'#0d2340', marginBottom:'0.3rem' }}>📊 Analytics</h2>
+      <h2 style={{ fontSize:22, fontWeight:700, color:'#0d2340', marginBottom:'0.3rem', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '-0.02em' }}>📊 Analytics</h2>
       <p style={{ fontSize:13, color:'#6b6b68', marginBottom:'1.5rem' }}>Visão geral do escritório</p>
 
       {/* KPIs principais */}

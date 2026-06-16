@@ -114,7 +114,7 @@ export default function Leads() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
         <div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: '#0d2340', margin: 0 }}>CRM — Funil de Leads</h2>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: '#0d2340', margin: 0, fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '-0.02em' }}>CRM — Funil de Leads</h2>
           <p style={{ fontSize: 13, color: '#6b6b68', margin: '2px 0 0' }}>{leads.length} lead(s) encontrado(s)</p>
         </div>
         <button onClick={() => { setForm(BLANK); setModal('novo'); }}

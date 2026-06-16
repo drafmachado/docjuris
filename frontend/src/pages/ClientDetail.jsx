@@ -179,13 +179,13 @@ export default function ClientDetail() {
         <ArrowLeft size={14} /> Voltar
       </button>
 
-      <Card style={{ padding: '1.25rem', marginBottom: '1rem' }}>
+      <Card style={{ padding: '1.5rem', marginBottom: '1rem', borderRadius: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#e8f0fe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 600, color: '#185fa5', flexShrink: 0 }}>
+          <div style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(135deg, #0f2035, #1a3a5c)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 700, color: '#c5a859', fontFamily: "'Space Grotesk', sans-serif", flexShrink: 0 }}>
             {initials}
           </div>
           <div style={{ flex: 1 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 600 }}>{client.nome}</h2>
+            <h2 style={{ fontSize: 21, fontWeight: 700, color: '#0f2035', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '-0.02em' }}>{client.nome}</h2>
             <p style={{ fontSize: 13, color: '#6b6b68' }}>CPF: {client.cpf || '—'} · {[client.cidade, client.estado].filter(Boolean).join(', ') || '—'}</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -200,13 +200,14 @@ export default function ClientDetail() {
         </div>
       </Card>
 
-      <div style={{ display: 'flex', gap: 0, borderBottom: '0.5px solid rgba(0,0,0,0.1)', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: '1.25rem', flexWrap: 'wrap' }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
-            padding: '8px 16px', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer',
-            borderBottom: tab === t.id ? '2px solid #1a3a5c' : '2px solid transparent',
-            color: tab === t.id ? '#1a3a5c' : '#6b6b68', fontWeight: tab === t.id ? 500 : 400,
-            marginBottom: -1,
+            padding: '8px 16px', fontSize: 13, cursor: 'pointer', borderRadius: 20,
+            border: tab === t.id ? 'none' : '1px solid rgba(0,0,0,0.1)',
+            background: tab === t.id ? '#0f2035' : '#fff',
+            color: tab === t.id ? '#fff' : '#6b6b68',
+            fontWeight: tab === t.id ? 600 : 500, transition: 'all .15s',
           }}>{t.label}</button>
         ))}
       </div>

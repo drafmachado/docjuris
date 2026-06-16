@@ -246,8 +246,12 @@ export default function ClientDetail() {
                     </button>
                   )}
                   <button onClick={() => handleResend(d.id)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#185fa5', fontSize: 12, textDecoration: 'underline' }}>
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#185fa5', fontSize: 12, textDecoration: 'underline', marginRight: 8 }}>
                     Reenviar
+                  </button>
+                  <button onClick={() => handleDeleteDoc(d.id, d.template_name || 'documento')}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 12, textDecoration: 'underline', fontWeight: 600 }}>
+                    Excluir
                   </button>
                 </Td>
               </Tr>

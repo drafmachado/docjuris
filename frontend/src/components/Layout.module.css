@@ -19,16 +19,17 @@
   z-index: 200;
   background: #0f2035;
   border: none;
-  border-radius: 8px;
-  padding: 8px;
+  border-radius: 10px;
+  padding: 9px;
   cursor: pointer;
-  color: white;
+  color: #c5a859;
 }
 
 .sidebar {
-  width: 220px;
+  width: 240px;
   min-height: 100vh;
-  background: #0f2035;
+  background: #fbfbf9;
+  border-right: 1px solid rgba(0,0,0,0.06);
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -41,70 +42,83 @@
 .logo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 1.25rem 1rem;
-  border-bottom: 0.5px solid rgba(255,255,255,0.08);
+  gap: 12px;
+  padding: 1.4rem 1.25rem;
 }
-.logoTitle { display: block; font-size: 14px; font-weight: 600; color: white; }
-.logoSub { display: block; font-size: 10px; color: rgba(255,255,255,0.35); margin-top: 1px; }
-.nav { flex: 1; padding: 0.75rem 0; overflow-y: auto; }
+.logoMark {
+  width: 38px; height: 38px;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #0f2035, #1a3a5c);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Space Grotesk', -apple-system, sans-serif;
+  font-weight: 700; font-size: 19px;
+  color: #c5a859;
+  flex-shrink: 0;
+}
+.logoTitle { display: block; font-size: 17px; font-weight: 600; color: #0f2035; letter-spacing: -0.02em; }
+.logoSub { display: block; font-size: 9px; color: #aaa; margin-top: 1px; letter-spacing: 0.12em; text-transform: uppercase; }
+.nav { flex: 1; padding: 0.5rem 0; overflow-y: auto; }
 .navSection {
   display: block;
-  padding: 0.6rem 1rem 0.25rem;
+  padding: 1.1rem 1.25rem 0.5rem;
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: rgba(255,255,255,0.3);
+  letter-spacing: 0.13em;
+  color: #b5b5b0;
+  font-weight: 600;
 }
 .navItem {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 8px 1rem;
-  font-size: 13px;
-  color: rgba(255,255,255,0.55);
+  gap: 11px;
+  margin: 2px 12px;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  color: #5a5a55;
   text-decoration: none;
-  border-left: 2px solid transparent;
+  border-radius: 10px;
   transition: all 0.15s;
 }
-.navItem:hover { color: white; background: rgba(255,255,255,0.06); }
-.navItem.active { color: white; background: rgba(255,255,255,0.1); border-left-color: #4a9eff; }
+.navItem svg { width: 17px; height: 17px; flex-shrink: 0; }
+.navItem:hover { color: #0f2035; background: rgba(0,0,0,0.04); }
+.navItem.active { color: #fff; background: #0f2035; font-weight: 500; }
+.navItem.active svg { color: #c5a859; }
 
 .sidebarFooter {
-  padding: 1rem;
-  border-top: 0.5px solid rgba(255,255,255,0.08);
+  padding: 1rem 1.25rem 1.25rem;
+  border-top: 1px solid rgba(0,0,0,0.06);
 }
-.userRow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.userRow { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
 .avatar {
-  width: 30px; height: 30px;
-  border-radius: 50%;
-  background: #1a3a5c;
+  width: 36px; height: 36px;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #0f2035, #1a3a5c);
   display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 600; color: #4a9eff;
+  font-size: 12px; font-weight: 700; color: #c5a859;
+  font-family: 'Space Grotesk', -apple-system, sans-serif;
   flex-shrink: 0;
 }
-.userName { font-size: 12px; color: white; font-weight: 500; }
-.userRole { font-size: 10px; color: rgba(255,255,255,0.35); }
+.userName { font-size: 13px; color: #0f2035; font-weight: 600; }
+.userRole { font-size: 10px; color: #999; }
 .logoutBtn {
   display: flex; align-items: center; gap: 6px;
-  width: 100%; padding: 6px 8px;
+  width: 100%; padding: 8px 10px;
   background: transparent;
-  border: 0.5px solid rgba(255,255,255,0.12);
-  border-radius: 6px;
-  color: rgba(255,255,255,0.45);
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: 9px;
+  color: #888;
   font-size: 12px;
   cursor: pointer;
   transition: all 0.15s;
 }
-.logoutBtn:hover { border-color: rgba(255,255,255,0.3); color: rgba(255,255,255,0.8); }
+.logoutBtn:hover { border-color: rgba(0,0,0,0.2); color: #0f2035; background: rgba(0,0,0,0.02); }
 
 .main {
-  margin-left: 220px;
+  margin-left: 240px;
   padding: 1.5rem;
   flex: 1;
   min-height: 100vh;
-  /* Garante que o main nunca ultrapasse a largura da tela */
-  max-width: calc(100vw - 220px);
+  max-width: calc(100vw - 240px);
   overflow-x: hidden;
 }
 
@@ -112,22 +126,19 @@
 @media (max-width: 768px) {
   .menuBtn { display: flex; }
 
-  /* Sidebar fica escondida fora da tela à esquerda */
   .sidebar {
     transform: translateX(-100%);
-    width: 240px;
+    width: 250px;
   }
 
-  /* Quando aberta, desliza para dentro */
   .sidebar.open {
     transform: translateX(0);
   }
 
-  /* Main ocupa a tela toda */
   .main {
     margin-left: 0;
     max-width: 100vw;
     padding: 1rem;
-    padding-top: 3.5rem; /* espaço para o botão hambúrguer */
+    padding-top: 3.5rem;
   }
 }

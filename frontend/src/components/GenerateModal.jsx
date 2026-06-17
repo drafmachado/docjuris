@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Modal, Btn, SectionTitle, FormField, FormGrid, Badge } from './UI.jsx';
 import api from '../utils/api.js';
 import toast from 'react-hot-toast';
@@ -17,10 +17,11 @@ export default function GenerateModal({ open, onClose, preselectedClient, onSucc
   const [result, setResult] = useState(null);
   const [stepProgress, setStepProgress] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false); // useRef é síncrono — protege contra duplo clique
 
   useEffect(() => {
     if (!open) return;
-    setStep('form'); setResult(null); setStepProgress(0); setManualValues({}); setIsSubmitting(false);
+    setStep('form'); setResult(null); setStepProgress(0); setManualValues({}); setIsSubmitting(false); submittingRef.current = false;
     api.get('/clients').then(r => setClients(r.data));
     api.get('/templates').then(r => setTemplates(r.data));
   }, [open]);
@@ -51,7 +52,8 @@ export default function GenerateModal({ open, onClose, preselectedClient, onSucc
 
   const handleGenerate = async () => {
     if (!clientId || !templateId) { toast.error('Selecione cliente e tipo de documento'); return; }
-    if (isSubmitting) return; // bloquear duplo clique
+    if (submittingRef.current) return; // useRef é síncrono — bloqueia mesmo cliques rápidos
+    submittingRef.current = true;
     setIsSubmitting(true);
 
     setStep('generating');
@@ -80,6 +82,7 @@ export default function GenerateModal({ open, onClose, preselectedClient, onSucc
       toast.error(err.response?.data?.error || 'Erro ao gerar documento');
       setStep('form');
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };

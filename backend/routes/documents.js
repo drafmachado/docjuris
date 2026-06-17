@@ -107,6 +107,10 @@ router.post('/generate', async (req, res) => {
       });
 
       autentiqueId = autDoc.id;
+      // Triggers de auto-sign: verificar assinatura em 5, 20 e 60 min
+      [5, 20, 60].forEach(min => {
+        setTimeout(() => sincronizarAutentique(true), min * 60 * 1000);
+      });
       autentiqueLinks = (autDoc.signatures || []).map(s => ({
         name: s.name || s.email,
         email: s.email,

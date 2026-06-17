@@ -75,48 +75,47 @@ export async function sincronizarAutentique(recentOnly = false) {
       const autDoc = await getDocument(doc.zapsign_doc_token);
       if (!autDoc) continue;
 
-      // Verificar estado das assinaturas
+      // ÚNICO indicador confiável: files.signed (signed?.created_at é inconsistente na API)
       const assinaturas = autDoc.signatures || [];
       const signedUrl = autDoc.files?.signed;
 
-      // Auto-assinar pela Dra. Andreia se cliente já assinou e Andreia ainda não
-      const andreiaSig = assinaturas.find(s =>
-        s.email?.toLowerCase() === 'fmachado.andreia@gmail.com' ||
-        s.email?.toLowerCase() === 'dra.andreia@advmachado.adv.br'
-      );
-      const clienteSigs = assinaturas.filter(s =>
-        s.email?.toLowerCase() !== 'fmachado.andreia@gmail.com' &&
-        s.email?.toLowerCase() !== 'dra.andreia@advmachado.adv.br'
-      );
-      const clienteAssinou = clienteSigs.length > 0 && clienteSigs.every(s => s.signed?.created_at);
-      const andreiaAssinou = andreiaSig ? !!andreiaSig.signed?.created_at : true; // se não é signatária, ok
+      // Tentar auto-assinatura se o PDF ainda não está disponível
+      if (!signedUrl) {
+        const ANDREIA = ['fmachado.andreia@gmail.com','dra.andreia@advmachado.adv.br'];
+        const andreiaSig = assinaturas.find(s => ANDREIA.includes(s.email?.toLowerCase()));
+        const clienteSigs = assinaturas.filter(s => !ANDREIA.includes(s.email?.toLowerCase()));
+        // Verificar se cliente assinou via signed.created_at (quando disponível)
+        const clienteAssinouAPI = clienteSigs.length > 0 && clienteSigs.every(s => s.signed?.created_at);
+        const andreiaAssinouAPI = andreiaSig ? !!andreiaSig.signed?.created_at : true;
 
-      if (clienteAssinou && !andreiaAssinou && andreiaSig) {
-        console.log(`  🖊️  ${doc.client_nome}: cliente assinou — iniciando auto-assinatura da Dra. Andreia...`);
-        console.log(`     doc_id Autentique: ${doc.zapsign_doc_token}`);
-        await autoAssinarAndreia(doc.zapsign_doc_token);
-        // Aguardar Autentique processar
-        await new Promise(r => setTimeout(r, 3000));
-        // Buscar novamente para pegar o PDF assinado
-        const autDocAtualizado = await getDocument(doc.zapsign_doc_token);
-        if (autDocAtualizado?.files?.signed) {
-          console.log(`  ✅ Auto-assinatura concluída!`);
+        if (clienteAssinouAPI && !andreiaAssinouAPI && andreiaSig) {
+          console.log(`  🖊️  ${doc.client_nome}: tentando auto-assinatura...`);
+          await autoAssinarAndreia(doc.zapsign_doc_token);
+          await new Promise(r => setTimeout(r, 4000));
+          // Rebuscar após tentar assinar
+          const autDocAtualizado = await getDocument(doc.zapsign_doc_token);
+          if (autDocAtualizado?.files?.signed) {
+            console.log(`  ✅ Auto-assinatura OK — baixando PDF`);
+            // continuar com o PDF do documento atualizado
+            Object.assign(autDoc, autDocAtualizado);
+          } else {
+            console.log(`  ⏳ ${doc.client_nome}: aguardando assinatura do cliente`);
+            continue;
+          }
+        } else {
+          console.log(`  ⏳ ${doc.client_nome}: PDF assinado não disponível ainda`);
+          continue;
         }
       }
 
-      if (!signedUrl) {
-        const pendentes = assinaturas.filter(s => !s.signed?.created_at).map(s => s.email).join(', ');
-        console.log(`  ⏳ ${doc.client_nome}: aguardando assinatura de ${pendentes || 'verificando'}`);
-        continue;
-      }
-
-      if (signedUrl) {
+      const signedUrlFinal = autDoc.files?.signed;
+      if (signedUrlFinal) {
         const pdfFilename = doc.docx_filename
           ? doc.docx_filename.replace(/\.docx$/, '_assinado.pdf')
           : `doc_${doc.zapsign_doc_token}_assinado.pdf`;
         const pdfPath = path.join(pdfsDir, pdfFilename);
 
-        await downloadSignedPdf(signedUrl, pdfPath);
+        await downloadSignedPdf(signedUrlFinal || signedUrl, pdfPath);
 
         db.prepare(`
           UPDATE documents SET signed_pdf_filename = ?, status = 'assinado', signed_at = datetime('now')

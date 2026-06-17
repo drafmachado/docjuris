@@ -217,7 +217,10 @@ export const AUTO_FIELD_MAP = {
 };
 
 export function buildFillValues(client, manualValues) {
-  const cidadeEstado = [client.cidade, client.estado].filter(Boolean).join(', ');
+  // cidade_estado → só o nome do estado (ex: "São Paulo") sem cidade/UF
+  const nomeEstado = ESTADOS[client.estado] || client.estado || client.cidade || '';
+  const cidadeEstado = nomeEstado; // compatível com templates existentes
+  const cidadeUF = [client.cidade, client.estado].filter(Boolean).join('/'); // mantido como {cidade_uf}
   const enderecoCompleto = [client.endereco, client.cidade, client.estado].filter(Boolean).join(', ');
 
   const clientFields = {
@@ -241,6 +244,7 @@ export function buildFillValues(client, manualValues) {
     'endereco':            client.endereco || '',
     'Cidade e Estado':     cidadeEstado,
     'cidade_estado':       cidadeEstado,
+    'cidade_uf':           cidadeUF,
     'CIDADE':              client.cidade || '',
     'cidade':              client.cidade || '',
     'ESTADO':              client.estado || '',

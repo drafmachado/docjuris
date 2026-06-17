@@ -133,7 +133,23 @@ export async function getDocument(documentId) {
 
 // ─── Baixar PDF assinado a partir da URL pública do Autentique ───────────────
 export async function downloadSignedPdf(signedUrl, destPath) {
-  const response = await axios.get(signedUrl, { responseType: 'arraybuffer' });
+  // Tenta com autenticação primeiro (Autentique requer Bearer para URLs de PDF)
+  let response;
+  try {
+    response = await axios.get(signedUrl, {
+      responseType: 'arraybuffer',
+      headers: authHeaders(),
+      maxRedirects: 5,
+    });
+  } catch(e) {
+    if (e.response?.status === 425 || e.response?.status === 401 || e.response?.status === 403) {
+      // Fallback: tentar sem autenticação (URL pré-assinada)
+      response = await axios.get(signedUrl, {
+        responseType: 'arraybuffer',
+        maxRedirects: 5,
+      });
+    } else { throw e; }
+  }
   fs.writeFileSync(destPath, Buffer.from(response.data));
   return destPath;
 }

@@ -27,7 +27,7 @@ export default function ClientDetail() {
   const [petTitulo, setPetTitulo] = useState('');
   const [salvandoPet, setSalvandoPet] = useState(false);
   const [showHonModal, setShowHonModal] = useState(false);
-  const [honForm, setHonForm] = useState({ descricao:'', valor_total:'', num_parcelas:1, vencimento:'' });
+  const [honForm, setHonForm] = useState({ descricao:'', valor_total:'', valor_display:'', num_parcelas:1, vencimento:'', tipo_hon:'fixo' });
   const [showExcModal, setShowExcModal] = useState(false);
   const [excMotivo, setExcMotivo] = useState('');
   const [excConfirm, setExcConfirm] = useState('');
@@ -307,6 +307,207 @@ export default function ClientDetail() {
           ))}
           {!client.files?.length && <EmptyState icon="📁" title="Nenhum arquivo" subtitle="Envie documentos do cliente acima" />}
         </Card>
+      )}
+
+
+      {/* ── Aba Financeiro ── */}
+      {tab === 'fin' && (
+        <div>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+            <span style={{ fontSize:14, fontWeight:600, color:'#0d2340' }}>Honorários</span>
+            <button onClick={() => { setHonForm({ descricao:'', valor_total:'', valor_display:'', num_parcelas:1, vencimento:'', tipo_hon:'fixo' }); setShowHonModal(true); }}
+              style={{ background:'#0d2340', color:'#fff', border:'none', borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:600, cursor:'pointer' }}>
+              + Novo
+            </button>
+          </div>
+          {honorarios.length === 0 ? (
+            <div style={{ textAlign:'center', padding:'2rem', background:'#fff', borderRadius:10, border:'1px solid #e5e2d6', color:'#6b6b68' }}>
+              Nenhum honorário registrado
+            </div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {honorarios.map(h => (
+                <div key={h.id} style={{ background:'#fff', border:'1px solid #e5e2d6', borderRadius:10, padding:'12px 16px' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                    <div>
+                      <p style={{ margin:0, fontWeight:600, fontSize:14 }}>{h.descricao}</p>
+                      <p style={{ margin:'2px 0 0', fontSize:12, color:'#6b6b68' }}>
+                        {h.num_parcelas > 1
+                          ? `${h.num_parcelas}x de R$ ${parseFloat(h.valor_parcela||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}`
+                          : `R$ ${parseFloat(h.valor_total||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}`}
+                        {h.vencimento && ` · Vence: ${new Date(h.vencimento+'T12:00:00').toLocaleDateString('pt-BR')}`}
+                      </p>
+                    </div>
+                    <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                      <span style={{ fontSize:11, padding:'3px 10px', borderRadius:20, fontWeight:600,
+                        background: h.status==='pago' ? '#dcfce7' : h.status==='atrasado' ? '#fee2e2' : '#fef3c7',
+                        color: h.status==='pago' ? '#166534' : h.status==='atrasado' ? '#991b1b' : '#92400e' }}>
+                        {h.status?.toUpperCase()}
+                      </span>
+                      {h.status !== 'pago' && (
+                        <button onClick={() => handleStatusHon(h.id, 'pago')}
+                          style={{ background:'#dcfce7', color:'#166534', border:'none', borderRadius:6, padding:'4px 10px', fontSize:11, cursor:'pointer', fontWeight:600 }}>
+                          ✓ Pago
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Aba Petições ── */}
+      {tab === 'pet' && !petAberta && (
+        <div>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+            <span style={{ fontSize:14, fontWeight:600, color:'#0d2340' }}>Petições geradas por IA</span>
+            <button onClick={() => navigate('/peticao')}
+              style={{ background:'#0d2340', color:'#fff', border:'none', borderRadius:8, padding:'8px 16px', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+              + Nova Petição IA
+            </button>
+          </div>
+          {peticoes.length === 0 ? (
+            <div style={{ textAlign:'center', padding:'2rem', background:'#fff', borderRadius:10, border:'1px solid #e5e2d6', color:'#6b6b68' }}>
+              Nenhuma petição gerada.
+              <br/>
+              <button onClick={() => navigate('/peticao')}
+                style={{ marginTop:12, background:'#c5a859', color:'#fff', border:'none', borderRadius:8, padding:'9px 18px', fontWeight:600, cursor:'pointer', fontSize:13 }}>
+                Gerar Petição com IA
+              </button>
+            </div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {peticoes.map(p => (
+                <div key={p.id} style={{ background:'#fff', border:'1px solid #e5e2d6', borderRadius:10, padding:'12px 16px', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center' }}
+                  onClick={() => abrirPeticao(p)}>
+                  <div>
+                    <p style={{ margin:0, fontWeight:600, fontSize:14 }}>{p.titulo}</p>
+                    <p style={{ margin:'2px 0 0', fontSize:12, color:'#6b6b68' }}>
+                      {p.tipo_peca} · {new Date(p.updated_at).toLocaleDateString('pt-BR')}
+                    </p>
+                  </div>
+                  <span style={{ fontSize:12, color:'#185fa5', fontWeight:600 }}>Abrir →</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'pet' && petAberta && (
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+            <button onClick={() => setPetAberta(null)} style={{ background:'none', border:'none', cursor:'pointer', color:'#6b6b68', fontSize:13 }}>← Voltar</button>
+            <input value={petTitulo} onChange={e=>setPetTitulo(e.target.value)}
+              style={{ flex:1, padding:'8px 12px', border:'1px solid #d0cfc7', borderRadius:8, fontSize:13, fontWeight:600 }}/>
+            <button onClick={salvarPeticao} disabled={salvandoPet}
+              style={{ padding:'8px 16px', background:'#166534', color:'#fff', border:'none', borderRadius:8, fontSize:12, fontWeight:600, cursor:'pointer' }}>
+              {salvandoPet ? 'Salvando...' : '💾 Salvar'}
+            </button>
+            <button onClick={() => excluirPeticao(petAberta.id)}
+              style={{ padding:'8px 12px', background:'#fee2e2', color:'#991b1b', border:'none', borderRadius:8, fontSize:12, cursor:'pointer' }}>
+              Excluir
+            </button>
+          </div>
+          <textarea value={petConteudo} onChange={e=>setPetConteudo(e.target.value)}
+            style={{ minHeight:500, padding:'1rem', border:'1px solid #d0cfc7', borderRadius:10, fontSize:12, lineHeight:1.7, fontFamily:'Georgia,serif', resize:'vertical', background:'#fafaf8' }}/>
+          <div style={{ display:'flex', gap:8 }}>
+            <button onClick={() => { navigator.clipboard.writeText(petConteudo); toast.success('Copiado!'); }}
+              style={{ padding:'8px 16px', background:'#f0f0ec', border:'1px solid #d0cfc7', borderRadius:8, fontSize:12, cursor:'pointer' }}>
+              📋 Copiar
+            </button>
+            <button onClick={async () => {
+                try {
+                  const r = await api.get(`/peticao/${petAberta.id}/download/docx`, { responseType: 'blob' });
+                  const url = window.URL.createObjectURL(new Blob([r.data]));
+                  const a = document.createElement('a'); a.href = url;
+                  a.download = `${petTitulo || 'peticao'}.docx`; a.click();
+                  window.URL.revokeObjectURL(url);
+                } catch { toast.error('Erro ao baixar Word'); }
+              }}
+              style={{ padding:'8px 16px', background:'#0d2340', color:'#fff', border:'none', borderRadius:8, fontSize:12, cursor:'pointer', fontWeight:600 }}>
+              ⬇️ Word (.docx)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Honorário com R$ e % ── */}
+      {showHonModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+          <div style={{ background:'#fff', borderRadius:12, padding:'1.5rem', width:'100%', maxWidth:440 }}>
+            <h3 style={{ margin:'0 0 1rem', fontSize:16, color:'#0d2340' }}>Registrar Honorário</h3>
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              <input placeholder="Descrição (ex: Honorários — processo cível)" value={honForm.descricao||''}
+                onChange={e=>setHonForm(p=>({...p,descricao:e.target.value}))} style={inp}/>
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={()=>setHonForm(p=>({...p,tipo_hon:'fixo'}))}
+                  style={{ flex:1, padding:'8px', borderRadius:8, border:'2px solid', cursor:'pointer', fontWeight:600, fontSize:13,
+                    borderColor:(honForm.tipo_hon||'fixo')==='fixo'?'#0d2040':'#d0cfc7',
+                    background:(honForm.tipo_hon||'fixo')==='fixo'?'#0d2040':'#fff',
+                    color:(honForm.tipo_hon||'fixo')==='fixo'?'#fff':'#555'}}>
+                  R$ Valor fixo
+                </button>
+                <button onClick={()=>setHonForm(p=>({...p,tipo_hon:'percentual',num_parcelas:1}))}
+                  style={{ flex:1, padding:'8px', borderRadius:8, border:'2px solid', cursor:'pointer', fontWeight:600, fontSize:13,
+                    borderColor:honForm.tipo_hon==='percentual'?'#0d2040':'#d0cfc7',
+                    background:honForm.tipo_hon==='percentual'?'#0d2040':'#fff',
+                    color:honForm.tipo_hon==='percentual'?'#fff':'#555'}}>
+                  % Percentual
+                </button>
+              </div>
+              {(honForm.tipo_hon||'fixo')==='fixo' ? (
+                <div style={{ position:'relative' }}>
+                  <span style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:'#666', fontSize:14, fontWeight:600 }}>R$</span>
+                  <input placeholder="0,00" value={honForm.valor_display||''}
+                    onChange={e=>{
+                      const raw=e.target.value.replace(/[^\d]/g,'');
+                      const num=parseInt(raw||'0')/100;
+                      const display=num.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+                      setHonForm(p=>({...p,valor_display:display,valor_total:num.toString()}));
+                    }}
+                    style={{...inp,paddingLeft:36}}/>
+                </div>
+              ) : (
+                <div style={{ position:'relative' }}>
+                  <input placeholder="Ex: 20" type="number" min="0" max="100" step="0.5"
+                    value={honForm.valor_total||''}
+                    onChange={e=>setHonForm(p=>({...p,valor_total:e.target.value}))}
+                    style={{...inp,paddingRight:36}}/>
+                  <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', color:'#666', fontSize:14, fontWeight:600 }}>%</span>
+                </div>
+              )}
+              {(honForm.tipo_hon||'fixo')==='fixo' && (
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                  <div>
+                    <label style={{ fontSize:11, color:'#888', display:'block', marginBottom:3 }}>Nº parcelas</label>
+                    <input type="number" min="1" value={honForm.num_parcelas||1}
+                      onChange={e=>setHonForm(p=>({...p,num_parcelas:parseInt(e.target.value)||1}))} style={inp}/>
+                  </div>
+                  <div>
+                    <label style={{ fontSize:11, color:'#888', display:'block', marginBottom:3 }}>Vencimento</label>
+                    <input type="date" value={honForm.vencimento||''}
+                      onChange={e=>setHonForm(p=>({...p,vencimento:e.target.value}))} style={inp}/>
+                  </div>
+                </div>
+              )}
+              {honForm.valor_total && (
+                <div style={{ background:'#f0f7ff', borderRadius:8, padding:'10px 14px', fontSize:13, color:'#1e40af' }}>
+                  {(honForm.tipo_hon||'fixo')==='fixo'
+                    ? `Total: R$ ${parseFloat(honForm.valor_total||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}${(honForm.num_parcelas||1)>1 ? ` em ${honForm.num_parcelas}x de R$ ${(parseFloat(honForm.valor_total||0)/(honForm.num_parcelas||1)).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : ' à vista'}`
+                    : `${honForm.valor_total}% sobre o valor da causa`}
+                </div>
+              )}
+            </div>
+            <div style={{ display:'flex', gap:8, marginTop:'1rem', justifyContent:'flex-end' }}>
+              <button onClick={()=>setShowHonModal(false)} style={{ padding:'9px 18px', borderRadius:8, border:'1px solid #d0cfc7', background:'#fff', cursor:'pointer' }}>Cancelar</button>
+              <button onClick={handleSaveHon} style={{ padding:'9px 18px', borderRadius:8, border:'none', background:'#0d2340', color:'#fff', fontWeight:700, cursor:'pointer' }}>Salvar</button>
+            </div>
+          </div>
+        </div>
       )}
 
       <UploadLinkModal

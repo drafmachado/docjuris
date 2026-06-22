@@ -15,7 +15,11 @@ if (!AUTENTIQUE_API_TOKEN) {
 // Templates 4 e 7: cliente + Dra. Andreia (cliente assina primeiro)
 // Outros / desconhecidos: só o cliente (comportamento padrão seguro)
 export function buildSigners(templateId, clientEmail) {
-  const ANDREIA_EMAIL = 'dra.andreia@advmachado.adv.br';
+  // IMPORTANTE: para a auto-assinatura funcionar, o email da Andreia DEVE ser
+  // o mesmo da conta dona do token da API do Autentique (fmachado.andreia@gmail.com).
+  // O signDocument só assina pela conta titular do token. (doc oficial Autentique)
+  // Configurável via AUTENTIQUE_SIGNER_EMAIL; default = dono do token.
+  const ANDREIA_EMAIL = process.env.AUTENTIQUE_SIGNER_EMAIL || 'fmachado.andreia@gmail.com';
   const THAISA_EMAIL  = 'thaiisa_sousa@hotmail.com';
 
   const id = Number(templateId);

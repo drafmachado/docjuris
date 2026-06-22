@@ -133,25 +133,41 @@ export async function getDocument(documentId) {
 
 // ─── Baixar PDF assinado a partir da URL pública do Autentique ───────────────
 export async function downloadSignedPdf(signedUrl, destPath) {
-  // Tenta com autenticação primeiro (Autentique requer Bearer para URLs de PDF)
-  let response;
-  try {
-    response = await axios.get(signedUrl, {
-      responseType: 'arraybuffer',
-      headers: authHeaders(),
-      maxRedirects: 5,
-    });
-  } catch(e) {
-    if (e.response?.status === 425 || e.response?.status === 401 || e.response?.status === 403) {
-      // Fallback: tentar sem autenticação (URL pré-assinada)
-      response = await axios.get(signedUrl, {
+  // 425 = arquivo ainda sendo selado pelo Autentique. Retry com backoff.
+  const tentativas = [0, 2000, 4000, 8000, 15000]; // ms de espera antes de cada tentativa
+  let ultimoErro;
+
+  for (let i = 0; i < tentativas.length; i++) {
+    if (tentativas[i] > 0) await new Promise(r => setTimeout(r, tentativas[i]));
+    try {
+      const response = await axios.get(signedUrl, {
         responseType: 'arraybuffer',
         maxRedirects: 5,
+        timeout: 30000,
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Veredo/1.0)' },
+        validateStatus: s => s >= 200 && s < 300,
       });
-    } else { throw e; }
+      fs.writeFileSync(destPath, Buffer.from(response.data));
+      return destPath;
+    } catch(e) {
+      ultimoErro = e;
+      const status = e.response?.status;
+      // 425/503 = ainda processando, vale retry. Outros erros = aborta.
+      if (status !== 425 && status !== 503 && status !== 429) {
+        // Tentar uma vez com auth header antes de desistir
+        if (status === 401 || status === 403) {
+          try {
+            const r2 = await axios.get(signedUrl, { responseType:'arraybuffer', maxRedirects:5, timeout:30000, headers: authHeaders() });
+            fs.writeFileSync(destPath, Buffer.from(r2.data));
+            return destPath;
+          } catch(e2) { throw e2; }
+        }
+        throw e;
+      }
+      // senão, continua o loop (retry)
+    }
   }
-  fs.writeFileSync(destPath, Buffer.from(response.data));
-  return destPath;
+  throw ultimoErro;
 }
 
 // ─── Reenviar assinatura ─────────────────────────────────────────────────────

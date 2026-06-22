@@ -116,7 +116,13 @@ export default function GenerateModal({ open, onClose, preselectedClient, onSucc
       footer={step === 'form' ? (
         <>
           <Btn variant="outline" onClick={onClose}>Cancelar</Btn>
-          <Btn onClick={handleGenerate}>Gerar documento</Btn>
+          <Btn
+            onClick={handleGenerate}
+            disabled={isSubmitting || step === 'generating'}
+            style={{ opacity: (isSubmitting || step === 'generating') ? 0.6 : 1,
+                     cursor: (isSubmitting || step === 'generating') ? 'not-allowed' : 'pointer' }}>
+            {isSubmitting ? '⏳ Gerando...' : 'Gerar documento'}
+          </Btn>
         </>
       ) : step === 'done' ? (
         <>

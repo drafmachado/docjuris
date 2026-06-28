@@ -183,79 +183,32 @@ INSTRUÇÕES DE EXECUÇÃO:
 
     const data1 = await response1.json();
 
-    // Coletar buscas realizadas
+    // A web_search_20250305 é uma ferramenta SERVER-SIDE: a própria API da Anthropic
+    // executa as buscas internamente e retorna o resultado final em UMA única resposta.
+    // Não precisamos (nem podemos) devolver tool_result manualmente.
+    // O content[] já contém: server_tool_use (buscas), web_search_tool_result e text (peça final).
+
+    // Coletar as queries de busca realizadas (para exibir ao usuário)
     const buscas = (data1.content || [])
-      .filter(b => b.type === 'tool_use' && b.name === 'web_search')
+      .filter(b => (b.type === 'server_tool_use' || b.type === 'tool_use') && b.name === 'web_search')
       .map(b => b.input?.query || '')
       .filter(Boolean);
 
-    // A web_search_20250305 executa buscas internamente e retorna tudo em uma só resposta.
-    // Pode retornar múltiplos ciclos de tool_use → text dentro do mesmo content[].
-    // Precisamos continuar chamando a API enquanto stop_reason === 'tool_use'.
-    let textos = '';
-    let currentData = data1;
-    let messages = [{ role: 'user', content: contentBlocks }];
-    let safetyLimit = 5; // evitar loop infinito
-
-    while (currentData.stop_reason === 'tool_use' && safetyLimit-- > 0) {
-      // Adicionar resposta do assistente ao histórico
-      messages.push({ role: 'assistant', content: currentData.content });
-
-      // Extrair os tool_use blocks e montar os tool_result correspondentes
-      // A web_search já retornou os resultados dentro do próprio bloco (server_tool_use)
-      // Precisamos confirmar cada tool_use com um tool_result vazio para continuar
-      const toolResults = (currentData.content || [])
-        .filter(b => b.type === 'tool_use' || b.type === 'server_tool_use')
-        .map(b => ({
-          type: 'tool_result',
-          tool_use_id: b.id,
-          content: b.output ? JSON.stringify(b.output) : '[]',
-        }));
-
-      if (toolResults.length === 0) break;
-
-      messages.push({ role: 'user', content: toolResults });
-
-      const responseNext = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': ANTHROPIC_KEY,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 8000,
-          system: systemPrompt,
-          tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-          messages,
-        }),
-      });
-
-      if (!responseNext.ok) {
-        const err = await responseNext.text();
-        return res.status(500).json({ error: 'Erro na continuação da API de IA: ' + err });
-      }
-
-      currentData = await responseNext.json();
-    }
-
-    // Coletar todos os blocos de texto da resposta final
-    textos = (currentData.content || [])
+    // Coletar todo o texto gerado (a peça final)
+    let textos = (data1.content || [])
       .filter(b => b.type === 'text')
       .map(b => b.text)
       .join('\n\n');
 
-    // Se ainda vazio, coletar de todas as mensagens do assistente no histórico
     if (!textos || textos.trim().length < 100) {
-      textos = messages
-        .filter(m => m.role === 'assistant')
-        .flatMap(m => (m.content || []).filter(b => b.type === 'text').map(b => b.text))
-        .join('\n\n');
-    }
-
-    if (!textos || textos.trim().length < 100) {
-      return res.status(500).json({ error: 'A IA não retornou conteúdo suficiente. Tente novamente.' });
+      // Log para diagnóstico — mostra o que a API retornou de fato
+      console.error('Petição vazia. stop_reason:', data1.stop_reason,
+        '| tipos de bloco:', (data1.content || []).map(b => b.type).join(', '),
+        '| erro:', data1.error ? JSON.stringify(data1.error) : 'nenhum');
+      return res.status(500).json({
+        error: 'A IA não retornou conteúdo. Verifique se a chave da API tem web_search habilitado. (' +
+               (data1.stop_reason || 'sem stop_reason') + ')'
+      });
     }
 
     // Salvar na tabela peticoes se client_id informado
@@ -370,3 +323,4 @@ router.get('/:id/download/docx', authMiddleware, async (req, res) => {
 });
 
 export default router;
+

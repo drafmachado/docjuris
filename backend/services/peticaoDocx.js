@@ -18,7 +18,7 @@ const M_RIGHT  = 1134;
 
 // Caminho da logo (relativo ao serviço, na raiz do projeto)
 const __dirname_service = dirname(fileURLToPath(import.meta.url));
-const LOGO_PATH = join(__dirname_service, '../../storage/logo_escritorio.jpg');
+const LOGO_PATH = join(__dirname_service, '../assets/logo_escritorio.jpg');
 
 function textRun(text, opts = {}) {
   return new TextRun({ text, font: 'Times New Roman', size: 24, ...opts });

@@ -92,14 +92,16 @@ Onde não houver jurisprudência verificada, escreva: [JURISPRUDÊNCIA PENDENTE 
 Comece diretamente com o endereçamento da peça. Não escreva introduções nem explicações.`;
 
   // Ler arquivos de contexto do cliente (PDFs, imagens)
-  const { arquivos_contexto } = req.body;
+  const { arquivos_contexto, arquivos_base64 } = req.body;
   const { readFileSync, existsSync } = await import('fs');
   const { join } = await import('path');
   const storageDir = process.env.NODE_ENV === 'production' ? '/app/storage' : join(process.cwd(), '../storage');
 
   const contentBlocks = [];
+
+  // 1. Arquivos já salvos na pasta do cliente (filename no disco)
   if (arquivos_contexto && arquivos_contexto.length > 0) {
-    for (const filename of arquivos_contexto.slice(0, 3)) {
+    for (const filename of arquivos_contexto.slice(0, 5)) {
       const filePath = join(storageDir, 'client_files', filename);
       if (!existsSync(filePath)) continue;
       try {
@@ -114,6 +116,20 @@ Comece diretamente com o endereçamento da peça. Não escreva introduções nem
       } catch(e) { console.error('Erro lendo arquivo contexto:', filename, e.message); }
     }
   }
+
+  // 2. Arquivos enviados diretamente como base64 (quando não há cliente selecionado)
+  if (arquivos_base64 && arquivos_base64.length > 0) {
+    for (const arq of arquivos_base64.slice(0, 5)) {
+      try {
+        if (arq.type === 'application/pdf') {
+          contentBlocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: arq.data } });
+        } else if (['image/jpeg','image/png','image/webp'].includes(arq.type)) {
+          contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: arq.type, data: arq.data } });
+        }
+      } catch(e) { console.error('Erro processando arquivo base64:', arq.name, e.message); }
+    }
+  }
+
   contentBlocks.push({ type: 'text', text: userPrompt });
 
   try {

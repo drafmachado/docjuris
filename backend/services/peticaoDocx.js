@@ -1,17 +1,24 @@
 import {
   Document, Packer, Paragraph, TextRun, Header, Footer,
-  AlignmentType, PageNumber, NumberFormat, HeadingLevel,
-  BorderStyle, PageOrientation,
+  AlignmentType, PageNumber, NumberFormat, BorderStyle,
+  PageOrientation, ImageRun, WidthType,
 } from 'docx';
+import { readFileSync, existsSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
 // A4 em DXA (1 DXA = 1/1440 inch)
 const A4_W = 11906;
 const A4_H = 16838;
-// Margens (3cm top/bottom, 3cm left, 2cm right — padrão ABNT jurídico)
+// Margens ABNT jurídico: 3cm top/left, 2cm right/bottom
 const M_TOP    = 1701;
-const M_BOTTOM = 1701;
+const M_BOTTOM = 1134;
 const M_LEFT   = 1701;
 const M_RIGHT  = 1134;
+
+// Caminho da logo (relativo ao serviço, na raiz do projeto)
+const __dirname_service = dirname(fileURLToPath(import.meta.url));
+const LOGO_PATH = join(__dirname_service, '../../storage/logo_escritorio.jpg');
 
 function textRun(text, opts = {}) {
   return new TextRun({ text, font: 'Times New Roman', size: 24, ...opts });
@@ -69,7 +76,6 @@ function parseParagraph(line) {
     if (p.startsWith('**') && p.endsWith('**')) {
       return textRun(p.replace(/\*\*/g, ''), { bold: true });
     }
-    // Marcar [JURISPRUDÊNCIA PENDENTE] em vermelho
     if (isPendente(p)) {
       return textRun(p, { color: 'CC0000', bold: true });
     }
@@ -78,8 +84,8 @@ function parseParagraph(line) {
 
   return new Paragraph({
     alignment: AlignmentType.JUSTIFIED,
-    spacing: { before: 0, after: 200, line: 360, lineRule: 'auto' }, // 1.5 espaçamento
-    indent: { firstLine: 708 }, // 1.25cm primeira linha
+    spacing: { before: 0, after: 200, line: 360, lineRule: 'auto' },
+    indent: { firstLine: 708 },
     children: runs,
   });
 }
@@ -90,20 +96,52 @@ export async function gerarPeticaoDocx(peticao, cliente) {
     .map(parseParagraph)
     .filter(Boolean);
 
-  const header = new Header({
-    children: [
+  // ─── Cabeçalho com Logo ───────────────────────────────────────────────────
+  const headerChildren = [];
+
+  // Tentar carregar a logo
+  let logoBuffer = null;
+  if (existsSync(LOGO_PATH)) {
+    try { logoBuffer = readFileSync(LOGO_PATH); } catch(e) { /* sem logo */ }
+  }
+
+  if (logoBuffer) {
+    // Parágrafo com logo centralizada
+    headerChildren.push(
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '0d2340', space: 4 } },
-        spacing: { after: 100 },
+        spacing: { before: 0, after: 80 },
         children: [
-          textRun('Dra. Andreia Machado — Advogada', { bold: true, size: 20, color: '0d2340' }),
-          textRun('   |   OAB/RJ 218.586   |   OAB/SP 532.488', { size: 18, color: '555555' }),
+          new ImageRun({
+            data: logoBuffer,
+            transformation: {
+              width: 180,  // px → DXA feito internamente pelo docx
+              height: 113,
+            },
+            type: 'jpg',
+          }),
         ],
-      }),
-    ],
-  });
+      })
+    );
+  }
 
+  // Linha de texto com OABs (sempre presente)
+  headerChildren.push(
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '0d2340', space: 4 } },
+      spacing: { before: 0, after: 100 },
+      children: [
+        textRun('Dra. Andreia Machado', { bold: true, size: 18, color: '0d2340' }),
+        textRun('   —   OAB/RJ 218.586   |   OAB/SP 532.488', { size: 16, color: '555555' }),
+        textRun('   |   dra.andreia@advmachado.adv.br', { size: 16, color: '888888' }),
+      ],
+    })
+  );
+
+  const header = new Header({ children: headerChildren });
+
+  // ─── Rodapé ───────────────────────────────────────────────────────────────
   const footer = new Footer({
     children: [
       new Paragraph({

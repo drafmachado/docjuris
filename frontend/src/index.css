@@ -50,5 +50,27 @@ input:focus, select:focus, textarea:focus {
 }
 textarea { resize: vertical; min-height: 72px; }
 
-::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 99px; }
+/* ─── Scrollbar global — visível e com espessura adequada ─── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.04);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.22);
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0,0,0,0.38);
+  background-clip: padding-box;
+}
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,0.22) rgba(0,0,0,0.04);
+}

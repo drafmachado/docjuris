@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Gavel, ChevronRight, Calendar, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import SearchableSelect from '../components/SearchableSelect.jsx';
 
 const API = '/api';
 
@@ -188,10 +189,14 @@ export default function Processos() {
             <h2 style={{ margin: '0 0 20px', fontSize: '18px', color: '#0f2035' }}>Novo Processo</h2>
 
             <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: 600, color: '#374151' }}>Cliente *</label>
-            <select value={form.client_id} onChange={e => setForm(f => ({ ...f, client_id: e.target.value }))} style={{ width: '100%', padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: '6px', marginBottom: '12px', fontSize: '14px' }}>
-              <option value="">Selecione o cliente</option>
-              {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-            </select>
+            <div style={{ marginBottom: '12px' }}>
+              <SearchableSelect
+                value={form.client_id}
+                onChange={val => setForm(f => ({ ...f, client_id: val }))}
+                options={clientes.map(c => ({ value: c.id, label: c.nome }))}
+                placeholder="Selecione o cliente"
+              />
+            </div>
 
             <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: 600, color: '#374151' }}>Número CNJ *</label>
             <input value={form.numero_cnj} onChange={e => setForm(f => ({ ...f, numero_cnj: e.target.value }))} placeholder="0000000-00.0000.0.00.0000" style={{ width: '100%', padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: '6px', marginBottom: '12px', fontSize: '14px', boxSizing: 'border-box' }} />

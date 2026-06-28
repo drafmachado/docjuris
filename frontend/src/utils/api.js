@@ -24,7 +24,14 @@ api.interceptors.response.use(
       return Promise.reject(err);
     }
 
-    // Retry automático para falhas temporárias (rede, timeout, cold start, 502/503/504)
+    // NÃO fazer retry em rotas que criam recursos (evita duplicação).
+    // Geração de petição é cara e demorada — um retry criaria peças duplicadas.
+    const url = config.url || '';
+    const isWriteRoute =
+      config.method === 'post' &&
+      (url.includes('/peticao/gerar') || url.includes('/files'));
+
+    // Retry automático apenas para leituras e falhas temporárias
     const isTransient =
       !err.response ||                          // sem resposta (rede/timeout)
       err.code === 'ECONNABORTED' ||            // timeout
@@ -32,7 +39,7 @@ api.interceptors.response.use(
 
     config._retryCount = config._retryCount || 0;
 
-    if (isTransient && config._retryCount < 2) {
+    if (isTransient && !isWriteRoute && config._retryCount < 2) {
       config._retryCount += 1;
       // Espera crescente: 1s, depois 2s
       await new Promise(r => setTimeout(r, config._retryCount * 1000));

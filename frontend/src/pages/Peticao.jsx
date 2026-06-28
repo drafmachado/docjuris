@@ -262,7 +262,7 @@ export default function Peticao() {
             ...form,
             arquivos_contexto: arquivosContexto,
             arquivos_base64: base64Files,
-          });
+          }, { timeout: 180000 }); // 3 min — geração com IA + web search é demorada
           setResultado(r.data.conteudo);
           setBuscas(r.data.buscas || []);
           setTokens(r.data.tokens_usados);
@@ -283,7 +283,7 @@ export default function Peticao() {
       const r = await api.post('/peticao/gerar', {
         ...form,
         arquivos_contexto: todosArquivos,
-      });
+      }, { timeout: 180000 }); // 3 min — geração com IA + web search é demorada
 
       setResultado(r.data.conteudo);
       setBuscas(r.data.buscas || []);

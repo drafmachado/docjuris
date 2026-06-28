@@ -1,5 +1,5 @@
 import {
-  Document, Packer, Paragraph, TextRun, Header, Footer,
+  Document, Packer, Paragraph, TextRun, Header, Footer, ExternalHyperlink,
   AlignmentType, PageNumber, NumberFormat, BorderStyle,
   PageOrientation, ImageRun, WidthType,
 } from 'docx';
@@ -25,7 +25,7 @@ function textRun(text, opts = {}) {
 }
 
 function isPendente(text) {
-  return text.includes('[JURISPRUDÊNCIA PENDENTE');
+  return /\[JURISPRUDÊNCIA PENDENTE/.test(text) || /\[DADO PENDENTE/.test(text);
 }
 
 function parseParagraph(line) {
@@ -70,17 +70,51 @@ function parseParagraph(line) {
     });
   }
 
-  // Negrito inline (**texto**)
-  const parts = trimmed.split(/(\*\*[^*]+\*\*)/g);
-  const runs = parts.map(p => {
+  // Quebrar linha em segmentos: **negrito**, [PENDENTE...], [Verificar: URL], texto normal
+  // Regex captura cada tipo de segmento
+  const segmentRegex = /(\*\*[^*]+\*\*|\[JURISPRUDÊNCIA PENDENTE[^\]]*\]|\[DADO PENDENTE[^\]]*\]|\[Verificar:\s*https?:\/\/[^\]]+\])/g;
+  const parts = trimmed.split(segmentRegex);
+
+  const runs = [];
+  for (const p of parts) {
+    if (!p) continue;
+
+    // Negrito
     if (p.startsWith('**') && p.endsWith('**')) {
-      return textRun(p.replace(/\*\*/g, ''), { bold: true });
+      runs.push(textRun(p.replace(/\*\*/g, ''), { bold: true }));
+      continue;
     }
-    if (isPendente(p)) {
-      return textRun(p, { color: 'CC0000', bold: true });
+
+    // [JURISPRUDÊNCIA PENDENTE...] ou [DADO PENDENTE...] — vermelho bold
+    if (/^\[JURISPRUDÊNCIA PENDENTE/.test(p) || /^\[DADO PENDENTE/.test(p)) {
+      runs.push(textRun(p, { color: 'CC0000', bold: true, size: 22 }));
+      continue;
     }
-    return textRun(p);
-  });
+
+    // [Verificar: URL] — link clicável em azul
+    const verMatch = p.match(/^\[Verificar:\s*(https?:\/\/[^\]]+)\]$/);
+    if (verMatch) {
+      const url = verMatch[1].trim();
+      runs.push(
+        new ExternalHyperlink({
+          link: url,
+          children: [
+            new TextRun({
+              text: '[Verificar decisão ↗]',
+              font: 'Times New Roman',
+              size: 20,
+              color: '0563C1',
+              underline: { type: 'single', color: '0563C1' },
+            }),
+          ],
+        })
+      );
+      continue;
+    }
+
+    // Texto normal
+    runs.push(textRun(p));
+  }
 
   return new Paragraph({
     alignment: AlignmentType.JUSTIFIED,

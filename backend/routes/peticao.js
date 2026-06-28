@@ -73,9 +73,10 @@ REGRAS OBRIGATÓRIAS:
 3. Cite artigos de lei com número exato
 4. Estruture a peça com todos os requisitos formais (endereçamento, qualificação, fatos, direito, pedidos, valor da causa)
 5. Linguagem técnica mas objetiva
-6. Adapte ao tribunal e área informados`;
+6. Adapte ao tribunal e área informados
+7. IMPORTANTE: Responda APENAS com o texto da peça processual. Não inclua introduções, passos, explicações sobre o que você vai fazer, nem listas de fontes ao final. Comece diretamente com o endereçamento da peça.`;
 
-  const userPrompt = `CASO PARA REDAÇÃO DE ${nomePeca.toUpperCase()}
+  const userPrompt = `Redija uma ${nomePeca} completa para o caso abaixo.
 
 ÁREA: ${nomeArea}
 TRIBUNAL/FORO: ${tribunal || processo?.tribunal || 'Juízo Cível da Comarca'}
@@ -86,15 +87,9 @@ ${fatos}
 PEDIDOS ESPECÍFICOS:
 ${pedidos || 'Proceder conforme o tipo de peça e os fatos expostos'}
 
-PASSO 1 — PESQUISE AGORA (obrigatório antes de redigir):
-Execute pelo menos 3 buscas web com termos específicos para este caso.
-Identifique decisões reais com número completo, relator e data.
-Anote quais fontes confirmaram cada decisão.
-
-PASSO 2 — REDIJA a ${nomePeca} completa usando APENAS o que foi encontrado no Passo 1.
+Pesquise jurisprudência real com web search antes de redigir.
 Onde não houver jurisprudência verificada, escreva: [JURISPRUDÊNCIA PENDENTE — inserir manualmente]
-
-PASSO 3 — Ao final, liste todas as citações usadas e onde cada uma foi encontrada.`;
+Comece diretamente com o endereçamento da peça. Não escreva introduções nem explicações.`;
 
   // Ler arquivos de contexto do cliente (PDFs, imagens)
   const { arquivos_contexto } = req.body;
@@ -104,7 +99,7 @@ PASSO 3 — Ao final, liste todas as citações usadas e onde cada uma foi encon
 
   const contentBlocks = [];
   if (arquivos_contexto && arquivos_contexto.length > 0) {
-    for (const filename of arquivos_contexto.slice(0, 3)) { // máx 3 arquivos
+    for (const filename of arquivos_contexto.slice(0, 3)) {
       const filePath = join(storageDir, 'client_files', filename);
       if (!existsSync(filePath)) continue;
       try {
@@ -122,8 +117,8 @@ PASSO 3 — Ao final, liste todas as citações usadas e onde cada uma foi encon
   contentBlocks.push({ type: 'text', text: userPrompt });
 
   try {
-    // Usar streaming para resposta longa — ou await direto
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    // ─── CHAMADA 1: Gerar com web_search ────────────────────────────────────
+    const response1 = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -139,24 +134,77 @@ PASSO 3 — Ao final, liste todas as citações usadas e onde cada uma foi encon
       }),
     });
 
-    if (!response.ok) {
-      const err = await response.text();
+    if (!response1.ok) {
+      const err = await response1.text();
       return res.status(500).json({ error: 'Erro na API de IA: ' + err });
     }
 
-    const data = await response.json();
+    const data1 = await response1.json();
 
-    // Coletar todo o texto gerado (incluindo após tool_use)
-    const textos = (data.content || [])
-      .filter(b => b.type === 'text')
-      .map(b => b.text)
-      .join('\n\n');
-
-    // Identificar fontes usadas (web search queries)
-    const buscas = (data.content || [])
+    // Coletar buscas realizadas
+    const buscas = (data1.content || [])
       .filter(b => b.type === 'tool_use' && b.name === 'web_search')
       .map(b => b.input?.query || '')
       .filter(Boolean);
+
+    let textos = '';
+
+    // ─── Se stop_reason=tool_use, fazer segunda chamada com resultado ───────
+    if (data1.stop_reason === 'tool_use') {
+      // Montar histórico com os tool_results para continuar
+      const assistantContent = data1.content;
+
+      // Simular resultados das buscas (a API retorna os resultados via tool_result)
+      const toolResults = (data1.content || [])
+        .filter(b => b.type === 'tool_use')
+        .map(b => ({
+          type: 'tool_result',
+          tool_use_id: b.id,
+          content: 'Pesquisa realizada com sucesso.',
+        }));
+
+      const response2 = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': ANTHROPIC_KEY,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 8000,
+          system: systemPrompt,
+          tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+          messages: [
+            { role: 'user', content: contentBlocks },
+            { role: 'assistant', content: assistantContent },
+            { role: 'user', content: toolResults },
+          ],
+        }),
+      });
+
+      if (!response2.ok) {
+        const err = await response2.text();
+        return res.status(500).json({ error: 'Erro na segunda chamada da API de IA: ' + err });
+      }
+
+      const data2 = await response2.json();
+      textos = (data2.content || [])
+        .filter(b => b.type === 'text')
+        .map(b => b.text)
+        .join('\n\n');
+
+    } else {
+      // stop_reason=end_turn — texto já disponível diretamente
+      textos = (data1.content || [])
+        .filter(b => b.type === 'text')
+        .map(b => b.text)
+        .join('\n\n');
+    }
+
+    if (!textos || textos.trim().length < 100) {
+      return res.status(500).json({ error: 'A IA não retornou conteúdo suficiente. Tente novamente.' });
+    }
 
     // Salvar na tabela peticoes se client_id informado
     let peticaoId = null;
@@ -177,7 +225,7 @@ PASSO 3 — Ao final, liste todas as citações usadas e onde cada uma foi encon
       peticaoId = r2.lastInsertRowid;
     }
 
-    res.json({ conteudo: textos, buscas, tokens_usados: data.usage?.output_tokens, peticaoId });
+    res.json({ conteudo: textos, buscas, peticaoId });
 
   } catch(e) {
     console.error('Erro geração petição:', e);

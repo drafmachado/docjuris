@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import api from '../utils/api.js';
 import toast from 'react-hot-toast';
-import { Sparkles, Copy, Download, Clock, Scale, Save, Folder, FileText, X } from 'lucide-react';
+import { Sparkles, Copy, Download, Clock, Scale, Save, Folder, FileText, X, Upload, File, Image } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const TIPOS = [
@@ -21,6 +21,137 @@ const AREAS = [
   { id: 'civel',       label: '⚖️ Cível' },
 ];
 
+const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
+const MAX_SIZE_MB = 10;
+const MAX_FILES = 5;
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function FileIcon({ mimetype }) {
+  if (mimetype === 'application/pdf') return <File size={14} color="#dc2626" />;
+  return <Image size={14} color="#0d2340" />;
+}
+
+// Componente de upload drag & drop
+function UploadZone({ arquivosNovos, setArquivosNovos, uploading }) {
+  const inputRef = useRef();
+  const [dragging, setDragging] = useState(false);
+
+  function validarArquivos(files) {
+    const validos = [];
+    for (const f of files) {
+      if (!ALLOWED_TYPES.includes(f.type)) {
+        toast.error(`Tipo não permitido: ${f.name} (use PDF, JPG ou PNG)`);
+        continue;
+      }
+      if (f.size > MAX_SIZE_MB * 1024 * 1024) {
+        toast.error(`Arquivo muito grande: ${f.name} (máx. ${MAX_SIZE_MB}MB)`);
+        continue;
+      }
+      validos.push(f);
+    }
+    return validos;
+  }
+
+  function adicionarArquivos(files) {
+    const novos = validarArquivos(Array.from(files));
+    setArquivosNovos(prev => {
+      const total = prev.length + novos.length;
+      if (total > MAX_FILES) {
+        toast.error(`Máximo de ${MAX_FILES} arquivos permitidos`);
+        return [...prev, ...novos.slice(0, MAX_FILES - prev.length)];
+      }
+      return [...prev, ...novos];
+    });
+  }
+
+  function onDrop(e) {
+    e.preventDefault();
+    setDragging(false);
+    adicionarArquivos(e.dataTransfer.files);
+  }
+
+  function remover(idx) {
+    setArquivosNovos(prev => prev.filter((_, i) => i !== idx));
+  }
+
+  return (
+    <div>
+      <label style={lbl}>
+        DOCUMENTOS COMPROBATÓRIOS (opcional — máx. {MAX_FILES} arquivos, PDF/JPG/PNG, {MAX_SIZE_MB}MB cada)
+      </label>
+
+      {/* Zona de drop */}
+      <div
+        onClick={() => !uploading && inputRef.current?.click()}
+        onDragOver={e => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+        style={{
+          border: `2px dashed ${dragging ? '#0d2340' : '#c5a859'}`,
+          borderRadius: 10,
+          padding: '18px 16px',
+          textAlign: 'center',
+          cursor: uploading ? 'not-allowed' : 'pointer',
+          background: dragging ? '#f0f4ff' : '#fdfcf8',
+          transition: 'all 0.2s',
+          marginBottom: arquivosNovos.length > 0 ? 8 : 0,
+        }}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          multiple
+          accept=".pdf,.jpg,.jpeg,.png"
+          style={{ display: 'none' }}
+          onChange={e => adicionarArquivos(e.target.files)}
+          disabled={uploading}
+        />
+        <Upload size={20} color="#c5a859" style={{ marginBottom: 6 }} />
+        <p style={{ margin: '4px 0 2px', fontSize: 13, fontWeight: 600, color: '#0d2340' }}>
+          Clique ou arraste arquivos aqui
+        </p>
+        <p style={{ margin: 0, fontSize: 11, color: '#6b6b68' }}>
+          Laudos médicos, negativas, receitas, contratos, fotos — PDF, JPG, PNG
+        </p>
+      </div>
+
+      {/* Lista de arquivos selecionados */}
+      {arquivosNovos.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {arquivosNovos.map((f, i) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: '#f8f7f3', borderRadius: 7, padding: '6px 10px',
+              border: '1px solid #e5e2d6',
+            }}>
+              <FileIcon mimetype={f.type} />
+              <span style={{ flex: 1, fontSize: 12, color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {f.name}
+              </span>
+              <span style={{ fontSize: 11, color: '#6b6b68', flexShrink: 0 }}>
+                {formatBytes(f.size)}
+              </span>
+              {!uploading && (
+                <button onClick={() => remover(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex' }}>
+                  <X size={13} color="#6b6b68" />
+                </button>
+              )}
+            </div>
+          ))}
+          <p style={{ margin: '4px 0 0', fontSize: 11, color: '#166534', fontWeight: 600 }}>
+            📎 {arquivosNovos.length} arquivo(s) serão enviados à IA como contexto da petição
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Peticao() {
   const [clientes, setClientes]     = useState([]);
   const [processos, setProcessos]   = useState([]);
@@ -32,15 +163,17 @@ export default function Peticao() {
   });
 
   const navigate = useNavigate();
-  const [clientFiles, setClientFiles] = useState([]);
-  const [arquivosContexto, setArquivosContexto] = useState([]);
-  const [peticaoId, setPeticaoId]     = useState(null);
-  const [titulo, setTitulo]           = useState('');
-  const [salvando, setSalvando]       = useState(false);
-  const [gerando, setGerando]         = useState(false);
-  const [resultado, setResultado]   = useState(null);
-  const [buscas, setBuscas]         = useState([]);
-  const [tokens, setTokens]         = useState(null);
+  const [clientFiles, setClientFiles]         = useState([]);
+  const [arquivosContexto, setArquivosContexto] = useState([]);  // arquivos já na pasta do cliente
+  const [arquivosNovos, setArquivosNovos]     = useState([]);    // arquivos novos para upload agora
+  const [uploading, setUploading]             = useState(false);
+  const [peticaoId, setPeticaoId]             = useState(null);
+  const [titulo, setTitulo]                   = useState('');
+  const [salvando, setSalvando]               = useState(false);
+  const [gerando, setGerando]                 = useState(false);
+  const [resultado, setResultado]             = useState(null);
+  const [buscas, setBuscas]                   = useState([]);
+  const [tokens, setTokens]                   = useState(null);
 
   useEffect(() => {
     api.get('/clients').then(r => setClientes(r.data || [])).catch(()=>{});
@@ -52,7 +185,6 @@ export default function Peticao() {
     ? processos.filter(p => String(p.client_id) === String(form.client_id))
     : processos;
 
-  // Carregar arquivos do cliente selecionado
   useEffect(() => {
     if (!form.client_id) { setClientFiles([]); return; }
     api.get(`/clients/${form.client_id}`)
@@ -60,23 +192,115 @@ export default function Peticao() {
       .catch(()=>{});
   }, [form.client_id]);
 
+  // Faz upload dos arquivos novos para a pasta do cliente (se cliente selecionado)
+  // e retorna os filenames para enviar à IA
+  async function uploadArquivosNovos() {
+    if (arquivosNovos.length === 0) return [];
+
+    // Se não tem cliente selecionado, envia direto como base64 (sem salvar)
+    if (!form.client_id) {
+      return arquivosNovos.map(f => ({ _file: f })); // será tratado no backend via base64
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      arquivosNovos.forEach(f => formData.append('files', f));
+
+      const r = await api.post(`/clients/${form.client_id}/files`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      // Retornar os filenames salvos para passar à IA
+      return (r.data.files || []).map(f => f.filename);
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function gerar() {
     if (!form.tipo_peca || !form.fatos.trim()) return toast.error('Preencha o tipo de peça e os fatos do caso');
     setGerando(true); setResultado(null); setBuscas([]); setPeticaoId(null);
+
     try {
-      const r = await api.post('/peticao/gerar', { ...form, arquivos_contexto: arquivosContexto });
+      // 1. Fazer upload dos arquivos novos (se houver)
+      let nomesArquivosNovos = [];
+      if (arquivosNovos.length > 0) {
+        if (form.client_id) {
+          // Salva na pasta do cliente e obtém filenames
+          setUploading(true);
+          try {
+            const formData = new FormData();
+            arquivosNovos.forEach(f => formData.append('files', f));
+            const r = await api.post(`/clients/${form.client_id}/files`, formData, {
+              headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            nomesArquivosNovos = (r.data.files || []).map(f => f.filename);
+            toast.success(`${arquivosNovos.length} arquivo(s) salvos na pasta do cliente`);
+            // Atualizar lista de arquivos do cliente
+            api.get(`/clients/${form.client_id}`).then(r2 => setClientFiles(r2.data?.files || [])).catch(()=>{});
+          } finally {
+            setUploading(false);
+          }
+        } else {
+          // Sem cliente: envia os arquivos como base64 diretamente no corpo da requisição
+          const base64Files = await Promise.all(
+            arquivosNovos.map(f => new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve({
+                name: f.name,
+                type: f.type,
+                data: reader.result.split(',')[1],
+              });
+              reader.onerror = reject;
+              reader.readAsDataURL(f);
+            }))
+          );
+          // Passa como campo especial para o backend processar
+          const r = await api.post('/peticao/gerar', {
+            ...form,
+            arquivos_contexto: arquivosContexto,
+            arquivos_base64: base64Files,
+          });
+          setResultado(r.data.conteudo);
+          setBuscas(r.data.buscas || []);
+          setTokens(r.data.tokens_usados);
+          if (r.data.peticaoId) setPeticaoId(r.data.peticaoId);
+          const TIPOS_LABEL = { liminar:'Tutela de Urgência', peticao_inicial:'Petição Inicial',
+            contestacao:'Contestação', recurso_apelacao:'Apelação', embargos:'Embargos',
+            manifestacao:'Manifestação', recurso_inominado:'Recurso Inominado', agravo:'Agravo' };
+          setTitulo(`${TIPOS_LABEL[form.tipo_peca]||form.tipo_peca} — ${new Date().toLocaleDateString('pt-BR')}`);
+          toast.success('Peça gerada com sucesso!');
+          api.get('/peticao/historico').then(r2 => setHistorico(r2.data || [])).catch(()=>{});
+          return;
+        }
+      }
+
+      // 2. Gerar a petição com todos os arquivos (contexto existente + novos)
+      const todosArquivos = [...arquivosContexto, ...nomesArquivosNovos];
+
+      const r = await api.post('/peticao/gerar', {
+        ...form,
+        arquivos_contexto: todosArquivos,
+      });
+
       setResultado(r.data.conteudo);
       setBuscas(r.data.buscas || []);
       setTokens(r.data.tokens_usados);
-      if (r.data.peticaoId) { setPeticaoId(r.data.peticaoId); }
+      if (r.data.peticaoId) setPeticaoId(r.data.peticaoId);
+
       const TIPOS_LABEL = { liminar:'Tutela de Urgência', peticao_inicial:'Petição Inicial',
         contestacao:'Contestação', recurso_apelacao:'Apelação', embargos:'Embargos',
         manifestacao:'Manifestação', recurso_inominado:'Recurso Inominado', agravo:'Agravo' };
       setTitulo(`${TIPOS_LABEL[form.tipo_peca]||form.tipo_peca} — ${new Date().toLocaleDateString('pt-BR')}`);
       toast.success(form.client_id ? 'Peça gerada e salva na pasta do cliente!' : 'Peça gerada com sucesso!');
       api.get('/peticao/historico').then(r2 => setHistorico(r2.data || [])).catch(()=>{});
-    } catch(e) { toast.error(e.response?.data?.error || 'Erro ao gerar. Tente novamente.'); }
-    finally { setGerando(false); }
+
+    } catch(e) {
+      toast.error(e.response?.data?.error || 'Erro ao gerar. Tente novamente.');
+    } finally {
+      setGerando(false);
+    }
   }
 
   async function salvarEdicao() {
@@ -94,15 +318,7 @@ export default function Peticao() {
     toast.success('Copiado!');
   }
 
-  function baixar() {
-    const blob = new Blob([resultado], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${form.tipo_peca}_${new Date().toISOString().slice(0,10)}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+  const isGerando = gerando || uploading;
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '1.5rem 1rem' }}>
@@ -140,7 +356,8 @@ export default function Peticao() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
               <label style={lbl}>CLIENTE (opcional)</label>
-              <select value={form.client_id} onChange={e=>setForm(p=>({...p,client_id:e.target.value,processo_id:''}))} style={inp}>
+              <select value={form.client_id} onChange={e=>setForm(p=>({...p,client_id:e.target.value,processo_id:''}))
+              } style={inp}>
                 <option value="">Selecionar cliente</option>
                 {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
               </select>
@@ -154,10 +371,17 @@ export default function Peticao() {
             </div>
           </div>
 
-          {/* Documentos do cliente como contexto */}
+          {/* Upload de novos documentos comprobatórios */}
+          <UploadZone
+            arquivosNovos={arquivosNovos}
+            setArquivosNovos={setArquivosNovos}
+            uploading={isGerando}
+          />
+
+          {/* Documentos já na pasta do cliente como contexto adicional */}
           {clientFiles.length > 0 && (
             <div>
-              <label style={lbl}>INCLUIR DOCUMENTOS DO CLIENTE COMO CONTEXTO (máx. 3)</label>
+              <label style={lbl}>INCLUIR DOCUMENTOS EXISTENTES DO CLIENTE (máx. 3)</label>
               <div style={{ display:'flex', flexDirection:'column', gap:6, background:'#f8f7f3', borderRadius:8, padding:10 }}>
                 {clientFiles.map(f => (
                   <label key={f.id} style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontSize:13 }}>
@@ -169,14 +393,14 @@ export default function Peticao() {
                         else setArquivosContexto(prev => prev.filter(x => x !== f.filename));
                       }}
                     />
-                    <FileText size={12} color="#6b6b68"/>
-                    <span style={{ color:'#333' }}>{f.original_filename || f.filename}</span>
-                    <span style={{ fontSize:11, color:'#6b6b68' }}>({f.file_type})</span>
+                    <FileIcon mimetype={f.mimetype || f.file_type} />
+                    <span style={{ color:'#333' }}>{f.original_name || f.original_filename || f.filename}</span>
+                    <span style={{ fontSize:11, color:'#6b6b68' }}>({f.mimetype || f.file_type})</span>
                   </label>
                 ))}
                 {arquivosContexto.length > 0 && (
                   <p style={{ margin:'4px 0 0', fontSize:11, color:'#0d2340', fontWeight:600 }}>
-                    ✅ {arquivosContexto.length} arquivo(s) serão enviados à IA como contexto
+                    ✅ {arquivosContexto.length} arquivo(s) existente(s) incluídos como contexto
                   </p>
                 )}
               </div>
@@ -215,13 +439,13 @@ export default function Peticao() {
           </div>
 
           {/* Botão gerar */}
-          <button onClick={gerar} disabled={gerando}
-            style={{ background: gerando ? '#ccc' : 'linear-gradient(135deg,#0d2340,#1a3a5c)',
+          <button onClick={gerar} disabled={isGerando}
+            style={{ background: isGerando ? '#ccc' : 'linear-gradient(135deg,#0d2340,#1a3a5c)',
               color:'#fff', border:'none', borderRadius:10, padding:'14px',
-              fontWeight:700, fontSize:15, cursor: gerando ? 'not-allowed' : 'pointer',
+              fontWeight:700, fontSize:15, cursor: isGerando ? 'not-allowed' : 'pointer',
               display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
             <Sparkles size={18} />
-            {gerando ? 'Pesquisando jurisprudência e redigindo...' : 'Gerar Peça com IA'}
+            {uploading ? 'Enviando arquivos...' : gerando ? 'Pesquisando jurisprudência e redigindo...' : 'Gerar Peça com IA'}
           </button>
 
           {/* Banner de segurança jurídica */}
@@ -233,9 +457,11 @@ export default function Peticao() {
             </p>
           </div>
 
-          {gerando && (
+          {isGerando && (
             <div style={{ background:'#f0f7ff', border:'1px solid #bfdbfe', borderRadius:8, padding:'10px 14px', fontSize:12, color:'#1e40af' }}>
-              ⏳ Pesquisando jurisprudência real em tempo real e redigindo a peça. Isso pode levar 30–90 segundos...
+              {uploading
+                ? '📤 Salvando documentos na pasta do cliente...'
+                : '⏳ Analisando documentos e pesquisando jurisprudência em tempo real. Isso pode levar 30–90 segundos...'}
             </div>
           )}
 
@@ -257,7 +483,6 @@ export default function Peticao() {
             <div style={{ background:'#fef9c3', border:'1px solid #fde047', borderRadius:8, padding:'8px 12px', fontSize:12, color:'#854d0e' }}>
               <strong>Antes de protocolar:</strong> revise cada citação jurisprudencial. Itens marcados como <code>[JURISPRUDÊNCIA PENDENTE]</code> devem ser pesquisados e inseridos por você.
             </div>
-            {/* Título editável */}
             <input value={titulo} onChange={e=>setTitulo(e.target.value)}
               placeholder="Título da peça"
               style={{ width:'100%', boxSizing:'border-box', padding:'8px 12px', border:'1px solid #d0cfc7', borderRadius:8, fontSize:13, fontWeight:600 }} />

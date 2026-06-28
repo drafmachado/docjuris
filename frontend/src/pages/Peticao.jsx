@@ -319,6 +319,14 @@ export default function Peticao() {
     toast.success('Copiado!');
   }
 
+  function abrirDoHistorico(h) {
+    setResultado(h.conteudo);
+    setPeticaoId(h.id);                    // habilita o botão de baixar Word
+    setTitulo(h.titulo || `${TIPOS.find(t=>t.id===h.tipo_peca)?.label || h.tipo_peca} — ${new Date(h.created_at).toLocaleDateString('pt-BR')}`);
+    setForm(p => ({ ...p, client_id: h.client_id || p.client_id }));
+    try { setBuscas(h.buscas ? JSON.parse(h.buscas) : []); } catch { setBuscas([]); }
+  }
+
   async function excluirPeticao(id, e) {
     e.stopPropagation(); // não abrir a petição ao clicar no lixeira
     if (!window.confirm('Excluir esta peça do histórico? Esta ação não pode ser desfeita.')) return;
@@ -564,7 +572,7 @@ export default function Peticao() {
                 style={{ background:'#fff', border:'1px solid #e5e2d6', borderRadius:8,
                   padding:'10px 14px', display:'flex', justifyContent:'space-between',
                   alignItems:'center', cursor:'pointer' }}
-                onClick={() => setResultado(h.conteudo)}>
+                onClick={() => abrirDoHistorico(h)}>
                 <div style={{ flex:1, minWidth:0 }}>
                   <span style={{ fontSize:13, fontWeight:600 }}>
                     {TIPOS.find(t=>t.id===h.tipo_peca)?.label || h.tipo_peca}
@@ -598,3 +606,4 @@ export default function Peticao() {
 
 const lbl = { fontSize:11, fontWeight:600, color:'#6b6b68', display:'block', marginBottom:4 };
 const inp = { width:'100%', boxSizing:'border-box', padding:'9px 12px', border:'1px solid #d0cfc7', borderRadius:8, fontSize:13, background:'#fff' };
+

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import api from '../utils/api.js';
 import toast from 'react-hot-toast';
 import { Sparkles, Copy, Download, Clock, Scale, Save, Folder, FileText, X, Upload, File, Image } from 'lucide-react';
+import SearchableSelect from '../components/SearchableSelect.jsx';
 import { useNavigate } from 'react-router-dom';
 
 const TIPOS = [
@@ -356,18 +357,21 @@ export default function Peticao() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
               <label style={lbl}>CLIENTE (opcional)</label>
-              <select value={form.client_id} onChange={e=>setForm(p=>({...p,client_id:e.target.value,processo_id:''}))
-              } style={inp}>
-                <option value="">Selecionar cliente</option>
-                {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-              </select>
+              <SearchableSelect
+                value={form.client_id}
+                onChange={val => setForm(p => ({ ...p, client_id: val, processo_id: '' }))}
+                options={clientes.map(c => ({ value: c.id, label: c.nome }))}
+                placeholder="Selecionar cliente"
+              />
             </div>
             <div>
               <label style={lbl}>PROCESSO (opcional)</label>
-              <select value={form.processo_id} onChange={e=>setForm(p=>({...p,processo_id:e.target.value}))} style={inp}>
-                <option value="">Selecionar processo</option>
-                {processosFiltrados.map(p => <option key={p.id} value={p.id}>{p.numero_cnj}</option>)}
-              </select>
+              <SearchableSelect
+                value={form.processo_id}
+                onChange={val => setForm(p => ({ ...p, processo_id: val }))}
+                options={processosFiltrados.map(p => ({ value: p.id, label: p.numero_cnj }))}
+                placeholder="Selecionar processo"
+              />
             </div>
           </div>
 

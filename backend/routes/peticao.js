@@ -67,14 +67,34 @@ DADOS DO PROCESSO:
 
 Você deve redigir peças processuais completas, tecnicamente precisas e estratégicas, seguindo rigorosamente as normas do Direito brasileiro.
 
-REGRAS OBRIGATÓRIAS:
-1. Use web search para buscar jurisprudência REAL e RECENTE (últimos 2 anos) dos tribunais relevantes — nunca invente decisões
-2. Cite os acórdãos com número completo (ex: STJ, REsp 1.234.567/SP, Rel. Min. Nome, j. 00/00/0000)
-3. Cite artigos de lei com número exato
-4. Estruture a peça com todos os requisitos formais (endereçamento, qualificação, fatos, direito, pedidos, valor da causa)
-5. Linguagem técnica mas objetiva
-6. Adapte ao tribunal e área informados
-7. IMPORTANTE: Responda APENAS com o texto da peça processual. Não inclua introduções, passos, explicações sobre o que você vai fazer, nem listas de fontes ao final. Comece diretamente com o endereçamento da peça.`;
+═══════════════════════════════════════════════════════════
+REGRAS ABSOLUTAS DE INTEGRIDADE JURÍDICA — SEM EXCEÇÕES
+═══════════════════════════════════════════════════════════
+
+JURISPRUDÊNCIA:
+1. PROIBIDO inventar, estimar, parafrasear ou "completar" qualquer decisão judicial. Zero tolerância.
+2. Use web search para buscar decisões REAIS. Só cite o que você encontrou e leu no resultado da busca.
+3. Toda citação jurisprudencial DEVE conter OBRIGATORIAMENTE:
+   - Número CNJ completo do processo (ex: REsp 1.234.567/SP ou 0001234-56.2023.8.26.0100)
+   - Nome do relator (ex: Rel. Min. Nancy Andrighi)
+   - Data de julgamento (ex: j. 15/03/2024)
+   - Órgão julgador (ex: 3ª Turma do STJ)
+   - Link direto para o acórdão no formato: [Verificar: URL_ENCONTRADA_NA_BUSCA]
+4. Se a busca retornou uma decisão mas SEM o número completo, relator ou data — NÃO cite. Escreva [JURISPRUDÊNCIA PENDENTE] nesse ponto.
+5. Se não encontrou nenhuma decisão verificável para fundamentar um ponto — escreva [JURISPRUDÊNCIA PENDENTE — pesquisar em: JusBrasil / STJ / tribunal competente].
+6. NUNCA escreva frases como "conforme jurisprudência pacífica" ou "os tribunais têm decidido que" sem citar a decisão concreta e verificável.
+
+LEGISLAÇÃO:
+7. Cite artigos de lei com número exato da lei e artigo (ex: art. 35, §1º, da Lei nº 9.656/1998).
+8. PROIBIDO citar artigos de lei que não existem ou números errados.
+
+FATOS:
+9. Use APENAS os fatos descritos pelo usuário. Não invente detalhes, datas, valores ou circunstâncias não informadas.
+10. Se um dado essencial estiver faltando (ex: data exata, valor do contrato), escreva [DADO PENDENTE — confirmar com cliente].
+
+ESTRUTURA:
+11. Responda APENAS com o texto da peça processual. Comece diretamente com o endereçamento.
+12. Não inclua introduções, listas de fontes, explicações sobre o processo de geração, nem rodapés de verificação fora do corpo da peça.`;
 
   const userPrompt = `Redija uma ${nomePeca} completa para o caso abaixo.
 
@@ -87,9 +107,15 @@ ${fatos}
 PEDIDOS ESPECÍFICOS:
 ${pedidos || 'Proceder conforme o tipo de peça e os fatos expostos'}
 
-Pesquise jurisprudência real com web search antes de redigir.
-Onde não houver jurisprudência verificada, escreva: [JURISPRUDÊNCIA PENDENTE — inserir manualmente]
-Comece diretamente com o endereçamento da peça. Não escreva introduções nem explicações.`;
+INSTRUÇÕES DE EXECUÇÃO:
+1. Antes de redigir, use web search para buscar decisões reais sobre: "${nomeArea}" + tema central dos fatos acima.
+2. Busque especificamente em: STJ, ${tribunal || 'TJSP'}, JusBrasil, sites de tribunais (.jus.br).
+3. Para cada decisão encontrada: confirme número CNJ, relator, data e copie o link exato.
+4. Só então redija a peça usando EXCLUSIVAMENTE o que foi encontrado e verificado.
+5. Cada citação jurisprudencial deve aparecer no formato:
+   (Tribunal, Número CNJ, Rel. Nome do Relator, j. DD/MM/AAAA — [Verificar: URL])
+6. Onde não houver decisão verificada: escreva [JURISPRUDÊNCIA PENDENTE — pesquisar em: JusBrasil/tribunal competente].
+7. Comece diretamente com o endereçamento da peça.`;
 
   // Ler arquivos de contexto do cliente (PDFs, imagens)
   const { arquivos_contexto, arquivos_base64 } = req.body;

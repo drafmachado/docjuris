@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import api from '../utils/api.js';
 import toast from 'react-hot-toast';
-import { Sparkles, Copy, Download, Clock, Scale, Save, Folder, FileText, X, Upload, File, Image } from 'lucide-react';
+import { Sparkles, Copy, Download, Clock, Scale, Save, Folder, FileText, X, Upload, File, Image, Trash2 } from 'lucide-react';
 import SearchableSelect from '../components/SearchableSelect.jsx';
 import { useNavigate } from 'react-router-dom';
 
@@ -319,6 +319,18 @@ export default function Peticao() {
     toast.success('Copiado!');
   }
 
+  async function excluirPeticao(id, e) {
+    e.stopPropagation(); // não abrir a petição ao clicar no lixeira
+    if (!window.confirm('Excluir esta peça do histórico? Esta ação não pode ser desfeita.')) return;
+    try {
+      await api.delete(`/peticao/${id}`);
+      setHistorico(prev => prev.filter(h => h.id !== id));
+      toast.success('Peça excluída.');
+    } catch(err) {
+      toast.error('Erro ao excluir. Tente novamente.');
+    }
+  }
+
   const isGerando = gerando || uploading;
 
   return (
@@ -547,21 +559,34 @@ export default function Peticao() {
             <Clock size={14}/> Histórico de peças geradas
           </h3>
           <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-            {historico.slice(0,5).map(h => (
+            {historico.slice(0,10).map(h => (
               <div key={h.id}
                 style={{ background:'#fff', border:'1px solid #e5e2d6', borderRadius:8,
                   padding:'10px 14px', display:'flex', justifyContent:'space-between',
                   alignItems:'center', cursor:'pointer' }}
                 onClick={() => setResultado(h.conteudo)}>
-                <div>
+                <div style={{ flex:1, minWidth:0 }}>
                   <span style={{ fontSize:13, fontWeight:600 }}>
                     {TIPOS.find(t=>t.id===h.tipo_peca)?.label || h.tipo_peca}
                   </span>
                   {h.cliente_nome && <span style={{ fontSize:12, color:'#6b6b68', marginLeft:8 }}>— {h.cliente_nome}</span>}
                 </div>
-                <span style={{ fontSize:11, color:'#6b6b68' }}>
-                  {new Date(h.created_at).toLocaleDateString('pt-BR')}
-                </span>
+                <div style={{ display:'flex', alignItems:'center', gap:12, flexShrink:0 }}>
+                  <span style={{ fontSize:11, color:'#6b6b68' }}>
+                    {new Date(h.created_at).toLocaleDateString('pt-BR')}
+                  </span>
+                  <button
+                    onClick={(e) => excluirPeticao(h.id, e)}
+                    title="Excluir peça"
+                    style={{ display:'flex', alignItems:'center', justifyContent:'center',
+                      background:'transparent', border:'none', cursor:'pointer',
+                      padding:6, borderRadius:6, color:'#9a9a97', transition:'all 0.15s' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#fcebeb'; e.currentTarget.style.color = '#a32d2d'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#9a9a97'; }}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>

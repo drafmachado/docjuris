@@ -189,23 +189,34 @@ INSTRUÇÕES DE EXECUÇÃO:
       .map(b => b.input?.query || '')
       .filter(Boolean);
 
+    // A web_search_20250305 executa buscas internamente e retorna tudo em uma só resposta.
+    // Pode retornar múltiplos ciclos de tool_use → text dentro do mesmo content[].
+    // Precisamos continuar chamando a API enquanto stop_reason === 'tool_use'.
     let textos = '';
+    let currentData = data1;
+    let messages = [{ role: 'user', content: contentBlocks }];
+    let safetyLimit = 5; // evitar loop infinito
 
-    // ─── Se stop_reason=tool_use, fazer segunda chamada com resultado ───────
-    if (data1.stop_reason === 'tool_use') {
-      // Montar histórico com os tool_results para continuar
-      const assistantContent = data1.content;
+    while (currentData.stop_reason === 'tool_use' && safetyLimit-- > 0) {
+      // Adicionar resposta do assistente ao histórico
+      messages.push({ role: 'assistant', content: currentData.content });
 
-      // Simular resultados das buscas (a API retorna os resultados via tool_result)
-      const toolResults = (data1.content || [])
-        .filter(b => b.type === 'tool_use')
+      // Extrair os tool_use blocks e montar os tool_result correspondentes
+      // A web_search já retornou os resultados dentro do próprio bloco (server_tool_use)
+      // Precisamos confirmar cada tool_use com um tool_result vazio para continuar
+      const toolResults = (currentData.content || [])
+        .filter(b => b.type === 'tool_use' || b.type === 'server_tool_use')
         .map(b => ({
           type: 'tool_result',
           tool_use_id: b.id,
-          content: 'Pesquisa realizada com sucesso.',
+          content: b.output ? JSON.stringify(b.output) : '[]',
         }));
 
-      const response2 = await fetch('https://api.anthropic.com/v1/messages', {
+      if (toolResults.length === 0) break;
+
+      messages.push({ role: 'user', content: toolResults });
+
+      const responseNext = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -217,30 +228,29 @@ INSTRUÇÕES DE EXECUÇÃO:
           max_tokens: 8000,
           system: systemPrompt,
           tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-          messages: [
-            { role: 'user', content: contentBlocks },
-            { role: 'assistant', content: assistantContent },
-            { role: 'user', content: toolResults },
-          ],
+          messages,
         }),
       });
 
-      if (!response2.ok) {
-        const err = await response2.text();
-        return res.status(500).json({ error: 'Erro na segunda chamada da API de IA: ' + err });
+      if (!responseNext.ok) {
+        const err = await responseNext.text();
+        return res.status(500).json({ error: 'Erro na continuação da API de IA: ' + err });
       }
 
-      const data2 = await response2.json();
-      textos = (data2.content || [])
-        .filter(b => b.type === 'text')
-        .map(b => b.text)
-        .join('\n\n');
+      currentData = await responseNext.json();
+    }
 
-    } else {
-      // stop_reason=end_turn — texto já disponível diretamente
-      textos = (data1.content || [])
-        .filter(b => b.type === 'text')
-        .map(b => b.text)
+    // Coletar todos os blocos de texto da resposta final
+    textos = (currentData.content || [])
+      .filter(b => b.type === 'text')
+      .map(b => b.text)
+      .join('\n\n');
+
+    // Se ainda vazio, coletar de todas as mensagens do assistente no histórico
+    if (!textos || textos.trim().length < 100) {
+      textos = messages
+        .filter(m => m.role === 'assistant')
+        .flatMap(m => (m.content || []).filter(b => b.type === 'text').map(b => b.text))
         .join('\n\n');
     }
 

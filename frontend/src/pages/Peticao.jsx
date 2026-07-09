@@ -219,6 +219,18 @@ export default function Peticao() {
     }
   }
 
+  // Aguarda o job de geração terminar, consultando o status a cada 3s (máx. 5 min)
+  async function aguardarJob(jobId) {
+    const inicio = Date.now();
+    while (Date.now() - inicio < 5 * 60 * 1000) {
+      await new Promise(r => setTimeout(r, 3000));
+      const s = await api.get(`/peticao/gerar/status/${jobId}`);
+      if (s.data.status === 'done') return s.data;
+      if (s.data.status === 'error') throw new Error(s.data.error || 'Erro na geração');
+    }
+    throw new Error('Tempo esgotado. A peça pode ter sido salva — verifique o histórico.');
+  }
+
   async function gerar() {
     if (!form.tipo_peca || !form.fatos.trim()) return toast.error('Preencha o tipo de peça e os fatos do caso');
     setGerando(true); setResultado(null); setBuscas([]); setPeticaoId(null);
@@ -258,15 +270,15 @@ export default function Peticao() {
             }))
           );
           // Passa como campo especial para o backend processar
-          const r = await api.post('/peticao/gerar', {
+          const start = await api.post('/peticao/gerar', {
             ...form,
             arquivos_contexto: arquivosContexto,
             arquivos_base64: base64Files,
-          }, { timeout: 180000 }); // 3 min — geração com IA + web search é demorada
-          setResultado(r.data.conteudo);
-          setBuscas(r.data.buscas || []);
-          setTokens(r.data.tokens_usados);
-          if (r.data.peticaoId) setPeticaoId(r.data.peticaoId);
+          });
+          const jobData = await aguardarJob(start.data.jobId);
+          setResultado(jobData.conteudo);
+          setBuscas(jobData.buscas || []);
+          if (jobData.peticaoId) setPeticaoId(jobData.peticaoId);
           const TIPOS_LABEL = { liminar:'Tutela de Urgência', peticao_inicial:'Petição Inicial',
             contestacao:'Contestação', recurso_apelacao:'Apelação', embargos:'Embargos',
             manifestacao:'Manifestação', recurso_inominado:'Recurso Inominado', agravo:'Agravo' };
@@ -280,15 +292,15 @@ export default function Peticao() {
       // 2. Gerar a petição com todos os arquivos (contexto existente + novos)
       const todosArquivos = [...arquivosContexto, ...nomesArquivosNovos];
 
-      const r = await api.post('/peticao/gerar', {
+      const start = await api.post('/peticao/gerar', {
         ...form,
         arquivos_contexto: todosArquivos,
-      }, { timeout: 180000 }); // 3 min — geração com IA + web search é demorada
+      });
+      const jobData = await aguardarJob(start.data.jobId);
 
-      setResultado(r.data.conteudo);
-      setBuscas(r.data.buscas || []);
-      setTokens(r.data.tokens_usados);
-      if (r.data.peticaoId) setPeticaoId(r.data.peticaoId);
+      setResultado(jobData.conteudo);
+      setBuscas(jobData.buscas || []);
+      if (jobData.peticaoId) setPeticaoId(jobData.peticaoId);
 
       const TIPOS_LABEL = { liminar:'Tutela de Urgência', peticao_inicial:'Petição Inicial',
         contestacao:'Contestação', recurso_apelacao:'Apelação', embargos:'Embargos',
@@ -298,7 +310,9 @@ export default function Peticao() {
       api.get('/peticao/historico').then(r2 => setHistorico(r2.data || [])).catch(()=>{});
 
     } catch(e) {
-      toast.error(e.response?.data?.error || 'Erro ao gerar. Tente novamente.');
+      toast.error(e.message || e.response?.data?.error || 'Erro ao gerar. Tente novamente.');
+      // Atualiza o histórico mesmo em erro — a peça pode ter sido salva
+      api.get('/peticao/historico').then(r2 => setHistorico(r2.data || [])).catch(()=>{});
     } finally {
       setGerando(false);
     }
@@ -606,4 +620,5 @@ export default function Peticao() {
 
 const lbl = { fontSize:11, fontWeight:600, color:'#6b6b68', display:'block', marginBottom:4 };
 const inp = { width:'100%', boxSizing:'border-box', padding:'9px 12px', border:'1px solid #d0cfc7', borderRadius:8, fontSize:13, background:'#fff' };
+
 

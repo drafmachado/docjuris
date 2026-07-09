@@ -340,6 +340,29 @@ export default function Peticao() {
     toast.success('Copiado!');
   }
 
+  // Download autenticado — window.open não envia o token JWT, causava "Token não fornecido"
+  async function baixarArquivo(formato) {
+    if (!peticaoId) return toast.error('Selecione um cliente e gere a peça para poder baixar');
+    const toastId = toast.loading(formato === 'pdf' ? 'Gerando PDF...' : 'Gerando Word...');
+    try {
+      const r = await api.get(`/peticao/${peticaoId}/download/${formato}`, {
+        responseType: 'blob',
+        timeout: 90000, // conversão PDF pode demorar
+      });
+      const url = URL.createObjectURL(r.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(titulo || 'peticao').replace(/[^a-zA-Z0-9À-ú\s._-]/g, '_')}.${formato === 'pdf' ? 'pdf' : 'docx'}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(formato === 'pdf' ? 'PDF baixado!' : 'Word baixado!', { id: toastId });
+    } catch(e) {
+      toast.error('Erro ao baixar. Tente novamente.', { id: toastId });
+    }
+  }
+
   function abrirDoHistorico(h) {
     setResultado(h.conteudo);
     setPeticaoId(h.id);                    // habilita o botão de baixar Word
@@ -557,12 +580,19 @@ export default function Peticao() {
                     fontSize:12, fontWeight:600, cursor:'pointer' }}>
                   <Copy size={13}/> Copiar
                 </button>
-                <button onClick={() => window.open(api.defaults.baseURL + `/peticao/${peticaoId}/download/docx`, '_blank')}
+                <button onClick={() => baixarArquivo('docx')}
                   disabled={!peticaoId}
                   style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 14px',
                     background: peticaoId ? '#0d2340' : '#ccc', color:'#fff', border:'none', borderRadius:8,
                     fontSize:12, fontWeight:600, cursor: peticaoId ? 'pointer' : 'not-allowed' }}>
-                  <Download size={13}/> Baixar Word (.docx)
+                  <Download size={13}/> Word
+                </button>
+                <button onClick={() => baixarArquivo('pdf')}
+                  disabled={!peticaoId}
+                  style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 14px',
+                    background: peticaoId ? '#7a1f1f' : '#ccc', color:'#fff', border:'none', borderRadius:8,
+                    fontSize:12, fontWeight:600, cursor: peticaoId ? 'pointer' : 'not-allowed' }}>
+                  <Download size={13}/> PDF
                 </button>
               </div>
             </div>
@@ -573,8 +603,8 @@ export default function Peticao() {
                 borderRadius:10, fontSize:12, lineHeight:1.7, fontFamily:'Georgia,serif',
                 resize:'vertical', background:'#fafaf8' }}
             />
-            <p style={{ fontSize:11, color:'#6b6b68', margin:0 }}>
-              ✏️ Você pode editar o texto diretamente antes de copiar ou baixar.
+            <p style={{ fontSize:11, color:'#0d2340', fontWeight:600, margin:0, background:'#f0f4ff', padding:'8px 12px', borderRadius:6 }}>
+              ✏️ Clique no texto acima e edite livremente. Ao terminar, clique em "Salvar edições" — suas correções também ensinam o sistema: peças editadas viram referência para as próximas gerações da mesma área.
             </p>
           </div>
         )}

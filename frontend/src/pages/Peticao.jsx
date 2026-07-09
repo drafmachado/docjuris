@@ -19,6 +19,7 @@ const TIPOS = [
 const AREAS = [
   { id: 'medico',      label: '🏥 Direito Médico e da Saúde' },
   { id: 'inventarios', label: '📜 Inventário e Sucessões' },
+  { id: 'jec',         label: '🏛️ JEC — Juizado Especial Cível' },
   { id: 'civel',       label: '⚖️ Cível' },
 ];
 
@@ -730,6 +731,7 @@ export default function Peticao() {
 
 const lbl = { fontSize:11, fontWeight:600, color:'#6b6b68', display:'block', marginBottom:4 };
 const inp = { width:'100%', boxSizing:'border-box', padding:'9px 12px', border:'1px solid #d0cfc7', borderRadius:8, fontSize:13, background:'#fff' };
+
 
 
 

@@ -32,7 +32,7 @@ router.get('/', (req, res) => {
     LEFT JOIN documents d ON d.client_id = c.id
     WHERE c.nome LIKE ? OR c.cpf LIKE ? OR c.email LIKE ?
     GROUP BY c.id
-    ORDER BY c.created_at DESC
+    ORDER BY c.nome COLLATE NOCASE ASC
   `).all(`%${search}%`, `%${search}%`, `%${search}%`);
   res.json(clients);
 });
@@ -168,3 +168,4 @@ router.delete('/:clientId/files/:fileId', (req, res) => {
 });
 
 export default router;
+

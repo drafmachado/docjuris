@@ -1,4 +1,6 @@
-const CACHE = 'advmachado-v1';
+// Service Worker — advmachado.adv.br
+// v3: API nunca é cacheada; assets são network-first (cache apenas como fallback offline)
+const CACHE = 'advmachado-v3';
 const PRECACHE = [
   '/',
   '/styles.css',
@@ -26,16 +28,26 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+
+  const url = new URL(e.request.url);
+
+  // ─── API: NUNCA interceptar — sempre direto na rede ───────────────────────
+  // Cachear /api causava dados desatualizados em todo o Veredo
+  // (listas de clientes, templates, documentos não atualizavam sem Ctrl+Shift+R)
+  if (url.pathname.startsWith('/api/')) return;
+
+  // ─── Assets do app (JS/CSS do Vite): network-first ────────────────────────
+  // Garante que após cada deploy a versão nova carrega imediatamente.
+  // O cache só é usado se estiver offline.
   e.respondWith(
-    caches.match(e.request).then(cached => {
-      const fresh = fetch(e.request).then(resp => {
+    fetch(e.request)
+      .then(resp => {
         if (resp.ok) {
           const clone = resp.clone();
           caches.open(CACHE).then(c => c.put(e.request, clone));
         }
         return resp;
-      }).catch(() => cached);
-      return cached || fresh;
-    })
+      })
+      .catch(() => caches.match(e.request))
   );
 });

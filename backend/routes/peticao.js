@@ -163,7 +163,7 @@ INSTRUÇÕES DE EXECUÇÃO:
 
   // 1. Arquivos já salvos na pasta do cliente (filename no disco)
   if (arquivos_contexto && arquivos_contexto.length > 0) {
-    for (const filename of arquivos_contexto.slice(0, 5)) {
+    for (const filename of arquivos_contexto.slice(0, 20)) {
       const filePath = join(storageDir, 'client_files', filename);
       if (!existsSync(filePath)) continue;
       try {
@@ -181,7 +181,7 @@ INSTRUÇÕES DE EXECUÇÃO:
 
   // 2. Arquivos enviados diretamente como base64 (quando não há cliente selecionado)
   if (arquivos_base64 && arquivos_base64.length > 0) {
-    for (const arq of arquivos_base64.slice(0, 5)) {
+    for (const arq of arquivos_base64.slice(0, 20)) {
       try {
         if (arq.type === 'application/pdf') {
           contentBlocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: arq.data } });
@@ -366,5 +366,6 @@ router.get('/:id/download/docx', authMiddleware, async (req, res) => {
 });
 
 export default router;
+
 
 

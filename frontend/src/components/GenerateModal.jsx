@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Modal, Btn, SectionTitle, FormField, FormGrid, Badge } from './UI.jsx';
 import api from '../utils/api.js';
+import SearchableSelect from './SearchableSelect.jsx';
 import toast from 'react-hot-toast';
 import { FileText, CheckCircle, Loader } from 'lucide-react';
 
@@ -136,10 +137,12 @@ export default function GenerateModal({ open, onClose, preselectedClient, onSucc
           <SectionTitle>1. Cliente</SectionTitle>
           <FormGrid cols={1}>
             <FormField label="Selecione o cliente">
-              <select value={clientId} onChange={e => setClientId(e.target.value)}>
-                <option value="">Escolha um cliente...</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.nome} — {c.cpf}</option>)}
-              </select>
+              <SearchableSelect
+                value={clientId}
+                onChange={val => setClientId(String(val))}
+                options={clients.map(c => ({ value: c.id, label: `${c.nome}${c.cpf ? ' — ' + c.cpf : ''}` }))}
+                placeholder="Escolha um cliente..."
+              />
             </FormField>
           </FormGrid>
 
@@ -257,3 +260,4 @@ export default function GenerateModal({ open, onClose, preselectedClient, onSucc
     </Modal>
   );
 }
+

@@ -278,6 +278,45 @@ router.post('/:id/resend', async (req, res) => {
   }
 });
 
+// ─── POST /api/documents/:id/send-signature — envia ao Autentique ────────────
+router.post('/:id/send-signature', async (req, res) => {
+  const db = getDB();
+  const doc = db.prepare(`
+    SELECT d.*, c.nome as client_name, c.email as client_email, t.name as template_name
+    FROM documents d
+    JOIN clients c ON c.id = d.client_id
+    JOIN templates t ON t.id = d.template_id
+    WHERE d.id = ?
+  `).get(req.params.id);
+
+  if (!doc) return res.status(404).json({ error: 'Documento não encontrado' });
+  if (!doc.client_email) return res.status(400).json({ error: 'Cliente sem email cadastrado. Cadastre o email em Clientes primeiro.' });
+
+  try {
+    // Prefere PDF; cai no DOCX se não houver
+    const pdfPath = doc.pdf_filename ? path.join(PDFS_DIR, doc.pdf_filename) : null;
+    const docxPath = doc.docx_filename ? path.join(PDFS_DIR, doc.docx_filename) : null;
+    const fileToSign = (pdfPath && fs.existsSync(pdfPath)) ? pdfPath
+                     : (docxPath && fs.existsSync(docxPath)) ? docxPath : null;
+    if (!fileToSign) return res.status(400).json({ error: 'Arquivo do documento não encontrado no servidor. Gere o documento novamente.' });
+
+    const signers = buildSigners(doc.template_id, doc.client_email);
+    const autDoc = await createDocument({
+      name: `${doc.template_name} - ${doc.client_name}`,
+      filePath: fileToSign,
+      signers,
+    });
+
+    db.prepare(`UPDATE documents SET zapsign_doc_token = ?, status = 'aguardando_assinatura' WHERE id = ?`)
+      .run(autDoc.id, doc.id);
+
+    res.json({ success: true, autentiqueId: autDoc.id });
+  } catch (err) {
+    console.error('Erro ao enviar para Autentique:', err);
+    res.status(500).json({ error: 'Erro ao enviar para assinatura: ' + err.message });
+  }
+});
+
 // ─── DELETE /api/documents/:id ────────────────────────────────────────────────
 router.delete('/:id', (req, res) => {
   const db = getDB();
@@ -297,4 +336,5 @@ router.delete('/:id', (req, res) => {
 });
 
 export default router;
+
 

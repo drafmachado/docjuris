@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import api from '../utils/api.js';
 import toast from 'react-hot-toast';
-import { Sparkles, Copy, Download, Clock, Scale, Save, Folder, FileText, X, Upload, File, Image, Trash2, Wand2, Undo2 } from 'lucide-react';
+import { Sparkles, Copy, Download, Clock, Scale, Save, Folder, FileText, X, Upload, File, Image, Trash2, Wand2, Undo2, MessageCircleQuestion } from 'lucide-react';
 import SearchableSelect from '../components/SearchableSelect.jsx';
 import { useNavigate } from 'react-router-dom';
 
@@ -183,6 +183,8 @@ export default function Peticao() {
   const [instrucaoAjuste, setInstrucaoAjuste] = useState('');
   const [ajustando, setAjustando]             = useState(false);
   const [versaoAnterior, setVersaoAnterior]   = useState(null);
+  const [perguntando, setPerguntando]         = useState(false);
+  const [respostaIA, setRespostaIA]           = useState(null); // { pergunta, resposta }
   const [resultado, setResultado]             = useState(null);
   const [buscas, setBuscas]                   = useState([]);
   const [tokens, setTokens]                   = useState(null);
@@ -400,6 +402,31 @@ export default function Peticao() {
     setResultado(versaoAnterior);
     setVersaoAnterior(null);
     toast.success('Versão anterior restaurada. Clique em "Salvar edições" para persistir.');
+  }
+
+  async function perguntar() {
+    if (!instrucaoAjuste.trim()) return toast.error('Escreva sua pergunta');
+    if (!resultado) return toast.error('Gere ou abra uma peça primeiro');
+
+    setPerguntando(true);
+    const perguntaFeita = instrucaoAjuste;
+    const toastId = toast.loading('Analisando a peça e respondendo...');
+
+    try {
+      const start = await api.post('/peticao/perguntar', {
+        conteudo: resultado,
+        pergunta: perguntaFeita,
+      });
+      const jobData = await aguardarJob(start.data.jobId);
+
+      setRespostaIA({ pergunta: perguntaFeita, resposta: jobData.resposta });
+      setInstrucaoAjuste('');
+      toast.success('Resposta pronta!', { id: toastId });
+    } catch(e) {
+      toast.error(e.message || 'Erro ao responder. Tente novamente.', { id: toastId });
+    } finally {
+      setPerguntando(false);
+    }
   }
 
   function abrirDoHistorico(h) {
@@ -645,25 +672,35 @@ export default function Peticao() {
             {/* ─── Ajustes por comando (chat de correções) ─── */}
             <div style={{ background:'#fff', border:'1.5px solid #c5a859', borderRadius:10, padding:'12px 14px' }}>
               <p style={{ margin:'0 0 8px', fontSize:13, fontWeight:700, color:'#0d2340', display:'flex', alignItems:'center', gap:6 }}>
-                <Wand2 size={14} color="#c5a859" /> Solicitar ajustes com IA
+                <Wand2 size={14} color="#c5a859" /> Ajustar ou perguntar sobre a peça
               </p>
               <textarea
                 value={instrucaoAjuste}
                 onChange={e => setInstrucaoAjuste(e.target.value)}
-                placeholder={'Descreva o que quer mudar. Ex:\n• "Inclua pedido de justiça gratuita"\n• "Aumente os danos morais para R$ 20.000 e justifique"\n• "Adicione jurisprudência do STJ sobre negativação indevida"\n• "Reescreva os fatos incluindo que o cliente perdeu um contrato de trabalho por causa da negativação"'}
+                placeholder={'Descreva um ajuste OU faça uma pergunta. Ex:\n• Ajuste: "Inclua pedido de justiça gratuita"\n• Ajuste: "Aumente os danos morais para R$ 20.000"\n• Pergunta: "Por que você incluiu o pedido de tutela de urgência?"\n• Pergunta: "Essa jurisprudência citada ainda é válida?"'}
                 rows={3}
                 disabled={ajustando}
                 style={{ width:'100%', boxSizing:'border-box', padding:'8px 10px', border:'1px solid #d0cfc7',
                   borderRadius:8, fontSize:12, resize:'vertical', marginBottom:8, lineHeight:1.5 }}
               />
-              <div style={{ display:'flex', gap:8 }}>
-                <button onClick={aplicarAjustes} disabled={ajustando || !instrucaoAjuste.trim()}
-                  style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-                    padding:'10px', background: ajustando ? '#ccc' : 'linear-gradient(135deg,#0d2340,#1a3a5c)',
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                <button onClick={aplicarAjustes} disabled={ajustando || perguntando || !instrucaoAjuste.trim()}
+                  style={{ flex:1, minWidth:180, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+                    padding:'10px', background: (ajustando || perguntando) ? '#ccc' : 'linear-gradient(135deg,#0d2340,#1a3a5c)',
                     color:'#fff', border:'none', borderRadius:8, fontSize:13, fontWeight:700,
-                    cursor: ajustando ? 'not-allowed' : 'pointer' }}>
+                    cursor: (ajustando || perguntando) ? 'not-allowed' : 'pointer' }}>
                   <Wand2 size={14} />
-                  {ajustando ? 'Aplicando ajustes... (pode levar até 1 min)' : 'Aplicar ajustes com IA'}
+                  {ajustando ? 'Aplicando... (até 1 min)' : 'Aplicar ajustes'}
+                </button>
+                <button onClick={perguntar} disabled={ajustando || perguntando || !instrucaoAjuste.trim()}
+                  title="Pergunta sobre a peça — não altera o texto"
+                  style={{ flex:1, minWidth:150, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+                    padding:'10px', background:'#fff',
+                    color: (ajustando || perguntando) ? '#999' : '#0d2340',
+                    border:'1.5px solid #0d2340', borderRadius:8, fontSize:13, fontWeight:700,
+                    cursor: (ajustando || perguntando) ? 'not-allowed' : 'pointer' }}>
+                  <MessageCircleQuestion size={14} />
+                  {perguntando ? 'Analisando...' : 'Perguntar (não altera)'}
                 </button>
                 {versaoAnterior && !ajustando && (
                   <button onClick={desfazerAjuste}
@@ -676,6 +713,26 @@ export default function Peticao() {
                 )}
               </div>
             </div>
+
+            {/* Resposta da IA às perguntas */}
+            {respostaIA && (
+              <div style={{ background:'#f0f7ff', border:'1.5px solid #bfdbfe', borderRadius:10, padding:'12px 14px', position:'relative' }}>
+                <button onClick={() => setRespostaIA(null)}
+                  style={{ position:'absolute', top:8, right:8, background:'none', border:'none', cursor:'pointer', padding:4 }}>
+                  <X size={14} color="#6b6b68" />
+                </button>
+                <p style={{ margin:'0 0 6px', fontSize:12, fontWeight:700, color:'#1e40af', display:'flex', alignItems:'center', gap:6 }}>
+                  <MessageCircleQuestion size={13} /> Sua pergunta:
+                </p>
+                <p style={{ margin:'0 0 10px', fontSize:12, color:'#374151', fontStyle:'italic' }}>
+                  "{respostaIA.pergunta}"
+                </p>
+                <p style={{ margin:'0 0 6px', fontSize:12, fontWeight:700, color:'#1e40af' }}>Resposta:</p>
+                <div style={{ fontSize:13, color:'#1f2937', lineHeight:1.6, whiteSpace:'pre-wrap' }}>
+                  {respostaIA.resposta}
+                </div>
+              </div>
+            )}
 
             <p style={{ fontSize:11, color:'#6b6b68', margin:0 }}>
               ✏️ Você também pode editar o texto diretamente (clique e digite) e depois "Salvar edições". Peças revisadas viram referência para as próximas gerações da mesma área.
@@ -731,6 +788,7 @@ export default function Peticao() {
 
 const lbl = { fontSize:11, fontWeight:600, color:'#6b6b68', display:'block', marginBottom:4 };
 const inp = { width:'100%', boxSizing:'border-box', padding:'9px 12px', border:'1px solid #d0cfc7', borderRadius:8, fontSize:13, background:'#fff' };
+
 
 
 

@@ -45,6 +45,107 @@ router.get('/gerar/status/:jobId', authMiddleware, (req, res) => {
   res.json(job);
 });
 
+// POST /api/peticao/ajustar — ajusta peça existente conforme instruções (job assíncrono)
+router.post('/ajustar', authMiddleware, (req, res) => {
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'API de IA não configurada' });
+
+  const { conteudo, instrucao } = req.body;
+  if (!conteudo || !instrucao) return res.status(400).json({ error: 'conteudo e instrucao são obrigatórios' });
+
+  const jobId = 'aj_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  jobs.set(jobId, { status: 'processing', createdAt: Date.now() });
+
+  ajustarPeticaoAsync(jobId, req.body).catch(e => {
+    console.error('Erro job ajuste:', e);
+    jobs.set(jobId, { status: 'error', error: e.message, createdAt: Date.now() });
+  });
+
+  res.json({ jobId });
+});
+
+// Executa o ajuste da peça em background
+async function ajustarPeticaoAsync(jobId, body) {
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  const db = getDB();
+  const { conteudo, instrucao, peticaoId } = body;
+
+  const systemPrompt = `Você é a Dra. Andreia Machado, advogada (OAB/RJ 218.586, OAB/SP 532.488). Sua tarefa é REVISAR uma peça processual existente aplicando exatamente os ajustes solicitados.
+
+REGRAS ABSOLUTAS:
+1. Aplique SOMENTE os ajustes solicitados. Todo o restante da peça deve permanecer EXATAMENTE como está — mesmas palavras, mesma estrutura, mesmas citações.
+2. Se o ajuste exigir nova jurisprudência, use web search para buscar decisões REAIS. Toda citação nova DEVE ter: número CNJ completo, relator, data de julgamento, órgão julgador e link no formato [Verificar: URL]. Sem esses dados, escreva [JURISPRUDÊNCIA PENDENTE].
+3. PROIBIDO inventar decisões, artigos de lei inexistentes ou fatos não informados.
+4. Se a instrução for ambígua, aplique a interpretação mais conservadora juridicamente.
+5. Responda APENAS com o texto INTEGRAL da peça revisada, do endereçamento ao final. Sem comentários, sem explicações do que mudou, sem introduções.`;
+
+  const userPrompt = `PEÇA ATUAL:
+
+${conteudo}
+
+═══════════════════════════════════════
+AJUSTES SOLICITADOS PELA ADVOGADA:
+${instrucao}
+═══════════════════════════════════════
+
+Reescreva a peça COMPLETA aplicando os ajustes acima. Mantenha intacto tudo que não foi mencionado nos ajustes.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 8000,
+        system: systemPrompt,
+        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      jobs.set(jobId, { status: 'error', error: 'Erro na API de IA: ' + err, createdAt: Date.now() });
+      return;
+    }
+
+    const data = await response.json();
+
+    const buscas = (data.content || [])
+      .filter(b => (b.type === 'server_tool_use' || b.type === 'tool_use') && b.name === 'web_search')
+      .map(b => b.input?.query || '')
+      .filter(Boolean);
+
+    const textos = (data.content || [])
+      .filter(b => b.type === 'text')
+      .map(b => b.text)
+      .join('\n\n');
+
+    if (!textos || textos.trim().length < 100) {
+      jobs.set(jobId, { status: 'error', error: 'A IA não retornou a peça revisada. Tente novamente.', createdAt: Date.now() });
+      return;
+    }
+
+    // Se a peça está salva, atualiza no banco (mantém a biblioteca de conhecimento alimentada)
+    if (peticaoId) {
+      try {
+        db.prepare(`UPDATE peticoes SET conteudo = ?, updated_at = datetime('now') WHERE id = ?`)
+          .run(textos, peticaoId);
+      } catch(e) { /* atualização é bônus — não falhar o ajuste */ }
+    }
+
+    jobs.set(jobId, { status: 'done', conteudo: textos, buscas, peticaoId: peticaoId || null, createdAt: Date.now() });
+
+  } catch(e) {
+    console.error('Erro ajuste petição:', e);
+    jobs.set(jobId, { status: 'error', error: e.message, createdAt: Date.now() });
+  }
+}
+
 // Função que executa a geração de fato (em background)
 async function gerarPeticaoAsync(jobId, body, user) {
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
@@ -478,6 +579,7 @@ router.get('/:id/download/docx', authMiddleware, async (req, res) => {
 });
 
 export default router;
+
 
 
 

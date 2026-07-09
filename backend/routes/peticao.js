@@ -70,6 +70,33 @@ DADOS DO CLIENTE:
 - Endereço: ${[cliente.endereco, cliente.cidade, cliente.estado].filter(Boolean).join(', ') || 'não informado'}
 ` : '';
 
+  // ─── Biblioteca de conhecimento: peças anteriores validadas pela advogada ──
+  // Peças com updated_at > created_at foram revisadas/editadas = aprovadas.
+  // Suas citações e estrutura servem de referência para peças futuras da mesma área.
+  let bibliotecaConhecimento = '';
+  try {
+    const pecasValidadas = db.prepare(`
+      SELECT conteudo FROM peticoes
+      WHERE area = ? AND tipo_peca = ? AND updated_at > created_at
+      ORDER BY updated_at DESC LIMIT 2
+    `).all(area || 'civel', tipo_peca);
+
+    if (pecasValidadas.length > 0) {
+      // Extrair citações jurisprudenciais das peças validadas (linhas com REsp, AgInt, Apelação, nº CNJ)
+      const citacoes = new Set();
+      for (const p of pecasValidadas) {
+        const matches = (p.conteudo || '').match(/[^\n]*(?:REsp|AgInt|AREsp|Apela[çc][ãa]o|Agravo)[^\n]{20,200}/g) || [];
+        matches.slice(0, 5).forEach(m => citacoes.add(m.trim()));
+      }
+      if (citacoes.size > 0) {
+        bibliotecaConhecimento = `
+
+JURISPRUDÊNCIA JÁ VALIDADA PELO ESCRITÓRIO EM PEÇAS ANTERIORES (verifique se ainda pertinente e reutilize quando aplicável):
+${[...citacoes].slice(0, 8).map(c => '- ' + c).join('\n')}`;
+      }
+    }
+  } catch(e) { /* biblioteca é opcional — não falhar a geração */ }
+
   const contextoProcesso = processo ? `
 DADOS DO PROCESSO:
 - Número CNJ: ${processo.numero_cnj}
@@ -96,10 +123,51 @@ DADOS DO PROCESSO:
     'civel': 'Direito Civil (responsabilidade civil, contratos, danos)',
   };
 
+  // ─── Conhecimento especialista por área ─────────────────────────────────
+  const ESPECIALISTA = {
+    'medico': `
+VOCÊ É ESPECIALISTA EM DIREITO MÉDICO E DA SAÚDE. Domine e aplique:
+- Lei 9.656/98 (planos de saúde): art. 12 (coberturas mínimas), art. 35-C (urgência/emergência), art. 13 (rescisão unilateral)
+- Lei 14.454/2022: rol da ANS é EXEMPLIFICATIVO — cobertura obrigatória se há eficácia comprovada, recomendação CONITEC ou órgão internacional
+- RN 465/2021 ANS e atualizações do rol
+- Súmula 608/STJ: CDC aplica-se aos planos de saúde (exceto autogestão)
+- Súmula 609/STJ: recusa de cobertura por doença preexistente é ilícita sem exame prévio
+- Tema 990/STJ: reembolso fora da rede credenciada
+- CDC arts. 6º, 14, 39, 51 (cláusulas abusivas em contratos de saúde)
+- Jurisprudência consolidada: prazo máximo de resposta da operadora (RN 259), multa diária em obrigação de fazer, dano moral in re ipsa em negativas indevidas de tratamento urgente
+- Tutela de urgência em saúde: perigo de dano irreparável à vida/saúde justifica liminar inaudita altera parte (art. 300 CPC)
+- Medicamentos de alto custo, home care, cirurgias, próteses (Súmula 93 TJSP para stents)`,
+    'inventarios': `
+VOCÊ É ESPECIALISTA EM DIREITO DAS SUCESSÕES E INVENTÁRIO. Domine e aplique:
+- CPC arts. 610-673: inventário judicial e extrajudicial, arrolamento sumário (art. 659) e comum (art. 664)
+- Resolução CNJ 35/2007: inventário extrajudicial (consenso + capazes + testamento inexistente ou homologado)
+- CC arts. 1.784-2.027: ordem de vocação hereditária, herança legítima e testamentária, colação, sonegados
+- ITCMD: alíquotas estaduais (RJ: Lei 7.174/2015; SP: Lei 10.705/2000), prazos de recolhimento, isenções
+- Cessão de direitos hereditários (CC art. 1.793): escritura pública obrigatória
+- Sobrepartilha (CPC art. 669), alvará judicial (Lei 6.858/80) para valores de até 500 OTNs
+- Nomeação de inventariante (CPC art. 617 — ordem legal), remoção (art. 622)
+- Prazo de abertura: 2 meses do óbito (CPC art. 611), multa ITCMD por atraso conforme lei estadual
+- Meação do cônjuge vs. herança: regime de bens determina o que é meado e o que é herdado
+- Herdeiros menores/incapazes: intervenção obrigatória do MP (CPC art. 178, II)`,
+    'civel': `
+VOCÊ É ESPECIALISTA EM DIREITO CIVIL E JUIZADOS ESPECIAIS CÍVEIS (JEC). Domine e aplique:
+- Lei 9.099/95: competência até 40 SM (art. 3º), dispensa de advogado até 20 SM (art. 9º), impossibilidade de perícia complexa, ausência de custas em 1º grau (art. 54-55), recurso inominado (art. 41-46)
+- Enunciados FONAJE atualizados (especialmente sobre competência, revelia, provas)
+- CDC: inversão do ônus da prova (art. 6º VIII), responsabilidade objetiva do fornecedor (art. 14), práticas abusivas (art. 39), cobrança indevida com repetição em dobro (art. 42 § único)
+- Súmula 385/STJ: negativação preexistente legítima afasta dano moral
+- Tema 929/STJ: dano moral por inscrição indevida — desnecessidade de prova do prejuízo (in re ipsa)
+- Telecom/consumo: falha na portabilidade, cobrança pós-cancelamento, negativação indevida — responsabilidade solidária das operadoras envolvidas (CDC art. 7º § único e art. 25 §1º)
+- Correção monetária e juros: Tema 112 STJ, taxa SELIC (CC art. 406 c/c EC 113/2021)
+- Valor da causa no JEC limita a condenação (art. 3º §3º Lei 9.099/95) — atenção ao teto`,
+  };
+  const conhecimentoEspecialista = ESPECIALISTA[area] || ESPECIALISTA['civel'];
+
   const nomePeca = TIPOS[tipo_peca] || tipo_peca;
   const nomeArea = AREAS[area] || area || 'Direito Civil';
 
   const systemPrompt = `Você é a Dra. Andreia Machado, advogada especialista em ${nomeArea}, inscrita na OAB/RJ 218.586 e OAB/SP 532.488, com escritório em São Paulo e Rio de Janeiro.
+
+${conhecimentoEspecialista}
 
 Você deve redigir peças processuais completas, tecnicamente precisas e estratégicas, seguindo rigorosamente as normas do Direito brasileiro.
 
@@ -139,6 +207,7 @@ TRIBUNAL/FORO: ${tribunal || processo?.tribunal || 'Juízo Cível da Comarca'}
 ${contextoCliente}${contextoProcesso}
 FATOS DO CASO:
 ${fatos}
+${bibliotecaConhecimento}
 
 PEDIDOS ESPECÍFICOS:
 ${pedidos || 'Proceder conforme o tipo de peça e os fatos expostos'}
@@ -345,6 +414,49 @@ router.delete('/:id', authMiddleware, (req, res) => {
   const db = getDB();
   db.prepare('DELETE FROM peticoes WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
+});
+
+// GET /api/peticao/:id/download/pdf — baixar como PDF (converte via LibreOffice)
+router.get('/:id/download/pdf', authMiddleware, async (req, res) => {
+  const db = getDB();
+  const pet = db.prepare('SELECT p.*, c.nome as cliente_nome FROM peticoes p LEFT JOIN clients c ON c.id = p.client_id WHERE p.id = ?').get(req.params.id);
+  if (!pet) return res.status(404).json({ error: 'Petição não encontrada' });
+
+  try {
+    const { writeFileSync, readFileSync, existsSync, unlinkSync, mkdirSync } = await import('fs');
+    const { join } = await import('path');
+    const { execSync } = await import('child_process');
+    const os = await import('os');
+
+    const buffer = await gerarPeticaoDocx(pet, { nome: pet.cliente_nome });
+    const tmpDir = join(os.tmpdir(), 'peticao_pdf');
+    if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
+    const base = `pet_${pet.id}_${Date.now()}`;
+    const docxPath = join(tmpDir, base + '.docx');
+    const pdfPath = join(tmpDir, base + '.pdf');
+    writeFileSync(docxPath, buffer);
+
+    let converted = false;
+    for (const cmd of ['soffice', 'libreoffice']) {
+      try {
+        execSync(`${cmd} --headless --convert-to pdf --outdir "${tmpDir}" "${docxPath}"`, { timeout: 60000, stdio: 'pipe' });
+        if (existsSync(pdfPath)) { converted = true; break; }
+      } catch(e) { /* tenta o próximo */ }
+    }
+
+    if (!converted) return res.status(500).json({ error: 'Conversão para PDF indisponível no servidor' });
+
+    const pdfBuffer = readFileSync(pdfPath);
+    try { unlinkSync(docxPath); unlinkSync(pdfPath); } catch(e) {}
+
+    const filename = `${pet.titulo || 'peticao'}.pdf`.replace(/[^a-zA-Z0-9À-ú\s._-]/g, '_');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdfBuffer);
+  } catch(e) {
+    console.error('Erro gerando PDF:', e);
+    res.status(500).json({ error: 'Erro ao gerar PDF: ' + e.message });
+  }
 });
 
 // GET /api/peticao/:id/download/docx — baixar como Word

@@ -222,6 +222,7 @@ DADOS DO PROCESSO:
     'medico': 'Direito Médico e da Saúde (planos de saúde, negativas de cobertura, procedimentos, medicamentos)',
     'inventarios': 'Direito das Sucessões (inventário, partilha, herança)',
     'civel': 'Direito Civil (responsabilidade civil, contratos, danos)',
+    'jec': 'Juizado Especial Cível — Lei 9.099/95 (causas até 40 salários mínimos, rito sumaríssimo)',
   };
 
   // ─── Conhecimento especialista por área ─────────────────────────────────
@@ -261,6 +262,20 @@ VOCÊ É ESPECIALISTA EM DIREITO CIVIL E JUIZADOS ESPECIAIS CÍVEIS (JEC). Domin
 - Correção monetária e juros: Tema 112 STJ, taxa SELIC (CC art. 406 c/c EC 113/2021)
 - Valor da causa no JEC limita a condenação (art. 3º §3º Lei 9.099/95) — atenção ao teto`,
   };
+  ESPECIALISTA['jec'] = `
+VOCÊ É ESPECIALISTA EM JUIZADOS ESPECIAIS CÍVEIS (Lei 9.099/95). Domine e aplique com rigor:
+- Competência: causas até 40 salários mínimos (art. 3º); acima de 20 SM exige advogado (art. 9º); renúncia ao excedente do teto (art. 3º §3º)
+- VEDAÇÕES no JEC: perícia complexa, causas de estado/capacidade, alimentos, falência, fazenda pública (usar JEFaz — Lei 12.153/09)
+- Rito: petição inicial simplificada (art. 14 — pedido e fundamentos de forma simples), audiência de conciliação obrigatória, revelia pela ausência do réu (art. 20)
+- Sem custas nem honorários em 1º grau (art. 54-55); custas apenas no recurso inominado
+- Recurso inominado: prazo 10 dias, preparo obrigatório em 48h sob pena de deserção (art. 42), julgamento por Turma Recursal
+- Embargos de declaração interrompem prazo (art. 50, redação Lei 13.105/15)
+- Enunciados FONAJE: aplicar os consolidados (citação por WhatsApp, dispensa de contador, limites de prova testemunhal — 3 por fato)
+- Execução no próprio JEC (art. 52-53): penhora online, multa do art. 523 CPC aplicável (Enunciado 97 FONAJE)
+- CDC combinado: inversão do ônus (art. 6º VIII), responsabilidade objetiva (art. 14), repetição em dobro (art. 42 § único)
+- Dano moral no JEC: pedido líquido recomendado, Súmula 385/STJ (negativação preexistente), Tema 929/STJ (in re ipsa na inscrição indevida)
+- Linguagem: peça DIRETA e OBJETIVA — juízes de JEC valorizam concisão; evitar dissertações doutrinárias longas`;
+
   const conhecimentoEspecialista = ESPECIALISTA[area] || ESPECIALISTA['civel'];
 
   const nomePeca = TIPOS[tipo_peca] || tipo_peca;
@@ -579,6 +594,7 @@ router.get('/:id/download/docx', authMiddleware, async (req, res) => {
 });
 
 export default router;
+
 
 
 

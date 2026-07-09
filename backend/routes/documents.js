@@ -9,6 +9,7 @@ import { generateDocument, buildFillValues } from '../services/docgen.js';
 import { sendDocumentEmail } from '../services/email.js';
 import { sincronizarAutentique } from '../services/autentique-sync.js';
 import { createDocument, buildSigners } from '../services/autentique.js';
+import { Resend } from 'resend';
 import { notifyDocumentoGerado } from '../services/evolution.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -236,20 +237,42 @@ router.post('/:id/resend', async (req, res) => {
   const pdfPath = doc.pdf_filename ? path.join(PDFS_DIR, doc.pdf_filename) : null;
 
   try {
-    const result = await sendDocumentEmail({
+    if (!process.env.RESEND_API_KEY) {
+      return res.status(500).json({ error: 'RESEND_API_KEY não configurada no servidor' });
+    }
+
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const attachments = [];
+    if (pdfPath && fs.existsSync(pdfPath)) {
+      attachments.push({
+        filename: `${doc.template_name}.pdf`,
+        content: fs.readFileSync(pdfPath).toString('base64'),
+      });
+    }
+
+    const { error } = await resend.emails.send({
+      from: 'Machado Advocacia <docjuris@advmachado.adv.br>',
       to: email,
-      clientName: doc.client_name,
-      documentName: doc.template_name,
-      pdfPath,
-      fromName: req.user.name,
+      subject: `Documento: ${doc.template_name}`,
+      html: `
+        <p>Olá, ${doc.client_name}!</p>
+        <p>Segue em anexo o documento <strong>${doc.template_name}</strong>.</p>
+        <p>Qualquer dúvida, estamos à disposição.</p>
+        <p>Atenciosamente,<br>Dra. Andreia Machado<br>OAB/RJ 218.586 | OAB/SP 532.488</p>
+      `,
+      attachments,
     });
+
+    if (error) {
+      return res.status(500).json({ error: 'Erro do Resend: ' + (error.message || JSON.stringify(error)) });
+    }
 
     db.prepare(`
       UPDATE documents SET status = 'enviado', email_sent = 1, email_sent_to = ?, email_sent_at = datetime('now')
       WHERE id = ?
     `).run(email, doc.id);
 
-    res.json({ success: true, email_preview: result.previewUrl });
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao reenviar: ' + err.message });
   }
@@ -274,3 +297,4 @@ router.delete('/:id', (req, res) => {
 });
 
 export default router;
+

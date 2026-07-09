@@ -24,7 +24,8 @@ const AREAS = [
 
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 const MAX_SIZE_MB = 10;
-const MAX_FILES = 5;
+const MAX_TOTAL_MB = 20; // limite da API de IA (requisição máx ~32MB em base64)
+const MAX_FILES = 20;
 
 function formatBytes(bytes) {
   if (bytes < 1024) return bytes + ' B';
@@ -62,11 +63,17 @@ function UploadZone({ arquivosNovos, setArquivosNovos, uploading }) {
     const novos = validarArquivos(Array.from(files));
     setArquivosNovos(prev => {
       const total = prev.length + novos.length;
-      if (total > MAX_FILES) {
-        toast.error(`Máximo de ${MAX_FILES} arquivos permitidos`);
-        return [...prev, ...novos.slice(0, MAX_FILES - prev.length)];
+      let lista = total > MAX_FILES
+        ? [...prev, ...novos.slice(0, MAX_FILES - prev.length)]
+        : [...prev, ...novos];
+      if (total > MAX_FILES) toast.error(`Máximo de ${MAX_FILES} arquivos permitidos`);
+
+      // Limite total combinado (a API de IA aceita ~32MB por requisição)
+      const totalBytes = lista.reduce((s, f) => s + f.size, 0);
+      if (totalBytes > MAX_TOTAL_MB * 1024 * 1024) {
+        toast.error(`Tamanho total excede ${MAX_TOTAL_MB}MB. Remova alguns arquivos ou use versões comprimidas.`);
       }
-      return [...prev, ...novos];
+      return lista;
     });
   }
 
@@ -83,7 +90,7 @@ function UploadZone({ arquivosNovos, setArquivosNovos, uploading }) {
   return (
     <div>
       <label style={lbl}>
-        DOCUMENTOS COMPROBATÓRIOS (opcional — máx. {MAX_FILES} arquivos, PDF/JPG/PNG, {MAX_SIZE_MB}MB cada)
+        DOCUMENTOS COMPROBATÓRIOS (opcional — máx. {MAX_FILES} arquivos, PDF/JPG/PNG, {MAX_SIZE_MB}MB cada, {MAX_TOTAL_MB}MB no total)
       </label>
 
       {/* Zona de drop */}
@@ -419,13 +426,13 @@ export default function Peticao() {
           {/* Documentos já na pasta do cliente como contexto adicional */}
           {clientFiles.length > 0 && (
             <div>
-              <label style={lbl}>INCLUIR DOCUMENTOS EXISTENTES DO CLIENTE (máx. 3)</label>
+              <label style={lbl}>INCLUIR DOCUMENTOS EXISTENTES DO CLIENTE (máx. 20)</label>
               <div style={{ display:'flex', flexDirection:'column', gap:6, background:'#f8f7f3', borderRadius:8, padding:10 }}>
                 {clientFiles.map(f => (
                   <label key={f.id} style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontSize:13 }}>
                     <input type="checkbox"
                       checked={arquivosContexto.includes(f.filename)}
-                      disabled={!arquivosContexto.includes(f.filename) && arquivosContexto.length >= 3}
+                      disabled={!arquivosContexto.includes(f.filename) && arquivosContexto.length >= 20}
                       onChange={e => {
                         if (e.target.checked) setArquivosContexto(prev => [...prev, f.filename]);
                         else setArquivosContexto(prev => prev.filter(x => x !== f.filename));
@@ -620,5 +627,6 @@ export default function Peticao() {
 
 const lbl = { fontSize:11, fontWeight:600, color:'#6b6b68', display:'block', marginBottom:4 };
 const inp = { width:'100%', boxSizing:'border-box', padding:'9px 12px', border:'1px solid #d0cfc7', borderRadius:8, fontSize:13, background:'#fff' };
+
 
 

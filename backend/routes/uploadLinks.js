@@ -381,7 +381,7 @@ async function generateDocumentsAutomatically(db, link) {
             signers,
           });
  
-          db.prepare(`UPDATE documents SET zapsign_doc_token = ? WHERE id = ?`)
+          db.prepare(`UPDATE documents SET zapsign_doc_token = ?, status = 'aguardando_assinatura' WHERE id = ?`)
             .run(autDoc.id, documentId);
  
           console.log(`✅ Enviado para Autentique: ${autDoc.id}`);
@@ -463,3 +463,4 @@ router.post('/:token/sign', async (req, res) => {
  
 export default router;
  
+

@@ -45,6 +45,94 @@ router.get('/gerar/status/:jobId', authMiddleware, (req, res) => {
   res.json(job);
 });
 
+// POST /api/peticao/perguntar — responde dúvidas sobre a peça SEM modificá-la (job assíncrono)
+router.post('/perguntar', authMiddleware, (req, res) => {
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'API de IA não configurada' });
+
+  const { conteudo, pergunta } = req.body;
+  if (!conteudo || !pergunta) return res.status(400).json({ error: 'conteudo e pergunta são obrigatórios' });
+
+  const jobId = 'pg_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  jobs.set(jobId, { status: 'processing', createdAt: Date.now() });
+
+  perguntarPeticaoAsync(jobId, req.body).catch(e => {
+    console.error('Erro job pergunta:', e);
+    jobs.set(jobId, { status: 'error', error: e.message, createdAt: Date.now() });
+  });
+
+  res.json({ jobId });
+});
+
+// Responde a pergunta em background
+async function perguntarPeticaoAsync(jobId, body) {
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  const { conteudo, pergunta } = body;
+
+  const systemPrompt = `Você é a Dra. Andreia Machado, advogada experiente (OAB/RJ 218.586, OAB/SP 532.488), explicando o raciocínio jurídico de uma peça processual para uma colega.
+
+REGRAS:
+1. Responda a pergunta de forma DIRETA e objetiva — vá direto ao ponto na primeira frase.
+2. Explique o fundamento jurídico: qual lei, súmula ou estratégia justifica o ponto questionado.
+3. Se a pergunta envolver jurisprudência ou norma que você não tem certeza, use web search para verificar antes de afirmar.
+4. Seja honesta sobre incertezas: se um ponto da peça for discutível ou tiver riscos, diga claramente.
+5. Se identificar um ERRO real na peça ao analisar a pergunta, aponte-o e sugira a correção (mas NÃO reescreva a peça — apenas explique).
+6. Responda em português, tom profissional entre colegas, sem juridiquês desnecessário.
+7. Máximo ~300 palavras, a menos que a pergunta exija mais profundidade.`;
+
+  const userPrompt = `PEÇA PROCESSUAL EM ANÁLISE:
+
+${conteudo}
+
+═══════════════════════════════════════
+PERGUNTA DA ADVOGADA:
+${pergunta}
+═══════════════════════════════════════
+
+Responda a pergunta sobre a peça acima. NÃO reescreva a peça — apenas explique, fundamente ou aponte riscos.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2000,
+        system: systemPrompt,
+        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      jobs.set(jobId, { status: 'error', error: 'Erro na API de IA: ' + err, createdAt: Date.now() });
+      return;
+    }
+
+    const data = await response.json();
+    const resposta = (data.content || [])
+      .filter(b => b.type === 'text')
+      .map(b => b.text)
+      .join('\n\n');
+
+    if (!resposta || resposta.trim().length < 10) {
+      jobs.set(jobId, { status: 'error', error: 'A IA não retornou resposta. Tente novamente.', createdAt: Date.now() });
+      return;
+    }
+
+    jobs.set(jobId, { status: 'done', resposta, createdAt: Date.now() });
+
+  } catch(e) {
+    console.error('Erro pergunta petição:', e);
+    jobs.set(jobId, { status: 'error', error: e.message, createdAt: Date.now() });
+  }
+}
+
 // POST /api/peticao/ajustar — ajusta peça existente conforme instruções (job assíncrono)
 router.post('/ajustar', authMiddleware, (req, res) => {
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
@@ -594,6 +682,7 @@ router.get('/:id/download/docx', authMiddleware, async (req, res) => {
 });
 
 export default router;
+
 
 
 

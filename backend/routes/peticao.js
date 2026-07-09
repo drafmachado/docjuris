@@ -5,15 +5,51 @@ import { authMiddleware } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// POST /api/peticao/gerar
-router.post('/gerar', authMiddleware, async (req, res) => {
+// ─── Job store em memória para geração assíncrona ───────────────────────────
+// Cloudflare corta requisições > 100s; a geração leva 60-120s.
+// Solução: POST retorna jobId na hora, frontend consulta status a cada 3s.
+const jobs = new Map();
+
+function cleanupJobs() {
+  const now = Date.now();
+  for (const [id, job] of jobs) {
+    if (now - job.createdAt > 15 * 60 * 1000) jobs.delete(id); // 15 min
+  }
+}
+setInterval(cleanupJobs, 5 * 60 * 1000);
+
+// POST /api/peticao/gerar — inicia geração assíncrona, retorna jobId imediatamente
+router.post('/gerar', authMiddleware, (req, res) => {
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
   if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'API de IA não configurada' });
 
-  const db = getDB();
-  const { client_id, processo_id, tipo_peca, area, fatos, pedidos, tribunal } = req.body;
-
+  const { tipo_peca, fatos } = req.body;
   if (!tipo_peca || !fatos) return res.status(400).json({ error: 'tipo_peca e fatos são obrigatórios' });
+
+  const jobId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  jobs.set(jobId, { status: 'processing', createdAt: Date.now() });
+
+  // Dispara a geração em background — NÃO await
+  gerarPeticaoAsync(jobId, req.body, req.user).catch(e => {
+    console.error('Erro job petição:', e);
+    jobs.set(jobId, { status: 'error', error: e.message, createdAt: Date.now() });
+  });
+
+  res.json({ jobId });
+});
+
+// GET /api/peticao/gerar/status/:jobId — consulta status da geração
+router.get('/gerar/status/:jobId', authMiddleware, (req, res) => {
+  const job = jobs.get(req.params.jobId);
+  if (!job) return res.status(404).json({ error: 'Job não encontrado ou expirado' });
+  res.json(job);
+});
+
+// Função que executa a geração de fato (em background)
+async function gerarPeticaoAsync(jobId, body, user) {
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  const db = getDB();
+  const { client_id, processo_id, tipo_peca, area, fatos, pedidos, tribunal } = body;
 
   // Buscar dados do cliente
   const cliente = client_id ? db.prepare('SELECT * FROM clients WHERE id = ?').get(client_id) : null;
@@ -118,7 +154,7 @@ INSTRUÇÕES DE EXECUÇÃO:
 7. Comece diretamente com o endereçamento da peça.`;
 
   // Ler arquivos de contexto do cliente (PDFs, imagens)
-  const { arquivos_contexto, arquivos_base64 } = req.body;
+  const { arquivos_contexto, arquivos_base64 } = body;
   const { readFileSync, existsSync } = await import('fs');
   const { join } = await import('path');
   const storageDir = process.env.NODE_ENV === 'production' ? '/app/storage' : join(process.cwd(), '../storage');
@@ -178,7 +214,8 @@ INSTRUÇÕES DE EXECUÇÃO:
 
     if (!response1.ok) {
       const err = await response1.text();
-      return res.status(500).json({ error: 'Erro na API de IA: ' + err });
+      jobs.set(jobId, { status: 'error', error: 'Erro na API de IA: ' + err, createdAt: Date.now() });
+      return;
     }
 
     const data1 = await response1.json();
@@ -205,10 +242,10 @@ INSTRUÇÕES DE EXECUÇÃO:
       console.error('Petição vazia. stop_reason:', data1.stop_reason,
         '| tipos de bloco:', (data1.content || []).map(b => b.type).join(', '),
         '| erro:', data1.error ? JSON.stringify(data1.error) : 'nenhum');
-      return res.status(500).json({
-        error: 'A IA não retornou conteúdo. Verifique se a chave da API tem web_search habilitado. (' +
-               (data1.stop_reason || 'sem stop_reason') + ')'
-      });
+      jobs.set(jobId, { status: 'error',
+        error: 'A IA não retornou conteúdo (' + (data1.stop_reason || 'sem stop_reason') + '). Tente novamente.',
+        createdAt: Date.now() });
+      return;
     }
 
     // Salvar na tabela peticoes se client_id informado
@@ -226,17 +263,23 @@ INSTRUÇÕES DE EXECUÇÃO:
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(client_id, processo_id||null, titulo, tipo_peca, area||'civel',
              fatos, pedidos||null, tribunal||null, textos, JSON.stringify(buscas),
-             JSON.stringify(arquivos_contexto||[]), req.user.id);
+             JSON.stringify(arquivos_contexto||[]), user.id);
       peticaoId = r2.lastInsertRowid;
     }
 
-    res.json({ conteudo: textos, buscas, peticaoId });
+    jobs.set(jobId, {
+      status: 'done',
+      conteudo: textos,
+      buscas,
+      peticaoId,
+      createdAt: Date.now(),
+    });
 
   } catch(e) {
     console.error('Erro geração petição:', e);
-    res.status(500).json({ error: e.message });
+    jobs.set(jobId, { status: 'error', error: e.message, createdAt: Date.now() });
   }
-});
+}
 
 // GET /api/peticao/historico (legado)
 router.get('/historico', authMiddleware, (req, res) => {
@@ -323,4 +366,5 @@ router.get('/:id/download/docx', authMiddleware, async (req, res) => {
 });
 
 export default router;
+
 

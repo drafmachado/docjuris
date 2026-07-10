@@ -24,12 +24,10 @@ api.interceptors.response.use(
       return Promise.reject(err);
     }
 
-    // NÃO fazer retry em rotas que criam recursos (evita duplicação).
-    // Geração de petição é cara e demorada — um retry criaria peças duplicadas.
-    const url = config.url || '';
-    const isWriteRoute =
-      config.method === 'post' &&
-      (url.includes('/peticao/gerar') || url.includes('/files'));
+    // NÃO fazer retry em NENHUMA escrita (POST/PUT/DELETE/PATCH).
+    // Retry em escrita duplica recursos: já causou 3 petições e 3 procurações
+    // idênticas com 3 envios ao Autentique. Retry só é seguro em leituras.
+    const isWriteRoute = (config.method || 'get').toLowerCase() !== 'get';
 
     // Retry automático apenas para leituras e falhas temporárias
     const isTransient =

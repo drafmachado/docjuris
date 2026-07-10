@@ -15,7 +15,7 @@ if (!EVOLUTION_URL || !EVOLUTION_KEY) {
 }
 
 // ── Enviar mensagem de texto ──────────────────────────────────────────────────
-async function sendText(phone, message) {
+export async function sendText(phone, message) {
   if (!EVOLUTION_URL || !EVOLUTION_KEY) return null;
 
   // Normalizar número: remover caracteres não numéricos

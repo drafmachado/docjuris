@@ -5,6 +5,7 @@ import { Card, Btn, Table, Tr, Td, Badge, FormField, FormGrid, EmptyState } from
 import GenerateModal from '../components/GenerateModal.jsx';
 import UploadLinkModal from '../components/UploadLinkModal.jsx';
 import api from '../utils/api.js';
+import { baixarArquivoAutenticado } from '../utils/download.js';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Upload, Trash2, Download, DollarSign, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
@@ -301,7 +302,7 @@ export default function ClientDetail() {
             <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: '#f5f5f0', borderRadius: 6, marginBottom: 6 }}>
               <span style={{ fontSize: 13, flex: 1 }}>📄 {f.original_name}</span>
               <span style={{ fontSize: 11, color: '#9a9a97' }}>{fmt(f.uploaded_at)}</span>
-              <a href={`/files/client_files/${f.filename}`} target="_blank" rel="noreferrer" style={{ color: '#185fa5' }}><Download size={14} /></a>
+              <button onClick={() => baixarArquivoAutenticado(`/files/client_files/${f.filename}`, f.original_name || f.filename)} style={{ background:'none', border:'none', cursor:'pointer', color:'#185fa5', padding:2 }}><Download size={14} /></button>
               <button onClick={() => handleDeleteFile(f.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a32d2d' }}><Trash2 size={14} /></button>
             </div>
           ))}

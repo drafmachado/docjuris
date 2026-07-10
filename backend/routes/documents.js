@@ -6,7 +6,6 @@ import { fileURLToPath } from 'url';
 import { getDB } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { generateDocument, buildFillValues } from '../services/docgen.js';
-import { sendDocumentEmail } from '../services/email.js';
 import { sincronizarAutentique } from '../services/autentique-sync.js';
 import { createDocument, buildSigners } from '../services/autentique.js';
 import { Resend } from 'resend';
@@ -143,20 +142,40 @@ router.post('/generate', async (req, res) => {
       const pdfPath = pdfFilename ? path.join(PDFS_DIR, pdfFilename) : null;
 
       try {
-        emailResult = await sendDocumentEmail({
+        if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY ausente');
+
+        const resendClient = new Resend(process.env.RESEND_API_KEY);
+        const attachments = [];
+        if (pdfPath && fs.existsSync(pdfPath)) {
+          attachments.push({
+            filename: `${template.name}.pdf`,
+            content: fs.readFileSync(pdfPath).toString('base64'),
+          });
+        }
+
+        const { data: emailData, error: emailError } = await resendClient.emails.send({
+          from: 'Machado Advocacia <docjuris@advmachado.adv.br>',
           to: recipient,
-          clientName: client.nome,
-          documentName: template.name,
-          pdfPath,
-          fromName: req.user.name,
+          subject: `Documento: ${template.name}`,
+          html: `
+            <p>Olá, ${client.nome}!</p>
+            <p>Segue em anexo o documento <strong>${template.name}</strong>.</p>
+            ${autentiqueId ? '<p>Você também receberá um email do <strong>Autentique</strong> com o link para assinatura digital.</p>' : ''}
+            <p>Qualquer dúvida, estamos à disposição.</p>
+            <p>Atenciosamente,<br>Machado Advocacia</p>
+          `,
+          attachments,
         });
+
+        if (emailError) throw new Error(emailError.message || JSON.stringify(emailError));
+        emailResult = { messageId: emailData?.id };
 
         db.prepare(`
           UPDATE documents SET email_sent = 1, email_sent_to = ?, email_sent_at = datetime('now')
           WHERE id = ?
         `).run(recipient, docId);
       } catch (emailErr) {
-        console.error('Erro ao enviar e-mail:', emailErr);
+        console.error('Erro ao enviar e-mail:', emailErr.message);
       }
     }
 

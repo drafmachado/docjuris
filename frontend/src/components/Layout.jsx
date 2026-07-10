@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
-import { LayoutDashboard, Users, FileText, FileStack, UserPlus, LogOut, Scale, Menu, X, Gavel, UserCheck, Calendar } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, FileStack, UserPlus, LogOut, Scale, Menu, X, Gavel, UserCheck, Calendar, Activity } from 'lucide-react';
 import styles from './Layout.module.css';
 
 export default function Layout() {
@@ -75,6 +75,11 @@ export default function Layout() {
           {user?.role === 'admin' && (
             <NavLink to="/users" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
               <UserPlus size={16} /> Usuários
+            </NavLink>
+          )}
+          {user?.role === 'admin' && (
+            <NavLink to="/diagnostico" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+              <Activity size={16} /> Diagnóstico
             </NavLink>
           )}
         </nav>

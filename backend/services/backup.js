@@ -33,7 +33,7 @@ export async function runBackup() {
  
     if (!fs.existsSync(DB_PATH)) {
       console.error('❌ Arquivo do banco não encontrado:', DB_PATH);
-      return;
+      return { ok: false, erro: 'Arquivo do banco não encontrado: ' + DB_PATH };
     }
  
     const auth = getAuth();
@@ -52,7 +52,7 @@ export async function runBackup() {
  
     if (existing.data.files.length > 0) {
       console.log(`ℹ️  Backup do dia ${timestamp} já existe. Pulando.`);
-      return;
+      return { ok: true, detalhe: `Backup do dia ${timestamp} já existe` };
     }
  
     // Faz upload do banco
@@ -88,8 +88,11 @@ export async function runBackup() {
       }
     }
  
+    return { ok: true, detalhe: `${response.data.name} (${(Number(response.data.size)/1024/1024).toFixed(1)}MB)` };
+
   } catch (err) {
     console.error('❌ Erro no backup:', err.message);
+    return { ok: false, erro: err.message };
   }
 }
  

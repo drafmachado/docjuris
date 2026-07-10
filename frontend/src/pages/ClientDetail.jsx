@@ -277,6 +277,13 @@ export default function ClientDetail() {
             <FormField label="Estado"><input value={form.estado || ''} onChange={e => set('estado', e.target.value)} /></FormField>
             <FormField label="Email"><input type="email" value={form.email || ''} onChange={e => set('email', e.target.value)} /></FormField>
             <FormField label="Telefone"><input value={form.telefone || ''} onChange={e => set('telefone', e.target.value)} /></FormField>
+            <FormField label="Advogada(s) atuante(s)" col={2}>
+              <select value={form.advogadas || 'ambas'} onChange={e => set('advogadas', e.target.value)}>
+                <option value="ambas">⚖️ Ambas — Dra. Andreia e Dra. Thaísa</option>
+                <option value="andreia">Dra. Andreia Machado (sozinha)</option>
+                <option value="thaisa">Dra. Thaísa de Souza (sozinha)</option>
+              </select>
+            </FormField>
             <FormField label="Observações" col={2}><textarea value={form.observacoes || ''} onChange={e => set('observacoes', e.target.value)} /></FormField>
           </FormGrid>
           <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>

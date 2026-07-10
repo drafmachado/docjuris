@@ -4,7 +4,7 @@ import { Topbar, Btn, Modal, FormGrid, FormField } from '../components/UI.jsx';
 import SearchableSelect from '../components/SearchableSelect.jsx';
 import api from '../utils/api.js';
 import toast from 'react-hot-toast';
-import { Plus, ChevronLeft, ChevronRight, Trash2, CalendarClock, User, Flag } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Trash2, CalendarClock, User, Flag, Workflow } from 'lucide-react';
 
 const COLUNAS = [
   { id: 'a_fazer',      titulo: '📋 A Fazer',       cor: '#185fa5' },
@@ -23,6 +23,10 @@ export default function Tarefas() {
   const [filtroResp, setFiltroResp] = useState('');
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ titulo: '', descricao: '', responsavel_id: '', client_id: '', prioridade: 'normal', data_limite: '' });
+  const [fluxos, setFluxos] = useState([]);
+  const [modalFluxo, setModalFluxo] = useState(false);
+  const [formFluxo, setFormFluxo] = useState({ fluxo_id: '', client_id: '', responsavel_id: '' });
+  const [aplicando, setAplicando] = useState(false);
 
   const load = () => {
     const q = filtroResp ? `?responsavel_id=${filtroResp}` : '';
@@ -33,6 +37,7 @@ export default function Tarefas() {
   useEffect(() => {
     api.get('/users').then(r => setUsers(r.data || [])).catch(() => {});
     api.get('/clients').then(r => setClientes(r.data || [])).catch(() => {});
+    api.get('/tarefas/fluxos').then(r => setFluxos(r.data || [])).catch(() => {});
   }, []);
 
   async function criar() {
@@ -44,6 +49,19 @@ export default function Tarefas() {
       setForm({ titulo: '', descricao: '', responsavel_id: '', client_id: '', prioridade: 'normal', data_limite: '' });
       load();
     } catch(e) { toast.error(e.response?.data?.error || 'Erro ao criar'); }
+  }
+
+  async function aplicarFluxo() {
+    if (!formFluxo.fluxo_id) return toast.error('Escolha um fluxo');
+    setAplicando(true);
+    try {
+      const r = await api.post('/tarefas/aplicar-fluxo', formFluxo);
+      toast.success(`${r.data.criadas} tarefas criadas com prazos automáticos!`);
+      setModalFluxo(false);
+      setFormFluxo({ fluxo_id: '', client_id: '', responsavel_id: '' });
+      load();
+    } catch(e) { toast.error(e.response?.data?.error || 'Erro ao aplicar fluxo'); }
+    finally { setAplicando(false); }
   }
 
   async function mover(t, direcao) {
@@ -70,6 +88,7 @@ export default function Tarefas() {
           <option value="">Todas as responsáveis</option>
           {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
         </select>
+        <Btn variant="outline" onClick={() => setModalFluxo(true)} style={{ marginRight: 8 }}><Workflow size={14} /> Aplicar fluxo padrão</Btn>
         <Btn onClick={() => setModal(true)}><Plus size={14} /> Nova Tarefa</Btn>
       </Topbar>
 
@@ -130,6 +149,42 @@ export default function Tarefas() {
           );
         })}
       </div>
+
+      <Modal open={modalFluxo} onClose={() => setModalFluxo(false)} title="Aplicar fluxo padrão de tarefas"
+        footer={<><Btn variant="outline" onClick={() => setModalFluxo(false)}>Cancelar</Btn><Btn onClick={aplicarFluxo} disabled={aplicando}>{aplicando ? 'Criando tarefas...' : 'Criar todas as tarefas'}</Btn></>}>
+        <FormGrid cols={1}>
+          <FormField label="Fluxo *">
+            <select value={formFluxo.fluxo_id} onChange={e => setFormFluxo(f => ({ ...f, fluxo_id: e.target.value }))}>
+              <option value="">Escolha o tipo de caso...</option>
+              {fluxos.map(fl => <option key={fl.id} value={fl.id}>{fl.nome} ({fl.itens.length} tarefas)</option>)}
+            </select>
+          </FormField>
+          {formFluxo.fluxo_id && (
+            <div style={{ background: '#f8f7f3', borderRadius: 8, padding: '10px 14px', fontSize: 12 }}>
+              <p style={{ margin: '0 0 6px', fontWeight: 700, color: '#0d2340' }}>Tarefas que serão criadas:</p>
+              {(fluxos.find(fl => String(fl.id) === String(formFluxo.fluxo_id))?.itens || []).map((it, i) => (
+                <div key={i} style={{ padding: '3px 0', color: '#374151' }}>
+                  {i + 1}. {it.titulo} <span style={{ color: '#9a9a97' }}>— prazo: {it.dias} dias</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <FormField label="Cliente (opcional)">
+            <SearchableSelect
+              value={formFluxo.client_id}
+              onChange={val => setFormFluxo(f => ({ ...f, client_id: val }))}
+              options={clientes.map(cl => ({ value: cl.id, label: cl.nome }))}
+              placeholder="Vincular todas ao cliente"
+            />
+          </FormField>
+          <FormField label="Responsável por todas">
+            <select value={formFluxo.responsavel_id} onChange={e => setFormFluxo(f => ({ ...f, responsavel_id: e.target.value }))}>
+              <option value="">Eu mesma</option>
+              {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+          </FormField>
+        </FormGrid>
+      </Modal>
 
       <Modal open={modal} onClose={() => setModal(false)} title="Nova Tarefa"
         footer={<><Btn variant="outline" onClick={() => setModal(false)}>Cancelar</Btn><Btn onClick={criar}>Criar tarefa</Btn></>}>

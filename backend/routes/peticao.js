@@ -369,7 +369,23 @@ VOCÊ É ESPECIALISTA EM JUIZADOS ESPECIAIS CÍVEIS (Lei 9.099/95). Domine e apl
   const nomePeca = TIPOS[tipo_peca] || tipo_peca;
   const nomeArea = AREAS[area] || area || 'Direito Civil';
 
-  const systemPrompt = `Você é a Dra. Andreia Machado, advogada especialista em ${nomeArea}, inscrita na OAB/RJ 218.586 e OAB/SP 532.488, com escritório em São Paulo e Rio de Janeiro.
+  // Identidade conforme advogadas atuantes no cadastro do cliente
+  const modoAdv = (cliente && cliente.advogadas) || 'ambas';
+  const IDENTIDADES = {
+    'andreia': 'Você é a Dra. Andreia Ferreira Machado, advogada (OAB/RJ 218.586, OAB/SP 532.488). A peça é subscrita APENAS por você.',
+    'thaisa':  'Você é a Dra. Thaisa de Souza da Silva, advogada (OAB/RJ 226.810). A peça é subscrita APENAS por você.',
+    'ambas':   'Você redige em nome das advogadas Dra. Andreia Ferreira Machado (OAB/RJ 218.586, OAB/SP 532.488) e Dra. Thaisa de Souza da Silva (OAB/RJ 226.810), que atuam em conjunto. A peça é subscrita pelas DUAS.',
+  };
+  const ASSINATURAS_PECA = {
+    'andreia': 'ANDREIA FERREIRA MACHADO\nOAB/RJ 218.586 | OAB/SP 532.488',
+    'thaisa':  'THAISA DE SOUZA DA SILVA\nOAB/RJ 226.810',
+    'ambas':   'ANDREIA FERREIRA MACHADO\nOAB/RJ 218.586 | OAB/SP 532.488\n\nTHAISA DE SOUZA DA SILVA\nOAB/RJ 226.810',
+  };
+
+  const systemPrompt = `${IDENTIDADES[modoAdv]} Especialista em ${nomeArea}, com escritório em São Paulo e Rio de Janeiro.
+
+AO FINAL DA PEÇA, o bloco de assinatura deve ser exatamente:
+${ASSINATURAS_PECA[modoAdv]}
 
 ${conhecimentoEspecialista}
 

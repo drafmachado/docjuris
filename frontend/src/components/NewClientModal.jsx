@@ -9,7 +9,7 @@ export default function NewClientModal({ open, onClose, onSuccess }) {
   const [files, setFiles] = useState([]);
   const [extracting, setExtracting] = useState(false);
   const [extracted, setExtracted] = useState(null);
-  const [form, setForm] = useState({ nome: '', nacionalidade: '', cpf: '', rg: '', orgao_expedidor: '', endereco: '', cidade: '', estado: '', email: '', telefone: '', observacoes: '' });
+  const [form, setForm] = useState({ nome: '', nacionalidade: '', cpf: '', rg: '', orgao_expedidor: '', endereco: '', cidade: '', estado: '', email: '', telefone: '', observacoes: '', advogadas: 'ambas' });
   const [saving, setSaving] = useState(false);
 
   const set = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
@@ -46,6 +46,7 @@ export default function NewClientModal({ open, onClose, onSuccess }) {
         email: data.email || '',
         telefone: data.telefone || '',
         observacoes: data.observacoes || '',
+        advogadas: data.advogadas || 'ambas',
       });
       toast.success('Dados extraídos com sucesso!');
     } catch (err) {
@@ -72,7 +73,7 @@ export default function NewClientModal({ open, onClose, onSuccess }) {
 
   const handleClose = () => {
     setFiles([]); setExtracted(null); setSaving(false); setExtracting(false);
-    setForm({ nome: '', nacionalidade: '', cpf: '', rg: '', orgao_expedidor: '', endereco: '', cidade: '', estado: '', email: '', telefone: '', observacoes: '' });
+    setForm({ nome: '', nacionalidade: '', cpf: '', rg: '', orgao_expedidor: '', endereco: '', cidade: '', estado: '', email: '', telefone: '', observacoes: '', advogadas: 'ambas' });
     onClose();
   };
 
@@ -127,6 +128,13 @@ export default function NewClientModal({ open, onClose, onSuccess }) {
         <FormField label="Estado"><input value={form.estado} onChange={e => set('estado', e.target.value)} placeholder="RJ" /></FormField>
         <FormField label="Email"><input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="cliente@email.com" /></FormField>
         <FormField label="Telefone"><input value={form.telefone} onChange={e => set('telefone', e.target.value)} placeholder="(21) 99999-9999" /></FormField>
+        <FormField label="Advogada(s) atuante(s) *" col={2}>
+          <select value={form.advogadas} onChange={e => set('advogadas', e.target.value)}>
+            <option value="ambas">⚖️ Ambas — Dra. Andreia e Dra. Thaísa (atuação conjunta)</option>
+            <option value="andreia">Dra. Andreia Machado (sozinha)</option>
+            <option value="thaisa">Dra. Thaísa de Souza (sozinha)</option>
+          </select>
+        </FormField>
         <FormField label="Observações" col={2}><textarea value={form.observacoes} onChange={e => set('observacoes', e.target.value)} placeholder="Observações sobre o cliente..." /></FormField>
       </FormGrid>
     </Modal>

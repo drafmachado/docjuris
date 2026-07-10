@@ -150,4 +150,145 @@ router.get('/:id/andamentos', async (req, res) => {
   res.json(resultado);
 });
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// IMPORTAÇÃO EM LOTE — cola lista de números CNJ, busca no DataJud e cadastra
+// ═══════════════════════════════════════════════════════════════════════════
+const importJobs = new Map();
+setInterval(() => {
+  const agora = Date.now();
+  for (const [k, v] of importJobs) {
+    if (agora - v.createdAt > 30 * 60 * 1000) importJobs.delete(k);
+  }
+}, 5 * 60 * 1000);
+
+// Inferir tribunal a partir do número CNJ: NNNNNNN-DD.AAAA.J.TR.OOOO
+function inferirTribunal(numeroLimpo) {
+  // posições: 13 = J (segmento), 14-15 = TR
+  const j = numeroLimpo[13];
+  const tr = numeroLimpo.slice(14, 16);
+  if (j === '8') {
+    const UFS = { '19': 'TJRJ', '26': 'TJSP', '13': 'TJMG', '05': 'TJBA', '06': 'TJCE',
+                  '07': 'TJDFT', '08': 'TJES', '09': 'TJGO', '16': 'TJPR', '21': 'TJRS',
+                  '24': 'TJSC', '17': 'TJPE' };
+    return UFS[tr] || null;
+  }
+  if (j === '4') return 'TRF' + Number(tr);
+  if (j === '5') return 'TRT' + Number(tr);
+  if (j === '3') return 'STJ';
+  return null;
+}
+
+// Extrair números CNJ de texto livre (com ou sem pontuação)
+function extrairNumerosCNJ(texto) {
+  const matches = texto.match(/\d{7}[-.]?\d{2}[.]?\d{4}[.]?\d[.]?\d{2}[.]?\d{4}/g) || [];
+  const limpos = matches.map(m => m.replace(/\D/g, '')).filter(n => n.length === 20);
+  return [...new Set(limpos)];
+}
+
+// Cliente especial de triagem (processos importados sem cliente identificado)
+function getClienteTriagem(db, userId) {
+  let triagem = db.prepare(`SELECT id FROM clients WHERE nome = '⚠️ TRIAGEM — Processos importados'`).get();
+  if (!triagem) {
+    const r = db.prepare(`
+      INSERT INTO clients (nome, observacoes, advogadas, created_by)
+      VALUES ('⚠️ TRIAGEM — Processos importados',
+              'Cliente técnico: processos importados em lote aguardando vinculação ao cliente correto. Edite cada processo e mova para o cliente verdadeiro.',
+              'ambas', ?)
+    `).run(userId);
+    triagem = { id: r.lastInsertRowid };
+  }
+  return triagem.id;
+}
+
+// POST /api/processos/importar-lote — inicia o job
+router.post('/importar-lote', (req, res) => {
+  const { texto } = req.body;
+  if (!texto || !texto.trim()) return res.status(400).json({ error: 'Cole a lista de números de processo' });
+
+  const numeros = extrairNumerosCNJ(texto);
+  if (numeros.length === 0) return res.status(400).json({ error: 'Nenhum número CNJ válido encontrado no texto' });
+  if (numeros.length > 200) return res.status(400).json({ error: 'Máximo de 200 processos por importação' });
+
+  const jobId = 'imp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  importJobs.set(jobId, {
+    status: 'processing', total: numeros.length, processados: 0,
+    criados: 0, existentes: 0, erros: [], createdAt: Date.now(),
+  });
+
+  importarLoteAsync(jobId, numeros, req.user.id).catch(e => {
+    const job = importJobs.get(jobId);
+    if (job) { job.status = 'error'; job.erroGeral = e.message; }
+  });
+
+  res.json({ jobId, total: numeros.length });
+});
+
+// GET /api/processos/importar-lote/status/:jobId
+router.get('/importar-lote/status/:jobId', (req, res) => {
+  const job = importJobs.get(req.params.jobId);
+  if (!job) return res.status(404).json({ error: 'Job não encontrado ou expirado' });
+  res.json(job);
+});
+
+async function importarLoteAsync(jobId, numeros, userId) {
+  const db = getDB();
+  const job = importJobs.get(jobId);
+  const triagemId = getClienteTriagem(db, userId);
+
+  for (const numero of numeros) {
+    try {
+      // Dedupe: já existe? (compara só dígitos)
+      const existe = db.prepare(`
+        SELECT id FROM processos
+        WHERE REPLACE(REPLACE(REPLACE(numero_cnj, '.', ''), '-', ''), ' ', '') = ?
+      `).get(numero);
+
+      if (existe) {
+        job.existentes++;
+      } else {
+        const tribunal = inferirTribunal(numero);
+        if (!tribunal) {
+          job.erros.push({ numero, erro: 'Tribunal não identificado pelo número' });
+        } else {
+          const dados = await consultarProcesso(numero, tribunal);
+
+          // Formatar número CNJ padrão
+          const fmt = `${numero.slice(0,7)}-${numero.slice(7,9)}.${numero.slice(9,13)}.${numero.slice(13,14)}.${numero.slice(14,16)}.${numero.slice(16,20)}`;
+
+          if (dados.erro) {
+            // Cadastra mesmo assim (sem dados do DataJud) para não perder o processo
+            db.prepare(`
+              INSERT INTO processos (client_id, numero_cnj, tribunal, observacoes, status, created_by)
+              VALUES (?, ?, ?, ?, 'ativo', ?)
+            `).run(triagemId, fmt, tribunal, 'Importado em lote. DataJud: ' + dados.erro, userId);
+            job.criados++;
+            job.erros.push({ numero: fmt, erro: 'Cadastrado, mas DataJud: ' + dados.erro });
+          } else {
+            const r = db.prepare(`
+              INSERT INTO processos (client_id, numero_cnj, tribunal, tipo, observacoes, status, created_by)
+              VALUES (?, ?, ?, ?, ?, 'ativo', ?)
+            `).run(triagemId, fmt, tribunal, dados.classe || null,
+                   [dados.assunto, 'Importado em lote'].filter(Boolean).join(' | '), userId);
+
+            // Popular andamentos iniciais (baseline para o monitoramento)
+            const insAnd = db.prepare('INSERT INTO andamentos (processo_id, data, descricao) VALUES (?, ?, ?)');
+            for (const m of (dados.movimentos || [])) {
+              insAnd.run(r.lastInsertRowid, m.data, m.descricao);
+            }
+            job.criados++;
+          }
+        }
+      }
+    } catch (e) {
+      job.erros.push({ numero, erro: e.message });
+    }
+
+    job.processados++;
+    await new Promise(r => setTimeout(r, 350)); // gentileza com a API do CNJ
+  }
+
+  job.status = 'done';
+}
+
 export default router;

@@ -93,6 +93,14 @@ router.post('/rodar', async (req, res) => {
     const r = await fetch('https://api.resend.com/domains', {
       headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}` },
     });
+    if (r.status === 401) {
+      const body = await r.json().catch(() => ({}));
+      // Chave "sending only" não pode listar domínios mas É válida para enviar
+      if ((body.message || '').toLowerCase().includes('restricted')) {
+        return 'Chave válida (permissão: apenas envio de emails)';
+      }
+      throw new Error('Chave da API inválida (401)');
+    }
     if (!r.ok) throw new Error(`Resend respondeu ${r.status}`);
     const data = await r.json();
     const verificados = (data.data || []).filter(d => d.status === 'verified').map(d => d.name);
@@ -102,10 +110,11 @@ router.post('/rodar', async (req, res) => {
 
   // ─── 6. WhatsApp (Evolution) ───
   resultados.whatsapp = await tempo(async () => {
-    const url = process.env.EVOLUTION_API_URL;
+    let url = process.env.EVOLUTION_API_URL;
     const key = process.env.EVOLUTION_API_KEY;
     const inst = process.env.EVOLUTION_INSTANCE;
     if (!url || !key || !inst) throw new Error('Variáveis Evolution não configuradas');
+    if (!/^https?:\/\//.test(url)) url = 'https://' + url; // env sem protocolo
     const r = await fetch(`${url}/instance/connectionState/${inst}`, {
       headers: { 'apikey': key },
     });
@@ -183,6 +192,15 @@ router.post('/rodar', async (req, res) => {
     saudavel: ok === total,
     resultados,
   });
+});
+
+// POST /api/diagnostico/backup-agora — executa o backup na hora e mostra o resultado real
+router.post('/backup-agora', async (req, res) => {
+  const { runBackup } = await import('../services/backup.js');
+  const resultado = await runBackup();
+  if (!resultado) return res.status(500).json({ error: 'Backup não retornou resultado' });
+  if (!resultado.ok) return res.status(500).json({ error: resultado.erro });
+  res.json({ ok: true, detalhe: resultado.detalhe });
 });
 
 export default router;

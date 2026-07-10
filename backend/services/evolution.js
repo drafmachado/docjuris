@@ -114,5 +114,4 @@ export async function notifyDocumentoAssinado({ clienteNome, clienteTelefone, te
   await Promise.allSettled(tasks);
 }
 
-// Função genérica para uso futuro
-export { sendText };
+

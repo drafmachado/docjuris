@@ -20,6 +20,41 @@ const MAPA = [
   { padrao: /honor[áa]rio/i,                     arquivo: 'Contrato_Honorarios_v2.docx' },
 ];
 
+const CAMPOS_SISTEMA = new Set([
+  'qualificacao_advogadas', 'QUALIFICACAO_ADVOGADAS',
+  'tratamento_outorgadas',
+  'assinatura_advogadas', 'ASSINATURA_ADVOGADAS',
+  'nome_advogadas', 'NOME_ADVOGADAS',
+  'data_atual', 'DATA_ATUAL',
+  'cidade_estado', 'CIDADE_ESTADO',
+  'local_data', 'LOCAL_DATA',
+]);
+
+// Remove campos de sistema da lista de manuais em todos os templates (roda em todo boot)
+export function limparCamposSistema() {
+  try {
+    const db = getDB();
+    const templates = db.prepare('SELECT id, auto_fields, manual_fields FROM templates').all();
+    for (const t of templates) {
+      let manual = [];
+      let auto = [];
+      try { manual = JSON.parse(t.manual_fields || '[]'); } catch {}
+      try { auto = JSON.parse(t.auto_fields || '[]'); } catch {}
+
+      const manualLimpo = manual.filter(m => !CAMPOS_SISTEMA.has(m.key || m));
+      const movidos = manual.filter(m => CAMPOS_SISTEMA.has(m.key || m)).map(m => m.key || m);
+      if (movidos.length === 0) continue;
+
+      const autoNovo = [...new Set([...auto, ...movidos])];
+      db.prepare('UPDATE templates SET manual_fields = ?, auto_fields = ? WHERE id = ?')
+        .run(JSON.stringify(manualLimpo), JSON.stringify(autoNovo), t.id);
+      console.log(`🔧 Template ${t.id}: campos de sistema movidos para auto: ${movidos.join(', ')}`);
+    }
+  } catch(e) {
+    console.error('⚠️ Limpeza de campos de sistema falhou (não crítico):', e.message);
+  }
+}
+
 export function aplicarTemplatesV2() {
   try {
     if (existsSync(MARKER)) return; // já aplicado

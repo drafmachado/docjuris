@@ -11,6 +11,8 @@ import { fileURLToPath } from 'url';
 import { initDB } from './db.js';
 import { aplicarTemplatesV2 } from './services/templates-migration.js';
 import diagnosticoRoutes from './routes/diagnostico.js';
+import portalRoutes from './routes/portal.js';
+import tarefasRoutes from './routes/tarefas.js';
 import authRoutes from './routes/auth.js';
 import clientRoutes from './routes/clients.js';
 import documentRoutes from './routes/documents.js';
@@ -107,6 +109,8 @@ app.use('/api/exclusao', exclusaoRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/peticao', peticaoRouter);
 app.use('/api/diagnostico', diagnosticoRoutes);
+app.use('/api/portal', portalRoutes);
+app.use('/api/tarefas', tarefasRoutes);
 app.use('/api/agenda', agendaRouter);
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.0.0' }));
 

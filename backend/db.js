@@ -227,6 +227,23 @@ export function initDB() {
     );
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tarefas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      titulo TEXT NOT NULL,
+      descricao TEXT,
+      client_id INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+      processo_id INTEGER REFERENCES processos(id) ON DELETE SET NULL,
+      responsavel_id INTEGER REFERENCES users(id),
+      status TEXT NOT NULL DEFAULT 'a_fazer',
+      prioridade TEXT NOT NULL DEFAULT 'normal',
+      data_limite TEXT,
+      created_by INTEGER REFERENCES users(id),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
   try { db.exec(`ALTER TABLE clients ADD COLUMN advogadas TEXT NOT NULL DEFAULT 'ambas'`); } catch {}
   try { db.exec(`ALTER TABLE documents ADD COLUMN zapsign_doc_token TEXT`); } catch {}
   try { db.exec(`ALTER TABLE documents ADD COLUMN signed_pdf_filename TEXT`); } catch {}

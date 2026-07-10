@@ -65,9 +65,9 @@ router.post('/', (req, res) => {
   if (!nome) return res.status(400).json({ error: 'Nome é obrigatório' });
 
   const result = db.prepare(`
-    INSERT INTO clients (nome, nacionalidade, cpf, rg, orgao_expedidor, endereco, cidade, estado, email, telefone, observacoes, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(nome, nacionalidade, cpf, rg, orgao_expedidor, endereco, cidade, estado, email, telefone, observacoes, req.user.id);
+    INSERT INTO clients (nome, nacionalidade, cpf, rg, orgao_expedidor, endereco, cidade, estado, email, telefone, observacoes, advogadas, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(nome, nacionalidade, cpf, rg, orgao_expedidor, endereco, cidade, estado, email, telefone, observacoes, req.body.advogadas || 'ambas', req.user.id);
 
   const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(client);
@@ -82,9 +82,10 @@ router.put('/:id', (req, res) => {
     UPDATE clients SET
       nome = ?, nacionalidade = ?, cpf = ?, rg = ?, orgao_expedidor = ?,
       endereco = ?, cidade = ?, estado = ?, email = ?, telefone = ?, observacoes = ?,
+      advogadas = COALESCE(?, advogadas),
       updated_at = datetime('now')
     WHERE id = ?
-  `).run(nome, nacionalidade, cpf, rg, orgao_expedidor, endereco, cidade, estado, email, telefone, observacoes, req.params.id);
+  `).run(nome, nacionalidade, cpf, rg, orgao_expedidor, endereco, cidade, estado, email, telefone, observacoes, req.body.advogadas || null, req.params.id);
 
   res.json({ success: true });
 });

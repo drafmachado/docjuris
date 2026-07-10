@@ -244,6 +244,59 @@ export function initDB() {
     );
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS fluxos_tarefas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome TEXT NOT NULL,
+      descricao TEXT,
+      itens TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  // Seed dos fluxos padrão (só se a tabela estiver vazia)
+  const temFluxos = db.prepare('SELECT COUNT(*) as n FROM fluxos_tarefas').get();
+  if (temFluxos.n === 0) {
+    const seedFluxo = db.prepare('INSERT INTO fluxos_tarefas (nome, descricao, itens) VALUES (?, ?, ?)');
+    seedFluxo.run(
+      '🏥 Caso novo — Plano de Saúde',
+      'Fluxo padrão para negativas de cobertura, medicamentos e procedimentos',
+      JSON.stringify([
+        { titulo: 'Coletar documentos: negativa por escrito, laudo médico, carteirinha, contrato do plano', dias: 2, prioridade: 'alta' },
+        { titulo: 'Enviar link de procuração e contrato para assinatura', dias: 2, prioridade: 'alta' },
+        { titulo: 'Notificar operadora extrajudicialmente (se cabível)', dias: 5, prioridade: 'normal' },
+        { titulo: 'Redigir petição inicial com pedido de tutela de urgência', dias: 7, prioridade: 'alta' },
+        { titulo: 'Protocolar ação e acompanhar distribuição', dias: 10, prioridade: 'alta' },
+        { titulo: 'Comunicar cliente sobre protocolo e próximos passos', dias: 11, prioridade: 'normal' },
+      ])
+    );
+    seedFluxo.run(
+      '🏛️ Caso novo — JEC Consumidor',
+      'Fluxo padrão para ações de consumo no Juizado Especial Cível',
+      JSON.stringify([
+        { titulo: 'Coletar provas: prints, contratos, faturas, protocolos de atendimento', dias: 3, prioridade: 'alta' },
+        { titulo: 'Enviar link de procuração e contrato para assinatura', dias: 2, prioridade: 'alta' },
+        { titulo: 'Verificar teto de 40 SM e competência do JEC', dias: 3, prioridade: 'normal' },
+        { titulo: 'Redigir petição inicial (JEC — direta e objetiva)', dias: 7, prioridade: 'alta' },
+        { titulo: 'Protocolar e anotar data da audiência de conciliação', dias: 10, prioridade: 'alta' },
+        { titulo: 'Preparar cliente para a audiência de conciliação', dias: 20, prioridade: 'normal' },
+      ])
+    );
+    seedFluxo.run(
+      '📜 Caso novo — Inventário',
+      'Fluxo padrão para abertura de inventário judicial ou extrajudicial',
+      JSON.stringify([
+        { titulo: 'Coletar certidão de óbito, documentos do falecido e dos herdeiros', dias: 5, prioridade: 'alta' },
+        { titulo: 'Levantar bens, dívidas e verificar existência de testamento', dias: 10, prioridade: 'alta' },
+        { titulo: 'Verificar viabilidade de inventário extrajudicial (consenso + capazes)', dias: 10, prioridade: 'normal' },
+        { titulo: 'Enviar procurações de todos os herdeiros para assinatura', dias: 7, prioridade: 'alta' },
+        { titulo: 'Calcular e orientar recolhimento do ITCMD', dias: 20, prioridade: 'alta' },
+        { titulo: 'Protocolar abertura do inventário (prazo legal: 2 meses do óbito)', dias: 30, prioridade: 'alta' },
+        { titulo: 'Preparar primeiras declarações', dias: 45, prioridade: 'normal' },
+      ])
+    );
+  }
+
   try { db.exec(`ALTER TABLE clients ADD COLUMN advogadas TEXT NOT NULL DEFAULT 'ambas'`); } catch {}
   try { db.exec(`ALTER TABLE documents ADD COLUMN zapsign_doc_token TEXT`); } catch {}
   try { db.exec(`ALTER TABLE documents ADD COLUMN signed_pdf_filename TEXT`); } catch {}

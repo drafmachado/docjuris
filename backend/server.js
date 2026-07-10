@@ -9,6 +9,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { initDB } from './db.js';
+import { aplicarTemplatesV2 } from './services/templates-migration.js';
 import authRoutes from './routes/auth.js';
 import clientRoutes from './routes/clients.js';
 import documentRoutes from './routes/documents.js';
@@ -129,6 +130,7 @@ app.get('*', (req, res) => {
 });
 
 initDB();
+aplicarTemplatesV2();
 
 app.listen(PORT, () => {
   console.log(`✅ DocJuris API rodando em http://localhost:${PORT}`);

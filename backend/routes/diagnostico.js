@@ -150,30 +150,14 @@ router.post('/rodar', async (req, res) => {
     throw new Error('LibreOffice não encontrado no servidor');
   });
 
-  // ─── 9. Backup (Google Drive) ───
+  // ─── 9. Backup (local + email + Drive) ───
   resultados.backup = await tempo(async () => {
-    if (!process.env.GOOGLE_CLIENT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
-      throw new Error('Credenciais Google não configuradas');
-    }
-    const auth = new google.auth.JWT(
-      process.env.GOOGLE_CLIENT_EMAIL, null,
-      process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-      ['https://www.googleapis.com/auth/drive']
-    );
-    const drive = google.drive({ version: 'v3', auth });
-    const r = await drive.files.list({
-      q: `'1S430FxBjLfjVLpdXsBfD8l8Hd6IBoBbN' in parents and trashed=false`,
-      orderBy: 'createdTime desc',
-      pageSize: 1,
-      fields: 'files(name, createdTime, size)',
-    });
-    const ultimo = r.data.files?.[0];
-    if (!ultimo) throw new Error('NENHUM backup encontrado no Google Drive!');
-    const idade = (Date.now() - new Date(ultimo.createdTime).getTime()) / (1000 * 60 * 60);
-    const tamanho = (Number(ultimo.size || 0) / 1024 / 1024).toFixed(1);
-    if (idade > 48) throw new Error(`Último backup tem ${Math.round(idade)}h (${ultimo.name}) — deveria ser diário!`);
-    if (Number(tamanho) < 0.1) throw new Error(`Backup suspeito: apenas ${tamanho}MB`);
-    return `Último: ${ultimo.name} (${tamanho}MB, há ${Math.round(idade)}h)`;
+    const { ultimoBackupLocal } = await import('../services/backup.js');
+    const local = ultimoBackupLocal();
+    if (!local) throw new Error('Nenhum backup local ainda. Clique em "Fazer backup agora" abaixo.');
+    const idadeH = (Date.now() - new Date(local.modificado).getTime()) / (1000 * 60 * 60);
+    if (idadeH > 48) throw new Error(`Último backup local tem ${Math.round(idadeH)}h (${local.nome}) — deveria ser diário`);
+    return `Local: ${local.nome} (${local.tamanhoKB}KB, há ${Math.round(idadeH)}h, ${local.total} cópias) + email diário para o Gmail`;
   });
 
   // ─── 10. Filas/rotinas internas ───

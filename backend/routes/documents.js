@@ -99,7 +99,7 @@ router.post('/generate', async (req, res) => {
       const fileToSign = (pdfPathForSign && fs.existsSync(pdfPathForSign)) ? pdfPathForSign : docxPath;
 
       // D1: monta a lista de signatários conforme o template
-      const signers = buildSigners(template_id, client.email);
+      const signers = buildSigners(template_id, client.email, client.advogadas || 'ambas');
 
       const autDoc = await createDocument({
         name: `${template.name} - ${client.nome}`,
@@ -222,7 +222,7 @@ router.get('/:id/download/signed', (req, res) => {
 router.post('/:id/resend', async (req, res) => {
   const db = getDB();
   const doc = db.prepare(`
-    SELECT d.*, c.nome as client_name, c.email as client_email, t.name as template_name
+    SELECT d.*, c.nome as client_name, c.email as client_email, c.advogadas as client_advogadas, t.name as template_name
     FROM documents d
     JOIN clients c ON c.id = d.client_id
     JOIN templates t ON t.id = d.template_id
@@ -282,7 +282,7 @@ router.post('/:id/resend', async (req, res) => {
 router.post('/:id/send-signature', async (req, res) => {
   const db = getDB();
   const doc = db.prepare(`
-    SELECT d.*, c.nome as client_name, c.email as client_email, t.name as template_name
+    SELECT d.*, c.nome as client_name, c.email as client_email, c.advogadas as client_advogadas, t.name as template_name
     FROM documents d
     JOIN clients c ON c.id = d.client_id
     JOIN templates t ON t.id = d.template_id
@@ -300,7 +300,7 @@ router.post('/:id/send-signature', async (req, res) => {
                      : (docxPath && fs.existsSync(docxPath)) ? docxPath : null;
     if (!fileToSign) return res.status(400).json({ error: 'Arquivo do documento não encontrado no servidor. Gere o documento novamente.' });
 
-    const signers = buildSigners(doc.template_id, doc.client_email);
+    const signers = buildSigners(doc.template_id, doc.client_email, doc.client_advogadas || 'ambas');
     const autDoc = await createDocument({
       name: `${doc.template_name} - ${doc.client_name}`,
       filePath: fileToSign,

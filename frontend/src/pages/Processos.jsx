@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Gavel, ChevronRight, Calendar, AlertCircle } from 'lucide-react';
+import { Plus, Search, Gavel, ChevronRight, Calendar, AlertCircle, UploadCloud, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import SearchableSelect from '../components/SearchableSelect.jsx';
 
@@ -18,6 +18,41 @@ export default function Processos() {
   const [clientes, setClientes] = useState([]);
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [textoImport, setTextoImport] = useState('');
+  const [importJob, setImportJob] = useState(null); // progresso
+  const [importando, setImportando] = useState(false);
+
+  async function iniciarImportacao() {
+    if (!textoImport.trim()) return toast.error('Cole a lista de números de processo');
+    setImportando(true);
+    try {
+      const r = await api.post('/processos/importar-lote', { texto: textoImport });
+      const jobId = r.data.jobId;
+      toast.success(`${r.data.total} número(s) identificado(s). Importando...`);
+
+      // Polling do progresso a cada 2s
+      const poll = setInterval(async () => {
+        try {
+          const s = await api.get(`/processos/importar-lote/status/${jobId}`);
+          setImportJob(s.data);
+          if (s.data.status === 'done' || s.data.status === 'error') {
+            clearInterval(poll);
+            setImportando(false);
+            if (s.data.status === 'done') {
+              toast.success(`Importação concluída: ${s.data.criados} criado(s), ${s.data.existentes} já existiam`);
+              load();
+            } else {
+              toast.error('Importação falhou: ' + (s.data.erroGeral || 'erro desconhecido'));
+            }
+          }
+        } catch(e) { clearInterval(poll); setImportando(false); }
+      }, 2000);
+    } catch(e) {
+      setImportando(false);
+      toast.error(e.response?.data?.error || 'Erro ao iniciar importação');
+    }
+  }
   const [form, setForm] = useState({ client_id: '', numero_cnj: '', vara: '', comarca: '', tribunal: '', tipo: '', polo_ativo: '', polo_passivo: '', observacoes: '' });
   const [prazosProximos, setPrazosProximos] = useState([]);
   const [filtroStatus, setFiltroStatus] = useState('ativo');
@@ -131,9 +166,14 @@ export default function Processos() {
           <h1 style={{ margin: 0, fontSize: '24px', color: '#0f2035', fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, letterSpacing: '-0.02em' }}>Processos</h1>
           <p style={{ margin: '4px 0 0', color: '#6b7280', fontSize: '14px' }}>{processos.length} processo(s) cadastrado(s)</p>
         </div>
-        <button onClick={() => setShowModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#0f2035', color: 'white', border: 'none', borderRadius: '11px', padding: '11px 18px', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}>
-          <Plus size={16} /> Novo Processo
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button onClick={() => { setShowImport(true); setImportJob(null); setTextoImport(''); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', color: '#0f2035', border: '1.5px solid #0f2035', borderRadius: '11px', padding: '11px 18px', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}>
+            <UploadCloud size={16} /> Importar em lote
+          </button>
+          <button onClick={() => setShowModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#0f2035', color: 'white', border: 'none', borderRadius: '11px', padding: '11px 18px', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}>
+            <Plus size={16} /> Novo Processo
+          </button>
+        </div>
       </div>
 
       {/* Filtro de status */}
@@ -242,6 +282,82 @@ export default function Processos() {
               <button onClick={() => setShowModal(false)} style={{ padding: '10px 20px', border: '1px solid #d1d5db', borderRadius: '8px', background: 'white', cursor: 'pointer', fontSize: '14px' }}>Cancelar</button>
               <button onClick={handleSubmit} style={{ padding: '10px 20px', background: '#0f2035', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}>Salvar</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Modal de importação em lote ─── */}
+      {showImport && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,32,53,0.55)', zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ background: 'white', borderRadius: '16px', width: '100%', maxWidth: '560px',
+            maxHeight: '90vh', overflow: 'auto', padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <h2 style={{ margin: 0, fontSize: '18px', color: '#0f2035' }}>Importar processos em lote</h2>
+              <button onClick={() => !importando && setShowImport(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+            </div>
+
+            {!importJob && (
+              <>
+                <p style={{ fontSize: '13px', color: '#6b7280', margin: '0 0 12px', lineHeight: 1.5 }}>
+                  Cole abaixo a lista de números de processo (exportada do TJRJ, TJSP ou qualquer tribunal).
+                  Pode colar texto bagunçado — o sistema extrai os números CNJ automaticamente,
+                  ignora os que já estão cadastrados, busca os dados no DataJud e cadastra tudo
+                  no cliente <strong>"⚠️ TRIAGEM"</strong> para você vincular depois.
+                </p>
+                <textarea
+                  value={textoImport}
+                  onChange={e => setTextoImport(e.target.value)}
+                  rows={10}
+                  placeholder={'0801234-56.2024.8.19.0001\n0807654-32.2023.8.26.0100\n...\n(um por linha ou texto corrido — tanto faz)'}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', border: '1px solid #e5e7eb',
+                    borderRadius: '10px', fontSize: '13px', fontFamily: 'monospace', marginBottom: 12 }}
+                />
+                <button onClick={iniciarImportacao} disabled={importando}
+                  style={{ width: '100%', padding: '12px', background: importando ? '#ccc' : '#0f2035',
+                    color: 'white', border: 'none', borderRadius: '11px', fontWeight: 700, fontSize: '14px',
+                    cursor: importando ? 'not-allowed' : 'pointer' }}>
+                  {importando ? 'Iniciando...' : 'Importar processos'}
+                </button>
+              </>
+            )}
+
+            {importJob && (
+              <div>
+                <div style={{ background: '#f8f7f3', borderRadius: '10px', padding: '14px', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: 8 }}>
+                    <span style={{ fontWeight: 700, color: '#0f2035' }}>
+                      {importJob.status === 'done' ? '✅ Concluído' : '⏳ Importando...'}
+                    </span>
+                    <span>{importJob.processados}/{importJob.total}</span>
+                  </div>
+                  <div style={{ background: '#e5e7eb', borderRadius: '10px', height: '10px', overflow: 'hidden' }}>
+                    <div style={{ background: '#0f2035', height: '100%', borderRadius: '10px',
+                      width: `${(importJob.processados / importJob.total) * 100}%`, transition: 'width 0.5s' }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: '12px', color: '#374151' }}>
+                    <span>✅ Criados: <strong>{importJob.criados}</strong></span>
+                    <span>↩️ Já existiam: <strong>{importJob.existentes}</strong></span>
+                    <span>⚠️ Avisos: <strong>{importJob.erros?.length || 0}</strong></span>
+                  </div>
+                </div>
+
+                {importJob.erros?.length > 0 && (
+                  <div style={{ maxHeight: 160, overflow: 'auto', fontSize: '11.5px', color: '#854f0b',
+                    background: '#fffbeb', borderRadius: '8px', padding: '10px 12px', marginBottom: 12 }}>
+                    {importJob.erros.map((e, i) => <div key={i} style={{ padding: '2px 0' }}>{e.numero}: {e.erro}</div>)}
+                  </div>
+                )}
+
+                {importJob.status === 'done' && (
+                  <button onClick={() => setShowImport(false)}
+                    style={{ width: '100%', padding: '12px', background: '#0f2035', color: 'white',
+                      border: 'none', borderRadius: '11px', fontWeight: 700, cursor: 'pointer' }}>
+                    Fechar
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -4,7 +4,8 @@
 
 import axios from 'axios';
 
-const EVOLUTION_URL      = process.env.EVOLUTION_API_URL;
+const _rawUrl = process.env.EVOLUTION_API_URL || '';
+const EVOLUTION_URL      = _rawUrl && !/^https?:\/\//.test(_rawUrl) ? 'https://' + _rawUrl : _rawUrl;
 const EVOLUTION_KEY      = process.env.EVOLUTION_API_KEY;
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'docjuris';
 const ANDREIA_WA         = process.env.ANDREIA_WHATSAPP || '5511967351199';
@@ -113,5 +114,4 @@ export async function notifyDocumentoAssinado({ clienteNome, clienteTelefone, te
 
   await Promise.allSettled(tasks);
 }
-
 

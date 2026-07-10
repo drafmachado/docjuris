@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Modal, Btn, SectionTitle, FormField, FormGrid, Badge } from './UI.jsx';
 import api from '../utils/api.js';
+import { abrirArquivoAutenticado } from '../utils/download.js';
 import SearchableSelect from './SearchableSelect.jsx';
 import toast from 'react-hot-toast';
 import { FileText, CheckCircle, Loader } from 'lucide-react';
@@ -127,7 +128,7 @@ export default function GenerateModal({ open, onClose, preselectedClient, onSucc
         </>
       ) : step === 'done' ? (
         <>
-          {result?.pdf_url && <Btn variant="outline" onClick={() => window.open(result.pdf_url)}>Baixar PDF</Btn>}
+          {result?.pdf_url && <Btn variant="outline" onClick={() => abrirArquivoAutenticado(result.pdf_url)}>Baixar PDF</Btn>}
           <Btn onClick={onClose}>Concluir</Btn>
         </>
       ) : null}

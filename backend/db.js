@@ -227,6 +227,7 @@ export function initDB() {
     );
   `);
 
+  try { db.exec(`ALTER TABLE clients ADD COLUMN advogadas TEXT NOT NULL DEFAULT 'ambas'`); } catch {}
   try { db.exec(`ALTER TABLE documents ADD COLUMN zapsign_doc_token TEXT`); } catch {}
   try { db.exec(`ALTER TABLE documents ADD COLUMN signed_pdf_filename TEXT`); } catch {}
   try { db.exec(`ALTER TABLE documents ADD COLUMN signed_at TEXT`); } catch {}

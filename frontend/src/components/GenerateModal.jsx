@@ -68,7 +68,7 @@ export default function GenerateModal({ open, onClose, preselectedClient, onSucc
 
     try {
       const res = await api.post('/documents/generate', {
-        client_id: parseInt(clientId),
+        client_id: parseInt(clientId, { timeout: 120000 }),
         template_id: parseInt(templateId),
         manual_values: manualValues,
         send_email: sendEmail,

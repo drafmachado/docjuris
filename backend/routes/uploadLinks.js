@@ -374,7 +374,7 @@ async function generateDocumentsAutomatically(db, link) {
         try {
           const docxPath = path.join(storageDir, 'pdfs', docxFilename);
           // D1: signatários conforme o template (4/7 = cliente+Andreia; 5/6 = só cliente)
-          const signers = buildSigners(templateId, client.email);
+          const signers = buildSigners(templateId, client.email, client.advogadas || 'ambas');
           const autDoc = await createDocument({
             name: `${template.name} - ${client.nome}`,
             filePath: docxPath,

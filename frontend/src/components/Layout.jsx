@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
-import { LayoutDashboard, Users, FileText, FileStack, UserPlus, LogOut, Scale, Menu, X, Gavel, UserCheck, Calendar, Activity } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, FileStack, UserPlus, LogOut, Scale, Menu, X, Gavel, UserCheck, Calendar, Activity, ListTodo } from 'lucide-react';
 import styles from './Layout.module.css';
 
 export default function Layout() {
@@ -50,6 +50,10 @@ export default function Layout() {
           </NavLink>
           <NavLink to="/identificar-clientes" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
             <UserCheck size={16} /> Identificar Clientes
+          </NavLink>
+
+          <NavLink to="/tarefas" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+            <ListTodo size={16} /> Tarefas
           </NavLink>
 
           <span className={styles.navSection}>IA Jurídica</span>

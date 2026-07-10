@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, Topbar, Btn, Table, Tr, Td, Badge, EmptyState } from '../components/UI.jsx';
 import GenerateModal from '../components/GenerateModal.jsx';
 import api from '../utils/api.js';
+import { abrirArquivoAutenticado } from '../utils/download.js';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -91,9 +92,8 @@ export function Documents() {
                       </button>
                     )}
                     {d.pdf_filename && (
-                      <a href={`/files/pdfs/${d.pdf_filename}`} target="_blank" rel="noreferrer"
-                        onClick={e => e.stopPropagation()}
-                        style={{ color: '#185fa5', fontSize: 12 }}>PDF</a>
+                      <button onClick={e => { e.stopPropagation(); abrirArquivoAutenticado(`/files/pdfs/${d.pdf_filename}`); }}
+                        style={{ background:'none', border:'none', cursor:'pointer', color:'#185fa5', fontSize:12, textDecoration:'underline', padding:0 }}>PDF</button>
                     )}
                     <button onClick={e => handleResend(d.id, e)}
                       title="Reenvia o PDF por email comum (não é o pedido de assinatura)"

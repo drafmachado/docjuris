@@ -27,6 +27,45 @@ function dataExtenso() {
   return `${d.getDate()} de ${meses[d.getMonth()]} de ${d.getFullYear()}`;
 }
 
+// ─── Campos dinâmicos das advogadas atuantes (cadastro do cliente) ──────────
+const QUALIF = {
+  andreia: 'ANDREIA FERREIRA MACHADO, brasileira, casada, inscrita na OAB/RJ sob o número 218.586 e na OAB/SP sob o número 532.488',
+  thaisa:  'THAISA DE SOUZA DA SILVA, brasileira, solteira, inscrita na OAB/RJ sob o número 226.810',
+};
+const ESCRITORIO = ', com escritório na Geminiano de Góis, nº 350 – Freguesia – Rio de Janeiro/RJ';
+
+function advogadasFields(client) {
+  const modo = client.advogadas || 'ambas';
+  let qualificacao, nomes, assinaturas, tratamento;
+
+  if (modo === 'andreia') {
+    qualificacao = QUALIF.andreia + ESCRITORIO + '.';
+    nomes = 'ANDREIA FERREIRA MACHADO';
+    assinaturas = 'Contratada: ______________________________________\nANDREIA FERREIRA MACHADO';
+    tratamento = 'a outorgada, concedendo-lhe';
+  } else if (modo === 'thaisa') {
+    qualificacao = QUALIF.thaisa + ESCRITORIO + '.';
+    nomes = 'THAISA DE SOUZA DA SILVA';
+    assinaturas = 'Contratada: ______________________________________\nTHAISA DE SOUZA DA SILVA';
+    tratamento = 'a outorgada, concedendo-lhe';
+  } else {
+    qualificacao = QUALIF.andreia + ', e ' + QUALIF.thaisa + ', ambas' + ESCRITORIO + '.';
+    nomes = 'ANDREIA FERREIRA MACHADO e THAISA DE SOUZA DA SILVA';
+    assinaturas = 'Contratadas: ______________________________________\nANDREIA FERREIRA MACHADO\n\n______________________________________\nTHAISA DE SOUZA DA SILVA';
+    tratamento = 'as outorgadas, concedendo-lhes';
+  }
+
+  return {
+    'qualificacao_advogadas': qualificacao,
+    'QUALIFICACAO_ADVOGADAS': qualificacao,
+    'nome_advogadas':         nomes,
+    'NOME_ADVOGADAS':         nomes,
+    'assinatura_advogadas':   assinaturas,
+    'ASSINATURA_ADVOGADAS':   assinaturas,
+    'tratamento_outorgadas':  tratamento,
+  };
+}
+
 // Estados por extenso (UF → nome completo)
 const ESTADOS = {
   AC:'Acre', AL:'Alagoas', AP:'Amapá', AM:'Amazonas', BA:'Bahia', CE:'Ceará',
@@ -259,6 +298,7 @@ export function buildFillValues(client, manualValues) {
     'DATA_EXTENSO':        dataExtenso(),
     'local_data':          localData(client),
     'LOCAL_DATA':          localData(client),
+    ...advogadasFields(client),
   };
 
   return { ...clientFields, ...manualValues };

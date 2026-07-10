@@ -14,7 +14,7 @@ if (!AUTENTIQUE_API_TOKEN) {
 // Templates 5 e 6: só o cliente assina
 // Templates 4 e 7: cliente + Dra. Andreia (cliente assina primeiro)
 // Outros / desconhecidos: só o cliente (comportamento padrão seguro)
-export function buildSigners(templateId, clientEmail) {
+export function buildSigners(templateId, clientEmail, advogadas = 'ambas') {
   // IMPORTANTE: para a auto-assinatura funcionar, o email da Andreia DEVE ser
   // o mesmo da conta dona do token da API do Autentique (fmachado.andreia@gmail.com).
   // O signDocument só assina pela conta titular do token. (doc oficial Autentique)
@@ -31,12 +31,16 @@ export function buildSigners(templateId, clientEmail) {
     ];
   }
 
-  // Cliente + Andreia (cliente assina primeiro)
+  // Cliente + advogada(s) atuante(s) — conforme cadastro do cliente (cliente assina primeiro)
   if (id === 4 || id === 7) {
-    return [
-      { email: clientEmail,   action: 'SIGN' },
-      { email: ANDREIA_EMAIL, action: 'SIGN' },
-    ];
+    const signers = [{ email: clientEmail, action: 'SIGN' }];
+    if (advogadas === 'ambas' || advogadas === 'andreia') {
+      signers.push({ email: ANDREIA_EMAIL, action: 'SIGN' });
+    }
+    if (advogadas === 'ambas' || advogadas === 'thaisa') {
+      signers.push({ email: THAISA_EMAIL, action: 'SIGN' });
+    }
+    return signers;
   }
 
   // Casos especiais futuros: cliente + Andreia + Thaisa

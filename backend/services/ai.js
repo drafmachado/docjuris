@@ -164,14 +164,23 @@ Responda APENAS com JSON válido:
   });
  
   const text = response.content.map(b => b.text || '').join('');
+  let resultado;
   try {
-    return JSON.parse(text.replace(/```json|```/g, '').trim());
+    resultado = JSON.parse(text.replace(/```json|```/g, '').trim());
   } catch {
-    // Fallback: todos como manuais
-    return {
+    resultado = {
       auto_fields: [],
       manual_fields: placeholders.map(p => ({ key: p, label: p, type: 'text' }))
     };
   }
+
+  // Forçar campos de sistema para auto, independente da classificação da IA
+  const setSistema = new Set(CAMPOS_SISTEMA);
+  resultado.manual_fields = (resultado.manual_fields || []).filter(m => !setSistema.has(m.key));
+  const autoSet = new Set(resultado.auto_fields || []);
+  for (const p of placeholders) if (setSistema.has(p)) autoSet.add(p);
+  resultado.auto_fields = [...autoSet];
+
+  return resultado;
 }
  

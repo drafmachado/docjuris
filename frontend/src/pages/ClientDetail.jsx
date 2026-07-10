@@ -12,6 +12,13 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const statusColor = s => s === 'enviado' ? 'green' : s === 'erro' ? 'red' : 'blue';
+
+// Estado real da assinatura (Autentique)
+function assinaturaInfo(d) {
+  if (d.status === 'assinado' || d.signed_pdf_filename) return { label: '✓ Assinado', color: 'green', enviado: true };
+  if (d.zapsign_doc_token) return { label: 'Aguardando assinatura', color: 'blue', enviado: true };
+  return { label: 'Não enviado', color: 'red', enviado: false };
+}
 const fmt = d => { try { return format(new Date(d), 'dd/MM/yyyy HH:mm', { locale: ptBR }); } catch { return d; } };
 
 const inp = { width:'100%', boxSizing:'border-box', padding:'9px 12px', border:'1px solid #d0cfc7', borderRadius:8, fontSize:14 };
@@ -108,6 +115,21 @@ export default function ClientDetail() {
     try { const r = await api.get(`/honorarios?client_id=${id}`); setHonorarios(r.data); } catch {}
   };
   useEffect(() => { if (tab === 'fin') loadHonorarios(); }, [tab, id]);
+
+  const [enviandoAssinatura, setEnviandoAssinatura] = useState(null);
+  const handleSendSignature = async (docId) => {
+    setEnviandoAssinatura(docId);
+    const toastId = toast.loading('Enviando para o Autentique...');
+    try {
+      await api.post(`/documents/${docId}/send-signature`);
+      toast.success('Enviado! O cliente receberá o email de assinatura.', { id: toastId });
+      load();
+    } catch(err) {
+      toast.error(err.response?.data?.error || 'Erro ao enviar para assinatura', { id: toastId });
+    } finally {
+      setEnviandoAssinatura(null);
+    }
+  };
 
   const handleDeleteDoc = async (docId, docName) => {
     if (!window.confirm(`Excluir documento "${docName}"? Esta ação não pode ser desfeita.`)) return;
@@ -224,14 +246,24 @@ export default function ClientDetail() {
 
       {tab === 'docs' && (
         <Card>
-          <Table headers={['Documento', 'Gerado em', 'Por', 'Status', 'Ações']}>
+          <Table headers={['Documento', 'Gerado em', 'Por', 'Assinatura (Autentique)', 'Ações']}>
             {(client.documents || []).map(d => (
               <Tr key={d.id}>
                 <Td>{d.template_name}</Td>
                 <Td muted>{fmt(d.created_at)}</Td>
                 <Td muted>{d.generated_by_name || '—'}</Td>
-                <Td><Badge color={statusColor(d.status)}>{d.status}</Badge></Td>
                 <Td>
+                  <Badge color={assinaturaInfo(d).color}>{assinaturaInfo(d).label}</Badge>
+                </Td>
+                <Td>
+                  {!assinaturaInfo(d).enviado && (
+                    <button onClick={() => handleSendSignature(d.id)}
+                      disabled={enviandoAssinatura === d.id}
+                      style={{ background: '#0d2340', color: '#fff', border: 'none', borderRadius: 6,
+                        padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600, marginRight: 8 }}>
+                      {enviandoAssinatura === d.id ? 'Enviando...' : '✍️ Enviar p/ assinatura'}
+                    </button>
+                  )}
                   {d.pdf_filename && (
                     <button onClick={() => handleViewPdf(d.id, false)}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#185fa5', fontSize: 12, marginRight: 8, textDecoration: 'underline' }}>PDF</button>

@@ -20,6 +20,21 @@ const NOMES = {
 export default function Diagnostico() {
   const [rodando, setRodando] = useState(false);
   const [relatorio, setRelatorio] = useState(null);
+  const [fazendoBackup, setFazendoBackup] = useState(false);
+
+  async function backupAgora() {
+    setFazendoBackup(true);
+    const toastId = toast.loading('Executando backup para o Google Drive...');
+    try {
+      const r = await api.post('/diagnostico/backup-agora', {}, { timeout: 120000 });
+      toast.success('Backup concluído: ' + r.data.detalhe, { id: toastId, duration: 6000 });
+      rodar(); // re-testa tudo para o card ficar verde
+    } catch(e) {
+      toast.error('Backup falhou: ' + (e.response?.data?.error || e.message), { id: toastId, duration: 10000 });
+    } finally {
+      setFazendoBackup(false);
+    }
+  }
 
   async function rodar() {
     setRodando(true);
@@ -106,6 +121,13 @@ export default function Diagnostico() {
                     color: r.ok ? '#374151' : '#a32d2d', wordBreak:'break-word' }}>
                     {r.detalhe}
                   </p>
+                  {chave === 'backup' && !r.ok && (
+                    <button onClick={backupAgora} disabled={fazendoBackup}
+                      style={{ marginTop:8, width:'100%', padding:'8px', background: fazendoBackup ? '#ccc' : '#0d2340',
+                        color:'#fff', border:'none', borderRadius:7, fontSize:12, fontWeight:700, cursor: fazendoBackup ? 'not-allowed' : 'pointer' }}>
+                      {fazendoBackup ? 'Executando backup...' : '▶ Fazer backup agora (mostra o erro real)'}
+                    </button>
+                  )}
                 </div>
               );
             })}

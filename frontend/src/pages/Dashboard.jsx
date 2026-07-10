@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { abrirArquivoAutenticado } from '../utils/download.js';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, Topbar, Btn, Table, Tr, Td, Badge, EmptyState } from '../components/UI.jsx';
 import GenerateModal from '../components/GenerateModal.jsx';
@@ -239,7 +240,7 @@ export default function Dashboard() {
               <Td muted>{fmt(d.created_at)}</Td>
               <Td><Badge color={statusColor(d.status)}>{statusLabel(d.status)}</Badge></Td>
               <Td>
-                {d.pdf_filename && <a href={`/files/pdfs/${d.pdf_filename}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#185fa5', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>PDF</a>}
+                {d.pdf_filename && <button onClick={e => { e.stopPropagation(); abrirArquivoAutenticado(`/files/pdfs/${d.pdf_filename}`); }} style={{ fontSize: 12, color: '#185fa5', background:'none', border:'none', cursor:'pointer', textDecoration:'underline', padding:0 }}>PDF</button>}
               </Td>
             </Tr>
           ))}

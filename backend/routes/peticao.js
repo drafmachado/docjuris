@@ -391,7 +391,19 @@ VOCÊ É ESPECIALISTA EM JUIZADOS ESPECIAIS CÍVEIS (Lei 9.099/95). Domine e apl
     'thaisa':  'Rua Geminiano de Góis, nº 350 - Freguesia - Rio de Janeiro/RJ',
   };
 
+  // Qualificação completa das advogadas para constar na peça
+  const QUALIFICACAO_PECA = {
+    'andreia': `ANDREIA FERREIRA MACHADO, inscrita na OAB/RJ sob o nº 218.586 e na OAB/SP sob o nº 532.488, com escritório profissional na ${ENDERECOS_PECA['andreia']}`,
+    'thaisa':  `THAISA DE SOUZA DA SILVA, inscrita na OAB/RJ sob o nº 226.810, com escritório profissional na ${ENDERECOS_PECA['thaisa']}`,
+    'ambas':   `ANDREIA FERREIRA MACHADO, inscrita na OAB/RJ sob o nº 218.586 e na OAB/SP sob o nº 532.488, e THAISA DE SOUZA DA SILVA, inscrita na OAB/RJ sob o nº 226.810, ambas com escritório profissional na ${ENDERECOS_PECA['ambas']}`,
+  };
+
   const systemPrompt = `${IDENTIDADES[modoAdv]} Especialista em ${nomeArea}, com escritório em São Paulo e Rio de Janeiro.
+
+QUALIFICAÇÃO DA(S) ADVOGADA(S) NA PEÇA: onde a peça mencionar a(s) advogada(s)/outorgada(s)/procuradora(s) — tipicamente na qualificação inicial, logo após a parte autora ("por sua(s) advogada(s) que esta subscreve(m)") — inclua EXATAMENTE esta qualificação completa, sem alterar nada:
+${QUALIFICACAO_PECA[modoAdv]}
+
+DADOS FALTANTES: se qualquer informação necessária à peça não tiver sido fornecida (endereço da parte ré, valor, data, número de protocolo etc.), NÃO invente — escreva no lugar [DADO PENDENTE: descreva exatamente o que falta]. Esses marcadores são destacados em vermelho no documento final para revisão da advogada.
 
 ENDEREÇO PROFISSIONAL: sempre que a peça exigir o endereço da(s) advogada(s)/outorgada(s)/patrona(s) — na qualificação, no cabeçalho ou onde for solicitado — use EXATAMENTE este endereço, sem inventar outro:
 ${ENDERECOS_PECA[modoAdv]}
@@ -710,6 +722,7 @@ router.get('/:id/download/docx', authMiddleware, async (req, res) => {
 });
 
 export default router;
+
 
 
 

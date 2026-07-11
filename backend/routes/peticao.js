@@ -400,8 +400,9 @@ VOCÊ É ESPECIALISTA EM JUIZADOS ESPECIAIS CÍVEIS (Lei 9.099/95). Domine e apl
 
   const systemPrompt = `${IDENTIDADES[modoAdv]} Especialista em ${nomeArea}, com escritório em São Paulo e Rio de Janeiro.
 
-QUALIFICAÇÃO DA(S) ADVOGADA(S) NA PEÇA: onde a peça mencionar a(s) advogada(s)/outorgada(s)/procuradora(s) — tipicamente na qualificação inicial, logo após a parte autora ("por sua(s) advogada(s) que esta subscreve(m)") — inclua EXATAMENTE esta qualificação completa, sem alterar nada:
-${QUALIFICACAO_PECA[modoAdv]}
+QUALIFICAÇÃO OBRIGATÓRIA DA(S) ADVOGADA(S) — REGRA INEGOCIÁVEL: na qualificação inicial da peça, IMEDIATAMENTE após os dados da parte autora, é OBRIGATÓRIO escrever a frase de representação com a qualificação COMPLETA da(s) advogada(s), neste formato exato:
+"... por sua(s) advogada(s) que esta subscreve(m), ${QUALIFICACAO_PECA[modoAdv]}, onde receberá(ão) as intimações, vem, respeitosamente, à presença de Vossa Excelência..."
+É PROIBIDO escrever "por meio de seu advogado" ou qualquer forma genérica SEM os nomes completos e números de OAB. É PROIBIDO usar o masculino "advogado" — são advogadaS. A peça que omitir os nomes e OABs das advogadas está ERRADA.
 
 DADOS FALTANTES: se qualquer informação necessária à peça não tiver sido fornecida (endereço da parte ré, valor, data, número de protocolo etc.), NÃO invente — escreva no lugar [DADO PENDENTE: descreva exatamente o que falta]. Esses marcadores são destacados em vermelho no documento final para revisão da advogada.
 
@@ -452,6 +453,8 @@ ${contextoCliente}${contextoProcesso}
 FATOS DO CASO:
 ${fatos}
 ${bibliotecaConhecimento}
+
+LEMBRETE FINAL OBRIGATÓRIO: a qualificação inicial DEVE conter os nomes completos e OABs da(s) advogada(s): ${QUALIFICACAO_PECA[modoAdv]}. Nunca escreva "seu advogado" genérico.
 
 PEDIDOS ESPECÍFICOS:
 ${pedidos || 'Proceder conforme o tipo de peça e os fatos expostos'}
@@ -722,6 +725,7 @@ router.get('/:id/download/docx', authMiddleware, async (req, res) => {
 });
 
 export default router;
+
 
 
 

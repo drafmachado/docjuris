@@ -166,7 +166,7 @@ REGRAS ABSOLUTAS:
 3. PROIBIDO inventar decisões, artigos de lei inexistentes ou fatos não informados.
 4. Se a instrução for ambígua, aplique a interpretação mais conservadora juridicamente.
 5. Responda APENAS com o texto INTEGRAL da peça revisada, do endereçamento ao final. Sem comentários, sem explicações do que mudou, sem introduções.
-6. ENDEREÇO PROFISSIONAL das advogadas: se a Dra. Andreia estiver entre as subscritas, use 'Av. Presidente Kennedy, 3700 - Boa Vista - São Caetano do Sul/SP, CEP 09.572-015'. Se apenas a Dra. Thaísa subscrever, use 'Rua Geminiano de Góis, nº 350 - Freguesia - Rio de Janeiro/RJ'. Nunca invente outro endereço.`;
+6. QUALIFICAÇÃO DAS ADVOGADAS: a qualificação inicial da peça deve conter APENAS "representado(a) por sua(s) advogada(s) que esta subscreve(m)" — sem nomes, OABs ou endereço. Nomes e OABs constam somente no bloco de assinatura final. Se a peça em revisão tiver qualificação de advogadas no início, REMOVA-A.`;
 
   const userPrompt = `PEÇA ATUAL:
 
@@ -400,14 +400,11 @@ VOCÊ É ESPECIALISTA EM JUIZADOS ESPECIAIS CÍVEIS (Lei 9.099/95). Domine e apl
 
   const systemPrompt = `${IDENTIDADES[modoAdv]} Especialista em ${nomeArea}, com escritório em São Paulo e Rio de Janeiro.
 
-QUALIFICAÇÃO OBRIGATÓRIA DA(S) ADVOGADA(S) — REGRA INEGOCIÁVEL: na qualificação inicial da peça, IMEDIATAMENTE após os dados da parte autora, é OBRIGATÓRIO escrever a frase de representação com a qualificação COMPLETA da(s) advogada(s), neste formato exato:
-"... por sua(s) advogada(s) que esta subscreve(m), ${QUALIFICACAO_PECA[modoAdv]}, onde receberá(ão) as intimações, vem, respeitosamente, à presença de Vossa Excelência..."
-É PROIBIDO escrever "por meio de seu advogado" ou qualquer forma genérica SEM os nomes completos e números de OAB. É PROIBIDO usar o masculino "advogado" — são advogadaS. A peça que omitir os nomes e OABs das advogadas está ERRADA.
+REPRESENTAÇÃO NA QUALIFICAÇÃO INICIAL — REGRA INEGOCIÁVEL: na qualificação da parte autora, após os dados do cliente, escreva APENAS a frase curta de representação:
+${modoAdv === 'ambas' ? '"... representado(a) por suas advogadas que esta subscrevem, vem, respeitosamente, à presença de Vossa Excelência..."' : '"... representado(a) por sua advogada que esta subscreve, vem, respeitosamente, à presença de Vossa Excelência..."'}
+É PROIBIDO incluir na qualificação inicial: nomes das advogadas, números de OAB, endereço do escritório ou qualquer qualificação delas. Esses dados constam SOMENTE no bloco de assinatura ao final. É PROIBIDO usar o masculino "advogado" — são advogadas.
 
 DADOS FALTANTES: se qualquer informação necessária à peça não tiver sido fornecida (endereço da parte ré, valor, data, número de protocolo etc.), NÃO invente — escreva no lugar [DADO PENDENTE: descreva exatamente o que falta]. Esses marcadores são destacados em vermelho no documento final para revisão da advogada.
-
-ENDEREÇO PROFISSIONAL: sempre que a peça exigir o endereço da(s) advogada(s)/outorgada(s)/patrona(s) — na qualificação, no cabeçalho ou onde for solicitado — use EXATAMENTE este endereço, sem inventar outro:
-${ENDERECOS_PECA[modoAdv]}
 
 AO FINAL DA PEÇA, o bloco de assinatura deve ser exatamente:
 ${ASSINATURAS_PECA[modoAdv]}
@@ -454,7 +451,7 @@ FATOS DO CASO:
 ${fatos}
 ${bibliotecaConhecimento}
 
-LEMBRETE FINAL OBRIGATÓRIO: a qualificação inicial DEVE conter os nomes completos e OABs da(s) advogada(s): ${QUALIFICACAO_PECA[modoAdv]}. Nunca escreva "seu advogado" genérico.
+LEMBRETE FINAL OBRIGATÓRIO: na qualificação inicial use APENAS a frase curta ${modoAdv === 'ambas' ? '"representado(a) por suas advogadas que esta subscrevem"' : '"representado(a) por sua advogada que esta subscreve"'} — SEM nomes, SEM OAB, SEM endereço. A qualificação completa vai apenas na assinatura final.
 
 PEDIDOS ESPECÍFICOS:
 ${pedidos || 'Proceder conforme o tipo de peça e os fatos expostos'}
@@ -632,15 +629,26 @@ router.get('/:id', authMiddleware, (req, res) => {
 });
 
 // POST /api/peticao/salvar — salvar petição na pasta do cliente
+
+// Remove qualquer conteúdo acima do endereçamento da peça (EXCELENTÍSSIMO..., EGRÉGIO...)
+// Regra do escritório: a peça salva começa direto no endereçamento ao juízo.
+function limparAcimaDoEnderecamento(texto) {
+  if (!texto) return texto;
+  const m = texto.match(/^[ \t]*(EXCELENT[ÍI]SSIM[OA]|EXM[OA]\.?|EGR[ÉE]GI[OA]|COLEND[OA]|MERIT[ÍI]SSIM[OA])/im);
+  if (!m || m.index === undefined || m.index === 0) return texto;
+  return texto.slice(m.index);
+}
+
 router.post('/salvar', authMiddleware, (req, res) => {
   const db = getDB();
   const { client_id, processo_id, titulo, tipo_peca, area, fatos, pedidos, tribunal, conteudo, buscas, arquivos_contexto } = req.body;
+  const conteudoLimpo = limparAcimaDoEnderecamento(conteudo);
   if (!client_id || !conteudo) return res.status(400).json({ error: 'client_id e conteudo são obrigatórios' });
   const r = db.prepare(`
     INSERT INTO peticoes (client_id, processo_id, titulo, tipo_peca, area, fatos, pedidos, tribunal, conteudo, buscas, arquivos_contexto, created_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(client_id, processo_id||null, titulo||'Petição', tipo_peca||'outro', area||'civel',
-         fatos||null, pedidos||null, tribunal||null, conteudo, JSON.stringify(buscas||[]),
+         fatos||null, pedidos||null, tribunal||null, conteudoLimpo, JSON.stringify(buscas||[]),
          JSON.stringify(arquivos_contexto||[]), req.user.id);
   res.json({ id: r.lastInsertRowid });
 });
@@ -651,8 +659,9 @@ router.put('/:id', authMiddleware, (req, res) => {
   const { titulo, conteudo } = req.body;
   const pet = db.prepare('SELECT id FROM peticoes WHERE id = ?').get(req.params.id);
   if (!pet) return res.status(404).json({ error: 'Petição não encontrada' });
+  const conteudoLimpo = conteudo ? limparAcimaDoEnderecamento(conteudo) : null;
   db.prepare(`UPDATE peticoes SET titulo=COALESCE(?,titulo), conteudo=COALESCE(?,conteudo), updated_at=datetime('now') WHERE id=?`)
-    .run(titulo||null, conteudo||null, req.params.id);
+    .run(titulo||null, conteudoLimpo, req.params.id);
   res.json({ ok: true });
 });
 
@@ -725,6 +734,7 @@ router.get('/:id/download/docx', authMiddleware, async (req, res) => {
 });
 
 export default router;
+
 
 
 

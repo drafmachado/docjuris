@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './hooks/useAuth.jsx';
@@ -60,10 +61,39 @@ function AppRoutes() {
   );
 }
 
+// Splash de abertura: logo clara por 2 segundos com fade suave.
+// (O splash nativo do PWA é controlado pelo sistema e não pode ser prolongado.)
+function SplashVeredo() {
+  const [visivel, setVisivel] = useState(true);
+  const [sumindo, setSumindo] = useState(false);
+
+  useEffect(() => {
+    const t1 = setTimeout(() => setSumindo(true), 2000);   // inicia fade aos 2s
+    const t2 = setTimeout(() => setVisivel(false), 2600);  // remove após o fade
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, []);
+
+  if (!visivel) return null;
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999, background: '#fbfbf9',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      opacity: sumindo ? 0 : 1, transition: 'opacity 0.6s ease',
+      pointerEvents: sumindo ? 'none' : 'auto',
+    }}>
+      <img src="/icon-512.png" alt="Veredo" style={{ width: 160, height: 160, borderRadius: 32 }} />
+      <p style={{ marginTop: 14, fontSize: 13, letterSpacing: '0.25em', color: '#c5a859', fontWeight: 700 }}>
+        VEREDO
+      </p>
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <SplashVeredo />
         <AppRoutes />
         <Toaster
           position="bottom-right"

@@ -669,6 +669,25 @@ export default function Peticao() {
                 borderRadius:10, fontSize:12, lineHeight:1.7, fontFamily:'Georgia,serif',
                 resize:'vertical', background:'#fafaf8' }}
             />
+            {/* ─── Alerta de pendências na peça ─── */}
+            {(() => {
+              const pendencias = (resultado.match(/\[[^\]]*PENDENTE[^\]]*\]/gi) || []);
+              if (pendencias.length === 0) return null;
+              return (
+                <div style={{ background:'#fef2f2', border:'2px solid #dc2626', borderRadius:10, padding:'12px 14px' }}>
+                  <p style={{ margin:'0 0 6px', fontSize:13, fontWeight:800, color:'#dc2626' }}>
+                    ⚠️ {pendencias.length} DADO(S) PENDENTE(S) NA PEÇA — revise antes de protocolar:
+                  </p>
+                  {pendencias.map((p, i) => (
+                    <p key={i} style={{ margin:'2px 0', fontSize:12.5, fontWeight:700, color:'#dc2626' }}>• {p}</p>
+                  ))}
+                  <p style={{ margin:'6px 0 0', fontSize:11, color:'#7f1d1d' }}>
+                    Esses marcadores aparecem em vermelho e negrito no Word/PDF. Complete os dados editando o texto ou peça pelo chat de ajustes abaixo.
+                  </p>
+                </div>
+              );
+            })()}
+
             {/* ─── Ajustes por comando (chat de correções) ─── */}
             <div style={{ background:'#fff', border:'1.5px solid #c5a859', borderRadius:10, padding:'12px 14px' }}>
               <p style={{ margin:'0 0 8px', fontSize:13, fontWeight:700, color:'#0d2340', display:'flex', alignItems:'center', gap:6 }}>
@@ -788,6 +807,7 @@ export default function Peticao() {
 
 const lbl = { fontSize:11, fontWeight:600, color:'#6b6b68', display:'block', marginBottom:4 };
 const inp = { width:'100%', boxSizing:'border-box', padding:'9px 12px', border:'1px solid #d0cfc7', borderRadius:8, fontSize:13, background:'#fff' };
+
 
 
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import api from '../utils/api.js';
 import toast from 'react-hot-toast';
-import { Sparkles, Copy, Download, Clock, Scale, Save, Folder, FileText, X, Upload, File, Image, Trash2, Wand2, Undo2, MessageCircleQuestion } from 'lucide-react';
+import { Sparkles, Copy, Download, Clock, Scale, Save, Folder, FileText, X, Upload, File, Image, Trash2, Wand2, Undo2, MessageCircleQuestion, Mic, MicOff } from 'lucide-react';
 import SearchableSelect from '../components/SearchableSelect.jsx';
 import { useNavigate } from 'react-router-dom';
 
@@ -185,6 +185,44 @@ export default function Peticao() {
   const [versaoAnterior, setVersaoAnterior]   = useState(null);
   const [perguntando, setPerguntando]         = useState(false);
   const [respostaIA, setRespostaIA]           = useState(null); // { pergunta, resposta }
+  const [ditando, setDitando]                 = useState(false);
+  const recognitionRef = useRef(null);
+
+  // Ditado por voz (Web Speech API do navegador — grátis, funciona no Chrome/Edge/Android)
+  function alternarDitado() {
+    if (ditando) {
+      recognitionRef.current?.stop();
+      setDitando(false);
+      return;
+    }
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error('Seu navegador não suporta ditado por voz. Use o Chrome (computador ou Android).');
+      return;
+    }
+    const rec = new SpeechRecognition();
+    rec.lang = 'pt-BR';
+    rec.continuous = true;
+    rec.interimResults = false;
+
+    rec.onresult = (event) => {
+      let textoNovo = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) textoNovo += event.results[i][0].transcript + ' ';
+      }
+      if (textoNovo) setFatos(prev => (prev ? prev.trimEnd() + ' ' : '') + textoNovo.trim() + ' ');
+    };
+    rec.onerror = (e) => {
+      if (e.error === 'not-allowed') toast.error('Permita o acesso ao microfone para ditar.');
+      setDitando(false);
+    };
+    rec.onend = () => setDitando(false);
+
+    recognitionRef.current = rec;
+    rec.start();
+    setDitando(true);
+    toast('🎤 Ditando... fale os fatos do caso. Clique de novo para parar.', { duration: 4000 });
+  }
   const [resultado, setResultado]             = useState(null);
   const [buscas, setBuscas]                   = useState([]);
   const [tokens, setTokens]                   = useState(null);
@@ -550,7 +588,17 @@ export default function Peticao() {
 
           {/* Fatos */}
           <div>
-            <label style={lbl}>FATOS DO CASO *</label>
+<div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <label style={lbl}>FATOS DO CASO *</label>
+              <button type="button" onClick={alternarDitado}
+                title={ditando ? 'Parar ditado' : 'Ditar por voz (grátis, via navegador)'}
+                style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 12px',
+                  background: ditando ? '#dc2626' : '#f0f4ff', color: ditando ? '#fff' : '#0d2340',
+                  border: ditando ? 'none' : '1px solid #c7d2fe', borderRadius:20, fontSize:11.5,
+                  fontWeight:700, cursor:'pointer' }}>
+                {ditando ? <><MicOff size={12}/> Parar</> : <><Mic size={12}/> Ditar por voz</>}
+              </button>
+            </div>
             <textarea
               placeholder={`Descreva os fatos em detalhes. Ex:\n"Cliente Maria, 65 anos, possui plano de saúde Amil há 12 anos. Em 15/05/2026, o plano negou cobertura para cirurgia de catarata bilateral, alegando ausência de cobertura. O médico Dr. João prescreveu o procedimento como urgente (CID H25.1). A negativa foi por escrito em 20/05/2026..."`}
               value={form.fatos}
@@ -807,6 +855,7 @@ export default function Peticao() {
 
 const lbl = { fontSize:11, fontWeight:600, color:'#6b6b68', display:'block', marginBottom:4 };
 const inp = { width:'100%', boxSizing:'border-box', padding:'9px 12px', border:'1px solid #d0cfc7', borderRadius:8, fontSize:13, background:'#fff' };
+
 
 
 

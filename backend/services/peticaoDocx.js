@@ -25,7 +25,7 @@ function textRun(text, opts = {}) {
 }
 
 function isPendente(text) {
-  return /\[JURISPRUDÊNCIA PENDENTE/.test(text) || /\[DADO PENDENTE/.test(text);
+  return /\[[^\]]*PENDENTE[^\]]*\]/i.test(text);
 }
 
 function parseParagraph(line) {
@@ -72,7 +72,7 @@ function parseParagraph(line) {
 
   // Quebrar linha em segmentos: **negrito**, [PENDENTE...], [Verificar: URL], texto normal
   // Regex captura cada tipo de segmento
-  const segmentRegex = /(\*\*[^*]+\*\*|\[JURISPRUDÊNCIA PENDENTE[^\]]*\]|\[DADO PENDENTE[^\]]*\]|\[Verificar:\s*https?:\/\/[^\]]+\])/g;
+  const segmentRegex = /(\*\*[^*]+\*\*|\[[^\]]*PENDENTE[^\]]*\]|\[Verificar:\s*https?:\/\/[^\]]+\])/g;
   const parts = trimmed.split(segmentRegex);
 
   const runs = [];
@@ -85,8 +85,8 @@ function parseParagraph(line) {
       continue;
     }
 
-    // [JURISPRUDÊNCIA PENDENTE...] ou [DADO PENDENTE...] — vermelho bold
-    if (/^\[JURISPRUDÊNCIA PENDENTE/.test(p) || /^\[DADO PENDENTE/.test(p)) {
+    // Qualquer [___PENDENTE___] — vermelho bold para chamar atenção
+    if (/^\[[^\]]*PENDENTE[^\]]*\]$/i.test(p)) {
       runs.push(textRun(p, { color: 'CC0000', bold: true, size: 22 }));
       continue;
     }
@@ -210,3 +210,4 @@ export async function gerarPeticaoDocx(peticao, cliente) {
 
   return Packer.toBuffer(doc);
 }
+

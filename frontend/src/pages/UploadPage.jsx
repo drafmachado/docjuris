@@ -21,6 +21,9 @@ export default function UploadPage() {
 
   // Dados de contato do cliente
   const [email, setEmail] = useState('');
+  const [estadoCivil, setEstadoCivil] = useState('');
+  const [profissao, setProfissao] = useState('');
+  const [nacionalidade, setNacionalidade] = useState('brasileiro(a)');
   const [phone, setPhone] = useState('');
   const [contactSaved, setContactSaved] = useState(false);
   const [savingContact, setSavingContact] = useState(false);
@@ -52,7 +55,7 @@ export default function UploadPage() {
     if (!phoneOk) return setContactError('Informe o telefone com DDD (ex: 11912345678).');
     setSavingContact(true);
     try {
-      await publicApi.post(`/upload-links/${token}/contact`, { email, phone: phone.replace(/\D/g,'') });
+      await publicApi.post(`/upload-links/${token}/contact`, { email, phone: phone.replace(/\D/g,''), estado_civil: estadoCivil, profissao, nacionalidade });
       setContactSaved(true);
     } catch {
       setContactError('Erro ao salvar. Tente novamente.');
@@ -195,6 +198,38 @@ export default function UploadPage() {
                 value={phone}
                 onChange={e => setPhone(e.target.value)}
                 placeholder="11912345678"
+                style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0cfc7', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#6b6b68', display: 'block', marginBottom: 4 }}>ESTADO CIVIL</label>
+              <select
+                value={estadoCivil}
+                onChange={e => setEstadoCivil(e.target.value)}
+                style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0cfc7', borderRadius: 8, fontSize: 14, boxSizing: 'border-box', background: '#fff' }}
+              >
+                <option value="">Selecione...</option>
+                <option value="solteiro(a)">Solteiro(a)</option>
+                <option value="casado(a)">Casado(a)</option>
+                <option value="divorciado(a)">Divorciado(a)</option>
+                <option value="viúvo(a)">Viúvo(a)</option>
+                <option value="união estável">União estável</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#6b6b68', display: 'block', marginBottom: 4 }}>PROFISSÃO</label>
+              <input
+                value={profissao}
+                onChange={e => setProfissao(e.target.value)}
+                placeholder="Ex: Supervisor de Lojas"
+                style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0cfc7', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#6b6b68', display: 'block', marginBottom: 4 }}>NACIONALIDADE</label>
+              <input
+                value={nacionalidade}
+                onChange={e => setNacionalidade(e.target.value)}
                 style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0cfc7', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }}
               />
             </div>

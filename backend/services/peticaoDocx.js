@@ -18,7 +18,7 @@ const M_RIGHT  = 1134;
 
 // Caminho da logo (relativo ao serviço, na raiz do projeto)
 const __dirname_service = dirname(fileURLToPath(import.meta.url));
-const LOGO_PATH = join(__dirname_service, '../assets/logo_escritorio.jpg');
+const LOGO_PATH = join(__dirname_service, '../assets/logo_peticao.png'); // mesma logo dos templates
 
 function textRun(text, opts = {}) {
   return new TextRun({ text, font: 'Times New Roman', size: 24, ...opts });
@@ -149,10 +149,10 @@ export async function gerarPeticaoDocx(peticao, cliente) {
           new ImageRun({
             data: logoBuffer,
             transformation: {
-              width: 180,  // px → DXA feito internamente pelo docx
-              height: 113,
+              width: 210,  // proporção original 365x84
+              height: 48,
             },
-            type: 'jpg',
+            type: 'png',
           }),
         ],
       })
@@ -210,4 +210,5 @@ export async function gerarPeticaoDocx(peticao, cliente) {
 
   return Packer.toBuffer(doc);
 }
+
 

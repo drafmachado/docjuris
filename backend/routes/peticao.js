@@ -165,7 +165,8 @@ REGRAS ABSOLUTAS:
 2. Se o ajuste exigir nova jurisprudência, use web search para buscar decisões REAIS. Toda citação nova DEVE ter: número CNJ completo, relator, data de julgamento, órgão julgador e link no formato [Verificar: URL]. Sem esses dados, escreva [JURISPRUDÊNCIA PENDENTE].
 3. PROIBIDO inventar decisões, artigos de lei inexistentes ou fatos não informados.
 4. Se a instrução for ambígua, aplique a interpretação mais conservadora juridicamente.
-5. Responda APENAS com o texto INTEGRAL da peça revisada, do endereçamento ao final. Sem comentários, sem explicações do que mudou, sem introduções.`;
+5. Responda APENAS com o texto INTEGRAL da peça revisada, do endereçamento ao final. Sem comentários, sem explicações do que mudou, sem introduções.
+6. ENDEREÇO PROFISSIONAL das advogadas: se a Dra. Andreia estiver entre as subscritas, use 'Av. Presidente Kennedy, 3700 - Boa Vista - São Caetano do Sul/SP, CEP 09.572-015'. Se apenas a Dra. Thaísa subscrever, use 'Rua Geminiano de Góis, nº 350 - Freguesia - Rio de Janeiro/RJ'. Nunca invente outro endereço.`;
 
   const userPrompt = `PEÇA ATUAL:
 
@@ -382,7 +383,18 @@ VOCÊ É ESPECIALISTA EM JUIZADOS ESPECIAIS CÍVEIS (Lei 9.099/95). Domine e apl
     'ambas':   'ANDREIA FERREIRA MACHADO\nOAB/RJ 218.586 | OAB/SP 532.488\n\nTHAISA DE SOUZA DA SILVA\nOAB/RJ 226.810',
   };
 
+  // Endereço profissional na qualificação: com Andreia entre as subscritas → São Caetano do Sul/SP;
+  // apenas Thaísa → escritório do Rio de Janeiro.
+  const ENDERECOS_PECA = {
+    'andreia': 'Av. Presidente Kennedy, 3700 - Boa Vista - São Caetano do Sul/SP, CEP 09.572-015',
+    'ambas':   'Av. Presidente Kennedy, 3700 - Boa Vista - São Caetano do Sul/SP, CEP 09.572-015',
+    'thaisa':  'Rua Geminiano de Góis, nº 350 - Freguesia - Rio de Janeiro/RJ',
+  };
+
   const systemPrompt = `${IDENTIDADES[modoAdv]} Especialista em ${nomeArea}, com escritório em São Paulo e Rio de Janeiro.
+
+ENDEREÇO PROFISSIONAL: sempre que a peça exigir o endereço da(s) advogada(s)/outorgada(s)/patrona(s) — na qualificação, no cabeçalho ou onde for solicitado — use EXATAMENTE este endereço, sem inventar outro:
+${ENDERECOS_PECA[modoAdv]}
 
 AO FINAL DA PEÇA, o bloco de assinatura deve ser exatamente:
 ${ASSINATURAS_PECA[modoAdv]}
@@ -698,6 +710,7 @@ router.get('/:id/download/docx', authMiddleware, async (req, res) => {
 });
 
 export default router;
+
 
 
 

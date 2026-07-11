@@ -109,13 +109,16 @@ export function SectionTitle({ children }) {
 }
 
 // Table
+// Envolvida em contêiner com rolagem horizontal: em telas estreitas (PWA/celular),
+// as colunas que não cabem ficam acessíveis deslizando o dedo — antes eram cortadas.
 export function Table({ headers, children, empty }) {
   return (
-    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+    <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', maxWidth: '100%' }}>
+    <table style={{ width: '100%', minWidth: Math.max(560, headers.length * 130), borderCollapse: 'collapse' }}>
       <thead>
         <tr>
           {headers.map((h, i) => (
-            <th key={i} style={{ padding: '9px 1.25rem', textAlign: 'left', fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6b6b68', borderBottom: '0.5px solid rgba(0,0,0,0.08)', background: '#fafaf8' }}>
+            <th key={i} style={{ padding: '9px 1.25rem', textAlign: 'left', fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6b6b68', borderBottom: '0.5px solid rgba(0,0,0,0.08)', background: '#fafaf8', whiteSpace: 'nowrap' }}>
               {h}
             </th>
           ))}
@@ -126,6 +129,7 @@ export function Table({ headers, children, empty }) {
         {empty}
       </tbody>
     </table>
+    </div>
   );
 }
 

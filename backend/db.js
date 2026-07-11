@@ -297,7 +297,20 @@ export function initDB() {
     );
   }
 
+  // Login da Dra. Thaísa (senha temporária — trocar no primeiro acesso)
+  try {
+    const temThaisa = db.prepare(`SELECT id FROM users WHERE email = 'thaiisa_sousa@hotmail.com'`).get();
+    if (!temThaisa) {
+      const hashThaisa = bcrypt.hashSync('Veredo@Thaisa2026', 12);
+      db.prepare(`INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)`)
+        .run('Thaísa de Souza da Silva', 'thaiisa_sousa@hotmail.com', hashThaisa, 'colaborador');
+      console.log('👩‍⚖️ Usuária Dra. Thaísa criada (senha temporária)');
+    }
+  } catch(e) { console.error('Seed Thaísa:', e.message); }
+
   try { db.exec(`ALTER TABLE clients ADD COLUMN advogadas TEXT NOT NULL DEFAULT 'ambas'`); } catch {}
+  try { db.exec(`ALTER TABLE clients ADD COLUMN estado_civil TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE clients ADD COLUMN profissao TEXT`); } catch {}
   try { db.exec(`ALTER TABLE documents ADD COLUMN zapsign_doc_token TEXT`); } catch {}
   try { db.exec(`ALTER TABLE documents ADD COLUMN signed_pdf_filename TEXT`); } catch {}
   try { db.exec(`ALTER TABLE documents ADD COLUMN signed_at TEXT`); } catch {}

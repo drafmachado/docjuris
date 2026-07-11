@@ -138,17 +138,22 @@ router.post('/:token/contact', async (req, res) => {
   if (!link) return res.status(404).json({ error: 'Link não encontrado' });
   if (new Date(link.expires_at) < new Date()) return res.status(410).json({ error: 'Link expirado' });
 
-  const { email, phone } = req.body;
+  const { email, phone, estado_civil, profissao, nacionalidade } = req.body;
   if (!email && !phone) return res.status(400).json({ error: 'Informe email ou telefone' });
 
   // Atualizar cliente — preserva valores já existentes se o campo vier vazio
   db.prepare(`
     UPDATE clients SET
-      email    = CASE WHEN ? != '' THEN ? ELSE email    END,
-      telefone = CASE WHEN ? != '' THEN ? ELSE telefone END,
+      email         = CASE WHEN ? != '' THEN ? ELSE email         END,
+      telefone      = CASE WHEN ? != '' THEN ? ELSE telefone      END,
+      estado_civil  = CASE WHEN ? != '' THEN ? ELSE estado_civil  END,
+      profissao     = CASE WHEN ? != '' THEN ? ELSE profissao     END,
+      nacionalidade = CASE WHEN ? != '' THEN ? ELSE nacionalidade END,
       updated_at = datetime('now')
     WHERE id = ?
-  `).run(email||'', email||'', phone||'', phone||'', link.client_id);
+  `).run(email||'', email||'', phone||'', phone||'',
+         estado_civil||'', estado_civil||'', profissao||'', profissao||'',
+         nacionalidade||'', nacionalidade||'', link.client_id);
 
   res.json({ ok: true });
 });

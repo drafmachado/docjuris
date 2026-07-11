@@ -86,7 +86,7 @@ export default function ClientDetail() {
   const loadPeticoes = async () => {
     try { const r = await api.get(`/peticao/cliente/${id}`); setPeticoes(r.data || []); } catch {}
   };
-  useEffect(() => { if (tab === 'pet') loadPeticoes(); }, [tab, id]);
+  useEffect(() => { loadPeticoes(); }, [id]); // carrega no mount — contador correto na aba
 
   const abrirPeticao = (pet) => {
     setPetAberta(pet);
@@ -599,3 +599,4 @@ export default function ClientDetail() {
     </div>
   );
 }
+

@@ -1,149 +1,174 @@
+// Agenda de Prazos — rotina central das advogadas.
+// Vencidos SEMPRE visíveis, alertas por criticidade, última movimentação fixa
+// em cada prazo, sincronização automática (6h) + botão de atualização manual.
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Topbar, Badge, EmptyState } from '../components/UI.jsx';
 import api from '../utils/api.js';
 import toast from 'react-hot-toast';
-import { Calendar, AlertCircle, Check, ChevronRight, Clock } from 'lucide-react';
+import { RefreshCw, CheckCircle2, CalendarClock, Gavel, AlertTriangle } from 'lucide-react';
 
 const GRUPOS = [
-  { id: 'vencido', label: 'Vencidos', cor: '#991b1b', bg: '#fee2e2', borda: '#fca5a5' },
-  { id: 'critico', label: 'Críticos — até 2 dias', cor: '#b45309', bg: '#fff8f1', borda: '#fcd34d' },
-  { id: 'proximo', label: 'Próximos 7 dias', cor: '#1e40af', bg: '#eff6ff', borda: '#bfdbfe' },
-  { id: 'normal',  label: 'Mais adiante', cor: '#475569', bg: '#f8fafc', borda: '#e2e8f0' },
+  { id: 'vencido', titulo: 'VENCIDOS — ação imediata',   cor: '#a32d2d', bg: '#fdf2f2', borda: '#dc2626' },
+  { id: 'critico', titulo: 'CRÍTICOS — até 3 dias',      cor: '#b45309', bg: '#fff7ed', borda: '#f59e0b' },
+  { id: 'proximo', titulo: 'PRÓXIMOS — até 7 dias',      cor: '#854f0b', bg: '#fefce8', borda: '#eab308' },
+  { id: 'normal',  titulo: 'FUTUROS',                    cor: '#185fa5', bg: '#f8fafc', borda: '#cbd5e1' },
 ];
 
-function fmtData(iso) {
-  const d = new Date(iso + 'T12:00:00');
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+function fmtData(d) { try { return new Date(d + 'T12:00:00').toLocaleDateString('pt-BR'); } catch { return d; } }
+function fmtDataHora(d) {
+  try { return new Date(d.replace(' ', 'T') + 'Z').toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }); }
+  catch { return d; }
 }
-function diaSemana(iso) {
-  const d = new Date(iso + 'T12:00:00');
-  return d.toLocaleDateString('pt-BR', { weekday: 'long' });
-}
-function textoDias(dias) {
-  if (dias < 0) return `${Math.abs(dias)} dia(s) atrás`;
-  if (dias === 0) return 'Hoje';
-  if (dias === 1) return 'Amanhã';
-  return `em ${dias} dias`;
+function fmtMovData(d) {
+  try { return new Date(d).toLocaleDateString('pt-BR'); } catch { return (d||'').slice(0,10); }
 }
 
 export default function AgendaPrazos() {
   const [prazos, setPrazos] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+  const [sync, setSync] = useState(null);
+  const [ativos, setAtivos] = useState(0);
+  const [atualizando, setAtualizando] = useState(false);
+  const [carregado, setCarregado] = useState(false);
 
   const load = async () => {
     try {
       const r = await api.get('/processos/agenda-prazos');
-      setPrazos(r.data || []);
-    } catch { toast.error('Erro ao carregar prazos'); }
-    finally { setLoading(false); }
+      // Compatível com formato novo { prazos, ultima_sincronizacao } e antigo (array)
+      if (Array.isArray(r.data)) { setPrazos(r.data); }
+      else {
+        setPrazos(r.data.prazos || []);
+        setSync(r.data.ultima_sincronizacao);
+        setAtivos(r.data.processos_ativos || 0);
+      }
+    } catch {} finally { setCarregado(true); }
   };
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 3 * 60 * 1000);
+    const interval = setInterval(load, 2 * 60 * 1000); // auto-atualiza a cada 2 min
     return () => clearInterval(interval);
   }, []);
 
   const concluir = async (e, prazoId) => {
     e.stopPropagation();
-    if (!window.confirm('Marcar este prazo como cumprido? Ele sairá da agenda.')) return;
     try {
       await api.put(`/processos/prazos/${prazoId}/concluir`);
+      setPrazos(prev => prev.filter(p => p.id !== prazoId));
       toast.success('Prazo concluído!');
-      load();
     } catch { toast.error('Erro ao concluir'); }
   };
 
+  const atualizarAgora = async () => {
+    setAtualizando(true);
+    try {
+      const r = await api.post('/processos/monitorar-agora');
+      if (r.data.ja_rodando) toast('Sincronização já em andamento — aguarde alguns minutos', { icon: '⏳' });
+      else toast.success(`Sincronização iniciada (${ativos} processos ativos). Os dados chegam em ~2 min.`);
+      // Recarrega algumas vezes enquanto o ciclo roda
+      setTimeout(load, 60 * 1000);
+      setTimeout(load, 150 * 1000);
+    } catch { toast.error('Erro ao iniciar sincronização'); }
+    finally { setTimeout(() => setAtualizando(false), 4000); }
+  };
+
   const porGrupo = id => prazos.filter(p => p.urgencia === id);
-  const totalAtivos = prazos.length;
-  const vencidos = porGrupo('vencido').length;
-  const criticos = porGrupo('critico').length;
+  const totalVencCrit = porGrupo('vencido').length + porGrupo('critico').length;
 
   return (
-    <div style={{ maxWidth: 860, margin: '0 auto', padding: '1.5rem 1rem' }}>
-      <style>{`
-        .prazoCard { transition: transform .15s, box-shadow .15s; }
-        .prazoCard:hover { transform: translateX(3px); box-shadow: 0 4px 14px rgba(0,0,0,.07); }
-      `}</style>
+    <div>
+      <Topbar title="Agenda de Prazos">
+        <button onClick={atualizarAgora} disabled={atualizando}
+          style={{ display: 'flex', alignItems: 'center', gap: 7, background: atualizando ? '#e5e7eb' : '#0f2035',
+            color: atualizando ? '#6b7280' : '#fff', border: 'none', borderRadius: 10, padding: '9px 16px',
+            fontSize: 13, fontWeight: 700, cursor: atualizando ? 'not-allowed' : 'pointer' }}>
+          <RefreshCw size={14} className={atualizando ? 'girando' : ''} />
+          {atualizando ? 'Sincronizando...' : 'Atualizar agora'}
+        </button>
+      </Topbar>
 
-      {/* Header */}
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700, color: '#0f2035', margin: 0, display: 'flex', alignItems: 'center', gap: 9, fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '-0.02em' }}>
-          <Calendar size={22} color="#c5a859" /> Agenda de Prazos
-        </h2>
-        <p style={{ fontSize: 13, color: '#6b6b68', margin: '4px 0 0' }}>
-          Todos os prazos e audiências em aberto, ordenados por urgência
-        </p>
+      {/* Barra de status da sincronização */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
+        background: '#fff', borderRadius: 12, padding: '10px 16px', marginBottom: 16,
+        boxShadow: '0 1px 4px rgba(0,0,0,0.05)', fontSize: 12.5, color: '#6b6b68' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <Gavel size={13} color="#c5a859" /> <b style={{ color: '#0f2035' }}>{ativos}</b> processos ativos monitorados
+        </span>
+        <span>•</span>
+        <span>
+          Última sincronização: <b style={{ color: '#0f2035' }}>{sync ? fmtDataHora(sync) : 'aguardando primeiro ciclo'}</b>
+          {' '}(automática a cada 6h)
+        </span>
+        {totalVencCrit > 0 && (
+          <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5,
+            background: '#fdf2f2', color: '#a32d2d', borderRadius: 20, padding: '3px 12px', fontWeight: 700 }}>
+            <AlertTriangle size={13} /> {totalVencCrit} prazo(s) exigindo atenção
+          </span>
+        )}
       </div>
 
-      {/* Resumo rápido */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 130, background: '#fff', border: '1px solid rgba(0,0,0,.07)', borderRadius: 14, padding: '14px 18px' }}>
-          <div style={{ fontSize: 12, color: '#999', fontWeight: 500 }}>Em aberto</div>
-          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 26, fontWeight: 700, color: '#0f2035' }}>{totalAtivos}</div>
-        </div>
-        <div style={{ flex: 1, minWidth: 130, background: vencidos > 0 ? '#fee2e2' : '#fff', border: `1px solid ${vencidos > 0 ? '#fca5a5' : 'rgba(0,0,0,.07)'}`, borderRadius: 14, padding: '14px 18px' }}>
-          <div style={{ fontSize: 12, color: vencidos > 0 ? '#991b1b' : '#999', fontWeight: 500 }}>Vencidos</div>
-          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 26, fontWeight: 700, color: vencidos > 0 ? '#991b1b' : '#0f2035' }}>{vencidos}</div>
-        </div>
-        <div style={{ flex: 1, minWidth: 130, background: criticos > 0 ? '#fff8f1' : '#fff', border: `1px solid ${criticos > 0 ? '#fcd34d' : 'rgba(0,0,0,.07)'}`, borderRadius: 14, padding: '14px 18px' }}>
-          <div style={{ fontSize: 12, color: criticos > 0 ? '#b45309' : '#999', fontWeight: 500 }}>Críticos (até 2d)</div>
-          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 26, fontWeight: 700, color: criticos > 0 ? '#b45309' : '#0f2035' }}>{criticos}</div>
-        </div>
-      </div>
+      {carregado && prazos.length === 0 && (
+        <EmptyState icon="📅" title="Nenhum prazo em aberto"
+          subtitle="Prazos criados manualmente ou detectados pela IA nos andamentos aparecem aqui" />
+      )}
 
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: '#6b6b68' }}>Carregando...</div>
-      ) : totalAtivos === 0 ? (
-        <div style={{ textAlign: 'center', padding: '3rem', background: '#fff', borderRadius: 16, border: '1px solid rgba(0,0,0,.07)' }}>
-          <div style={{ fontSize: 36, marginBottom: 10 }}>✅</div>
-          <p style={{ color: '#0f2035', fontWeight: 600, margin: 0 }}>Nenhum prazo em aberto</p>
-          <p style={{ color: '#999', fontSize: 13, margin: '4px 0 0' }}>Todos os prazos estão em dia.</p>
-        </div>
-      ) : (
-        GRUPOS.map(g => {
-          const itens = porGrupo(g.id);
-          if (itens.length === 0) return null;
-          return (
-            <div key={g.id} style={{ marginBottom: '1.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: g.cor, textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: "'Space Grotesk', sans-serif" }}>
-                  {g.label}
-                </span>
-                <span style={{ background: g.bg, color: g.cor, fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 20 }}>{itens.length}</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {itens.map(p => (
-                  <div key={p.id} className="prazoCard"
-                    onClick={() => navigate(`/processos/${p.processo_id}`)}
-                    style={{ background: '#fff', border: `1px solid ${g.borda}`, borderLeft: `4px solid ${g.cor}`, borderRadius: 12, padding: '14px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14 }}>
-                    {/* Data */}
-                    <div style={{ textAlign: 'center', minWidth: 64, flexShrink: 0 }}>
-                      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 15, fontWeight: 700, color: g.cor }}>{fmtData(p.data_limite)}</div>
-                      <div style={{ fontSize: 11, color: g.cor, fontWeight: 600 }}>{textoDias(p.dias_restantes)}</div>
+      {GRUPOS.map(g => {
+        const itens = porGrupo(g.id);
+        if (itens.length === 0) return null;
+        return (
+          <div key={g.id} style={{ marginBottom: 22 }}>
+            <h3 style={{ fontSize: 13, fontWeight: 800, color: g.cor, letterSpacing: '0.06em', marginBottom: 8 }}>
+              {g.titulo} ({itens.length})
+            </h3>
+            {itens.map(p => (
+              <div key={p.id} style={{ background: '#fff', borderRadius: 12, padding: '13px 16px',
+                marginBottom: 8, borderLeft: `4px solid ${g.borda}`, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 220 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: '#1a1a18' }}>{p.titulo}</div>
+                    <div style={{ fontSize: 12, color: '#6b6b68', marginTop: 2 }}>
+                      {p.cliente_nome} · {p.numero_cnj} ({p.tribunal})
                     </div>
-                    <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(0,0,0,.08)' }} />
-                    {/* Info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 14, color: '#0f2035', marginBottom: 2 }}>{p.titulo}</div>
-                      <div style={{ fontSize: 12.5, color: '#6b7280' }}>
-                        {p.cliente_nome} · {p.numero_cnj} · {p.tribunal || 'Sem tribunal'}
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: g.cor }}>
+                        {p.urgencia === 'vencido'
+                          ? `VENCIDO há ${Math.abs(p.dias_restantes)} dia(s)`
+                          : p.dias_restantes === 0 ? 'VENCE HOJE'
+                          : `${p.dias_restantes} dia(s)`}
                       </div>
-                      {p.observacoes && <div style={{ fontSize: 11.5, color: '#9ca3af', marginTop: 3 }}>{p.observacoes.substring(0, 90)}{p.observacoes.length > 90 ? '...' : ''}</div>}
+                      <div style={{ fontSize: 11.5, color: '#9a9a97' }}>
+                        <CalendarClock size={11} style={{ verticalAlign: '-2px' }} /> {fmtData(p.data_limite)}
+                      </div>
                     </div>
-                    {/* Ações */}
                     <button onClick={(e) => concluir(e, p.id)} title="Marcar como cumprido"
-                      style={{ background: '#dcfce7', color: '#166534', border: 'none', borderRadius: 9, width: 34, height: 34, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Check size={16} />
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#eaf3de',
+                        color: '#3b6d11', border: 'none', borderRadius: 8, padding: '7px 12px',
+                        fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                      <CheckCircle2 size={13} /> Concluir
                     </button>
                   </div>
-                ))}
+                </div>
+
+                {/* Última movimentação — fixa no cartão */}
+                {p.ult_mov_descricao && (
+                  <div style={{ marginTop: 9, background: '#fafaf6', borderRadius: 8, padding: '7px 11px',
+                    fontSize: 12, color: '#374151', display: 'flex', gap: 8 }}>
+                    <span style={{ fontWeight: 700, color: '#9a9a97', flexShrink: 0, fontSize: 10.5, letterSpacing: '0.05em' }}>
+                      ÚLTIMA MOVIMENTAÇÃO · {fmtMovData(p.ult_mov_data)}
+                    </span>
+                    <span>{p.ult_mov_descricao}</span>
+                  </div>
+                )}
               </div>
-            </div>
-          );
-        })
-      )}
+            ))}
+          </div>
+        );
+      })}
+
+      <style>{`.girando { animation: girar 1.2s linear infinite; } @keyframes girar { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

@@ -203,6 +203,11 @@ export async function monitorarProcessos() {
           .slice(0, 20);
       }
 
+      // Registrar a verificação SEMPRE — mesmo sem movimentos novos.
+      // (Antes só gravava quando havia novidade, e a coluna nem existia:
+      //  a tela nunca tinha como mostrar quando foi a última sincronização.)
+      db.prepare("UPDATE processos SET ultima_consulta = datetime('now') WHERE id = ?").run(proc.id);
+
       if (movimentos.length === 0) {
         await new Promise(r => setTimeout(r, 300));
         continue;
@@ -224,9 +229,6 @@ export async function monitorarProcessos() {
         }
       }
 
-      // Atualizar timestamp da última consulta
-      db.prepare("UPDATE processos SET ultima_consulta = datetime('now') WHERE id = ?").run(proc.id);
-      
       // 700ms entre consultas = ~85/min, abaixo do limite de 120/min do DataJud
       await new Promise(r => setTimeout(r, 700));
     } catch(e) {
@@ -236,4 +238,5 @@ export async function monitorarProcessos() {
 
   console.log(`✅ Monitoramento concluído — ${novosAndamentos} novo(s) andamento(s)`);
 }
+
 

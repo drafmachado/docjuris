@@ -16,6 +16,7 @@ const NOMES = {
   backup:         { titulo: 'Backup (Google Drive)',  desc: 'Cópia diária do banco às 3h' },
   rotinas:        { titulo: 'Rotinas Internas',       desc: 'Assinaturas pendentes' },
   prazos:         { titulo: 'Prazos & Monitoramento', desc: 'Vencidos, críticos e sincronização DataJud' },
+  dje:            { titulo: 'DJE / Intimações',       desc: 'DJEN consultado para as 3 OABs do escritório' },
 };
 
 export default function Diagnostico() {

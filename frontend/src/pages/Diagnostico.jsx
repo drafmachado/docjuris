@@ -14,7 +14,8 @@ const NOMES = {
   datajud:        { titulo: 'DataJud (CNJ)',          desc: 'Monitoramento de processos' },
   conversor_pdf:  { titulo: 'Conversor PDF',          desc: 'Geração de PDFs (LibreOffice)' },
   backup:         { titulo: 'Backup (Google Drive)',  desc: 'Cópia diária do banco às 3h' },
-  rotinas:        { titulo: 'Rotinas Internas',       desc: 'Prazos e assinaturas pendentes' },
+  rotinas:        { titulo: 'Rotinas Internas',       desc: 'Assinaturas pendentes' },
+  prazos:         { titulo: 'Prazos & Monitoramento', desc: 'Vencidos, críticos e sincronização DataJud' },
 };
 
 export default function Diagnostico() {
@@ -137,3 +138,4 @@ export default function Diagnostico() {
     </div>
   );
 }
+

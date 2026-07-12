@@ -20,14 +20,24 @@ router.get('/', (req, res) => {
 // GET /api/processos/:id
 router.get('/agenda-prazos', (req, res) => {
   const db = getDB();
+  // SEM filtro de data: prazos vencidos e abertos SEMPRE aparecem — some só ao concluir.
+  // Inclui a última movimentação de cada processo (fixa no cartão do prazo).
   const prazos = db.prepare(`
     SELECT pz.*, pr.numero_cnj, pr.tribunal, pr.tipo as processo_tipo,
-           c.nome as cliente_nome, c.telefone as cliente_telefone
+           pr.status as processo_status, pr.ultima_consulta,
+           c.nome as cliente_nome, c.telefone as cliente_telefone,
+           ult.data as ult_mov_data, ult.descricao as ult_mov_descricao
     FROM prazos pz
     JOIN processos pr ON pr.id = pz.processo_id
     JOIN clients c ON c.id = pz.client_id
+    LEFT JOIN (
+      SELECT a1.processo_id, a1.data, MAX(a1.descricao) as descricao
+      FROM andamentos a1
+      JOIN (SELECT processo_id, MAX(data) as md FROM andamentos GROUP BY processo_id) a2
+        ON a2.processo_id = a1.processo_id AND a2.md = a1.data
+      GROUP BY a1.processo_id, a1.data
+    ) ult ON ult.processo_id = pr.id
     WHERE pz.concluido = 0
-      AND pz.data_limite >= date('now')
     ORDER BY pz.data_limite ASC
   `).all();
 
@@ -37,12 +47,33 @@ router.get('/agenda-prazos', (req, res) => {
     const dias = Math.ceil((dl - hoje) / (1000*60*60*24));
     let urgencia = 'normal';
     if (dias < 0) urgencia = 'vencido';
-    else if (dias <= 2) urgencia = 'critico';
+    else if (dias <= 3) urgencia = 'critico';
     else if (dias <= 7) urgencia = 'proximo';
     return { ...p, dias_restantes: dias, urgencia };
   });
 
-  res.json(comStatus);
+  // Última sincronização do monitoramento (qualquer processo ativo)
+  const sync = db.prepare(`
+    SELECT MAX(ultima_consulta) as ultima, COUNT(*) as ativos
+    FROM processos WHERE status = 'ativo'
+  `).get();
+
+  res.json({ prazos: comStatus, ultima_sincronizacao: sync.ultima, processos_ativos: sync.ativos });
+});
+
+// POST /api/processos/monitorar-agora — dispara o ciclo de monitoramento manualmente
+let monitoramentoRodando = false;
+router.post('/monitorar-agora', async (req, res) => {
+  if (monitoramentoRodando) {
+    return res.json({ ok: true, ja_rodando: true, mensagem: 'Monitoramento já está em execução' });
+  }
+  monitoramentoRodando = true;
+  const { monitorarProcessos } = await import('../services/monitoramento.js');
+  // Fire-and-forget: roda em segundo plano; a tela acompanha pelo ultima_sincronizacao
+  monitorarProcessos()
+    .catch(e => console.error('Monitoramento manual:', e.message))
+    .finally(() => { monitoramentoRodando = false; });
+  res.json({ ok: true, iniciado: true });
 });
 
 // PUT /api/processos/prazos/:prazo_id/concluir — marcar prazo como concluído
@@ -292,3 +323,4 @@ async function importarLoteAsync(jobId, numeros, userId) {
 }
 
 export default router;
+

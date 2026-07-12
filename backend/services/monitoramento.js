@@ -227,7 +227,8 @@ export async function monitorarProcessos() {
       // Atualizar timestamp da última consulta
       db.prepare("UPDATE processos SET ultima_consulta = datetime('now') WHERE id = ?").run(proc.id);
       
-      await new Promise(r => setTimeout(r, 400));
+      // 700ms entre consultas = ~85/min, abaixo do limite de 120/min do DataJud
+      await new Promise(r => setTimeout(r, 700));
     } catch(e) {
       console.error(`  Erro em ${proc.numero_cnj}:`, e.message);
     }
@@ -235,3 +236,4 @@ export async function monitorarProcessos() {
 
   console.log(`✅ Monitoramento concluído — ${novosAndamentos} novo(s) andamento(s)`);
 }
+

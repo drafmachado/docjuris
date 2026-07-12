@@ -13,6 +13,13 @@ export default function GenerateModal({ open, onClose, preselectedClient, onSucc
   const [templateId, setTemplateId] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [manualValues, setManualValues] = useState({});
+
+  // Campos monetários/percentuais: só números (o documento formata R$, % e extenso sozinho)
+  const ehCampoNumerico = (key) => {
+    const k = (key || '').toLowerCase();
+    return (k.includes('valor') && !k.includes('extenso')) || k.includes('percentual') || k.includes('porcent');
+  };
+  const mascaraNumerica = (v) => v.replace(/[^0-9,]/g, '').replace(/(,.*),/g, '$1'); // dígitos + uma vírgula
   const [sendEmail, setSendEmail] = useState(true);
   const [emailTo, setEmailTo] = useState('');
   const [step, setStep] = useState('form'); // 'form' | 'generating' | 'done'
@@ -179,11 +186,24 @@ export default function GenerateModal({ open, onClose, preselectedClient, onSucc
                   {selectedTemplate.manual_fields.map(field => (
                     <FormField key={field.key} label={field.label}>
                       <input
-                        type={getInputType(field.type)}
-                        placeholder={getPlaceholder(field)}
+                        type={ehCampoNumerico(field.key) ? 'text' : getInputType(field.type)}
+                        inputMode={ehCampoNumerico(field.key) ? 'decimal' : undefined}
+                        placeholder={ehCampoNumerico(field.key)
+                          ? ((field.key||'').toLowerCase().includes('percentual') || (field.key||'').toLowerCase().includes('porcent')
+                              ? 'Só números — ex: 20 ou 12,5'
+                              : 'Só números — ex: 2500 ou 2500,50')
+                          : getPlaceholder(field)}
                         value={manualValues[field.key] || ''}
-                        onChange={e => handleManualChange(field.key, e.target.value)}
+                        onChange={e => handleManualChange(field.key,
+                          ehCampoNumerico(field.key) ? mascaraNumerica(e.target.value) : e.target.value)}
                       />
+                      {ehCampoNumerico(field.key) && (
+                        <span style={{ fontSize: 10, color: '#854f0b', marginTop: 2, display: 'block' }}>
+                          {(field.key||'').toLowerCase().includes('percentual') || (field.key||'').toLowerCase().includes('porcent')
+                            ? 'O "%" e o texto por extenso são inseridos automaticamente'
+                            : 'O "R$" e o valor por extenso são inseridos automaticamente'}
+                        </span>
+                      )}
                     </FormField>
                   ))}
                 </FormGrid>
@@ -261,4 +281,5 @@ export default function GenerateModal({ open, onClose, preselectedClient, onSucc
     </Modal>
   );
 }
+
 

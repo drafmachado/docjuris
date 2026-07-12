@@ -193,6 +193,34 @@ router.post('/rodar', async (req, res) => {
     return `Nenhum vencido · ${criticos} crítico(s) ≤3d · ${dezDias} nos próximos 10 dias · ${syncInfo}`;
   });
 
+  // ─── 12. DJE/Intimações (DJEN) ───
+  resultados.dje = await tempo(async () => {
+    const { OABS_MONITORADAS } = await import('../services/dje-monitor.js');
+    const hoje = new Date();
+    let totalPubs = 0;
+    const porOab = [];
+
+    for (const oab of OABS_MONITORADAS) {
+      // Testa a API do DJEN ao vivo: publicações de hoje para cada OAB
+      const dataISO = hoje.toISOString().split('T')[0];
+      const r = await fetch(
+        `https://djen.cnj.jus.br/pesquisar-publicacao?data=${dataISO}&tipoPesquisa=OAB&oabNumero=${oab.numero}&oabEstado=${oab.uf}`,
+        { headers: { 'Accept': 'application/json', 'User-Agent': 'DocJuris/1.0' } }
+      );
+      if (!r.ok && r.status !== 404) throw new Error(`DJEN inacessível para OAB/${oab.uf} ${oab.numero} (HTTP ${r.status})`);
+      let n = 0;
+      if (r.ok) {
+        const d = await r.json().catch(() => ({}));
+        n = (d.publicacoes || d.data || d.results || []).length;
+      }
+      totalPubs += n;
+      porOab.push(`${oab.advogada.replace('Dra. ', '')} OAB/${oab.uf}: ${n}`);
+      await new Promise(r2 => setTimeout(r2, 300));
+    }
+
+    return `API do DJEN acessível · publicações hoje — ${porOab.join(' · ')} · monitor roda a cada 6h`;
+  });
+
   const total = Object.keys(resultados).length;
   const ok = Object.values(resultados).filter(r => r.ok).length;
 

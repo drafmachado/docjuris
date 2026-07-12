@@ -81,8 +81,8 @@ function SplashVeredo() {
       opacity: sumindo ? 0 : 1, transition: 'opacity 0.6s ease',
       pointerEvents: sumindo ? 'none' : 'auto',
     }}>
-      <img src="/icon-512.png" alt="Veredo" style={{ width: 160, height: 160, borderRadius: 32 }} />
-      <p style={{ marginTop: 14, fontSize: 13, letterSpacing: '0.25em', color: '#c5a859', fontWeight: 700 }}>
+      <img src="/icon-512.png" alt="Veredo" style={{ width: 260, height: 260, borderRadius: 48 }} />
+      <p style={{ marginTop: 20, fontSize: 16, letterSpacing: '0.3em', color: '#c5a859', fontWeight: 700 }}>
         VEREDO
       </p>
     </div>
@@ -106,3 +106,4 @@ export default function App() {
     </BrowserRouter>
   );
 }
+

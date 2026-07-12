@@ -58,7 +58,38 @@ router.get('/agenda-prazos', (req, res) => {
     FROM processos WHERE status = 'ativo'
   `).get();
 
-  res.json({ prazos: comStatus, ultima_sincronizacao: sync.ultima, processos_ativos: sync.ativos });
+  // ─── PONTOS CEGOS: processos ativos que o monitoramento NÃO está enxergando ───
+  // O DataJud tem cobertura parcial; um processo sem nenhum andamento registrado,
+  // ou parado há 60+ dias, pode estar fora da cobertura — e prazos dele passariam
+  // despercebidos. Estes exigem conferência manual (DJE, push do tribunal).
+  const semAndamento = db.prepare(`
+    SELECT p.id, p.numero_cnj, p.tribunal, c.nome as cliente_nome
+    FROM processos p
+    LEFT JOIN clients c ON c.id = p.client_id
+    WHERE p.status = 'ativo'
+      AND NOT EXISTS (SELECT 1 FROM andamentos a WHERE a.processo_id = p.id)
+  `).all();
+
+  const paradosMais60d = db.prepare(`
+    SELECT p.id, p.numero_cnj, p.tribunal, c.nome as cliente_nome,
+           MAX(a.data) as ultima_mov
+    FROM processos p
+    LEFT JOIN clients c ON c.id = p.client_id
+    JOIN andamentos a ON a.processo_id = p.id
+    WHERE p.status = 'ativo'
+    GROUP BY p.id
+    HAVING MAX(a.data) < datetime('now', '-60 days')
+  `).all();
+
+  res.json({
+    prazos: comStatus,
+    ultima_sincronizacao: sync.ultima,
+    processos_ativos: sync.ativos,
+    pontos_cegos: {
+      sem_andamento: semAndamento,
+      parados_60d: paradosMais60d,
+    },
+  });
 });
 
 // POST /api/processos/monitorar-agora — dispara o ciclo de monitoramento manualmente

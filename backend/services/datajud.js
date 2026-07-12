@@ -72,7 +72,10 @@ export async function consultarProcesso(numeroCNJ, tribunal) {
   const numeroLimpo = numeroCNJ.replace(/[.\-]/g, '').trim();
 
   try {
-    const response = await fetch(`${BASE_URL}/${endpoint}/_search`, {
+    // Retry automático em 429 (limite da chave pública compartilhada do CNJ)
+    let response;
+    for (let tentativa = 1; tentativa <= 3; tentativa++) {
+      response = await fetch(`${BASE_URL}/${endpoint}/_search`, {
       method: 'POST',
       headers: {
         'Authorization': `APIKey ${DATAJUD_API_KEY}`,
@@ -85,8 +88,15 @@ export async function consultarProcesso(numeroCNJ, tribunal) {
           }
         }
       }),
-    });
+      });
+      if (response.status !== 429) break;
+      // 429: espera progressiva (5s, 10s) antes de tentar de novo
+      if (tentativa < 3) await new Promise(r => setTimeout(r, tentativa * 5000));
+    }
 
+    if (response.status === 429) {
+      return { erro: 'Limite temporário do DataJud (429) — nova tentativa no próximo ciclo' };
+    }
     if (!response.ok) {
       return { erro: `Erro na consulta: ${response.status}` };
     }
@@ -124,3 +134,4 @@ export async function consultarProcesso(numeroCNJ, tribunal) {
     return { erro: `Erro de conexão: ${err.message}` };
   }
 }
+

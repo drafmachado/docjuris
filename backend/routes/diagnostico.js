@@ -135,6 +135,10 @@ router.post('/rodar', async (req, res) => {
       },
       body: JSON.stringify({ size: 1, query: { match_all: {} } }),
     });
+    if (r.status === 429) {
+      // A chave pública do CNJ é compartilhada nacionalmente — 429 é congestionamento, não falha
+      return 'API ativa, mas com limite de requisições no momento (429) — o monitoramento tenta de novo automaticamente';
+    }
     if (!r.ok) throw new Error(`DataJud respondeu ${r.status}`);
     return 'API pública respondendo (TJRJ)';
   });
@@ -188,3 +192,4 @@ router.post('/backup-agora', async (req, res) => {
 });
 
 export default router;
+

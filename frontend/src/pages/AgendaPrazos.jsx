@@ -27,6 +27,8 @@ export default function AgendaPrazos() {
   const [prazos, setPrazos] = useState([]);
   const [sync, setSync] = useState(null);
   const [ativos, setAtivos] = useState(0);
+  const [pontosCegos, setPontosCegos] = useState(null);
+  const [mostrarCegos, setMostrarCegos] = useState(false);
   const [atualizando, setAtualizando] = useState(false);
   const [carregado, setCarregado] = useState(false);
 
@@ -39,6 +41,7 @@ export default function AgendaPrazos() {
         setPrazos(r.data.prazos || []);
         setSync(r.data.ultima_sincronizacao);
         setAtivos(r.data.processos_ativos || 0);
+        setPontosCegos(r.data.pontos_cegos || null);
       }
     } catch {} finally { setCarregado(true); }
   };
@@ -135,6 +138,42 @@ export default function AgendaPrazos() {
           </div>
         );
       })()}
+
+      {/* ─── Pontos cegos do monitoramento — honestidade sobre o que NÃO é visto ─── */}
+      {pontosCegos && (pontosCegos.sem_andamento?.length > 0 || pontosCegos.parados_60d?.length > 0) && (
+        <div style={{ background: '#fffbeb', border: '1.5px solid #f59e0b', borderRadius: 12,
+          padding: '12px 16px', marginBottom: 18 }}>
+          <div onClick={() => setMostrarCegos(v => !v)}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <AlertTriangle size={15} color="#b45309" />
+            <span style={{ fontSize: 13, fontWeight: 800, color: '#92400e', flex: 1 }}>
+              PONTOS CEGOS: {(pontosCegos.sem_andamento?.length || 0) + (pontosCegos.parados_60d?.length || 0)} processo(s)
+              que o monitoramento automático pode NÃO estar enxergando
+            </span>
+            <span style={{ fontSize: 11, color: '#b45309', fontWeight: 700 }}>
+              {mostrarCegos ? 'ocultar ▲' : 'ver lista ▼'}
+            </span>
+          </div>
+          <p style={{ fontSize: 11.5, color: '#92400e', margin: '5px 0 0 23px' }}>
+            Processos sem nenhum andamento registrado ou parados há mais de 60 dias podem estar fora da
+            cobertura do DataJud. <b>Prazos deles exigem conferência manual</b> (DJE, push do tribunal).
+          </p>
+          {mostrarCegos && (
+            <div style={{ marginTop: 10, marginLeft: 23 }}>
+              {(pontosCegos.sem_andamento || []).map(p => (
+                <div key={'sa'+p.id} style={{ fontSize: 12, color: '#78350f', padding: '3px 0' }}>
+                  • {p.numero_cnj} ({p.tribunal}) — {p.cliente_nome || 'sem cliente'} — <b>nenhum andamento registrado</b>
+                </div>
+              ))}
+              {(pontosCegos.parados_60d || []).map(p => (
+                <div key={'p60'+p.id} style={{ fontSize: 12, color: '#78350f', padding: '3px 0' }}>
+                  • {p.numero_cnj} ({p.tribunal}) — {p.cliente_nome || 'sem cliente'} — parado desde {fmtMovData(p.ultima_mov)}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {carregado && prazos.length === 0 && (
         <EmptyState icon="📅" title="Nenhum prazo em aberto"

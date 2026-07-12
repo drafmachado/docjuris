@@ -184,3 +184,4 @@ Responda APENAS com JSON válido:
   return resultado;
 }
  
+

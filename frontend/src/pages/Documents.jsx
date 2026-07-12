@@ -48,6 +48,18 @@ export function Documents() {
     }
   };
 
+  const handleDelete = async (d, e) => {
+    e.stopPropagation();
+    if (!window.confirm(`Excluir o documento "${d.template_name}" de ${d.client_name}?\n\nEsta ação não pode ser desfeita.`)) return;
+    try {
+      await api.delete(`/documents/${d.id}`);
+      toast.success('Documento excluído');
+      setDocs(prev => prev.filter(x => x.id !== d.id));
+    } catch(err) {
+      toast.error(err.response?.data?.error || 'Erro ao excluir');
+    }
+  };
+
   const handleSendSignature = async (docId, e) => {
     e.stopPropagation();
     setEnviando(docId);
@@ -101,6 +113,12 @@ export function Documents() {
                         color: '#185fa5', fontSize: 12, textDecoration: 'underline' }}>
                       Reenviar email
                     </button>
+                    <button onClick={e => handleDelete(d, e)}
+                      title="Excluir documento (registro e arquivos)"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer',
+                        color: '#a32d2d', fontSize: 12, textDecoration: 'underline', fontWeight: 600 }}>
+                      Excluir
+                    </button>
                   </div>
                 </Td>
               </Tr>
@@ -115,3 +133,4 @@ export function Documents() {
 }
 
 export default Documents;
+

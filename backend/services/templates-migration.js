@@ -28,6 +28,7 @@ const CAMPOS_SISTEMA = new Set([
   'data_atual', 'DATA_ATUAL',
   'cidade_estado', 'CIDADE_ESTADO',
   'local_data', 'LOCAL_DATA',
+  'valor_extenso', 'VALOR_EXTENSO',
 ]);
 
 // Remove campos de sistema da lista de manuais em todos os templates (roda em todo boot)
@@ -92,3 +93,4 @@ export function aplicarTemplatesV2() {
     console.error('⚠️ Migração de templates v2 falhou (não crítico):', e.message);
   }
 }
+

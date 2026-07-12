@@ -166,9 +166,31 @@ router.post('/rodar', async (req, res) => {
 
   // ─── 10. Filas/rotinas internas ───
   resultados.rotinas = await tempo(async () => {
-    const prazosAtrasados = db.prepare(`SELECT COUNT(*) as n FROM prazos WHERE data_limite < date('now') AND concluido = 0`).get();
     const docsPendentes = db.prepare(`SELECT COUNT(*) as n FROM documents WHERE zapsign_doc_token IS NOT NULL AND status != 'assinado'`).get();
-    return `${prazosAtrasados.n} prazo(s) vencido(s) aberto(s), ${docsPendentes.n} doc(s) aguardando assinatura`;
+    return `${docsPendentes.n} doc(s) aguardando assinatura`;
+  });
+
+  // ─── 11. Prazos & Monitoramento (rotina central das advogadas) ───
+  resultados.prazos = await tempo(async () => {
+    const vencidos = db.prepare(`SELECT COUNT(*) as n FROM prazos WHERE data_limite < date('now') AND concluido = 0`).get().n;
+    const criticos = db.prepare(`SELECT COUNT(*) as n FROM prazos WHERE concluido = 0 AND data_limite >= date('now') AND data_limite <= date('now', '+3 days')`).get().n;
+    const dezDias = db.prepare(`SELECT COUNT(*) as n FROM prazos WHERE concluido = 0 AND data_limite >= date('now') AND data_limite <= date('now', '+10 days')`).get().n;
+
+    // Saúde do monitoramento: a última sincronização deve ter menos de 12h (ciclo é de 6h)
+    const sync = db.prepare(`SELECT MAX(ultima_consulta) as ultima FROM processos WHERE status = 'ativo'`).get();
+    let syncInfo = 'monitoramento aguardando primeiro ciclo';
+    if (sync.ultima) {
+      const horas = (Date.now() - new Date(sync.ultima.replace(' ', 'T') + 'Z').getTime()) / (1000 * 60 * 60);
+      if (horas > 12) {
+        throw new Error(`Monitoramento PARADO: última sincronização há ${Math.round(horas)}h (deveria rodar a cada 6h). Use "Atualizar agora" na Agenda.`);
+      }
+      syncInfo = `sincronizado há ${Math.round(horas)}h`;
+    }
+
+    if (vencidos > 0) {
+      throw new Error(`${vencidos} prazo(s) VENCIDO(S) em aberto! ${criticos} crítico(s) (3 dias). Vá à Agenda de Prazos. (${syncInfo})`);
+    }
+    return `Nenhum vencido · ${criticos} crítico(s) ≤3d · ${dezDias} nos próximos 10 dias · ${syncInfo}`;
   });
 
   const total = Object.keys(resultados).length;
@@ -192,4 +214,5 @@ router.post('/backup-agora', async (req, res) => {
 });
 
 export default router;
+
 

@@ -106,6 +106,36 @@ export default function AgendaPrazos() {
         )}
       </div>
 
+      {/* ─── Dashboard de bandeiras: vencidos + janela de 10 dias ─── */}
+      {(() => {
+        const emDias = (min, max) => prazos.filter(p =>
+          p.urgencia !== 'vencido' && p.dias_restantes >= min && p.dias_restantes <= max).length;
+        const kpis = [
+          { label: 'VENCIDOS',            valor: porGrupo('vencido').length, cor: '#7f1d1d', bg: '#fdf2f2', bandeira: '🚨', sub: 'ação imediata' },
+          { label: 'BANDEIRA VERMELHA',   valor: emDias(0, 3),               cor: '#dc2626', bg: '#fef2f2', bandeira: '🔴', sub: 'até 3 dias' },
+          { label: 'BANDEIRA AMARELA',    valor: emDias(4, 7),               cor: '#b45309', bg: '#fffbeb', bandeira: '🟡', sub: '4 a 7 dias' },
+          { label: 'BANDEIRA VERDE',      valor: emDias(8, 10),              cor: '#3b6d11', bg: '#f0f7ea', bandeira: '🟢', sub: '8 a 10 dias' },
+        ];
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+            gap: 12, marginBottom: 20 }}>
+            {kpis.map(k => (
+              <div key={k.label} style={{ background: k.bg, borderRadius: 14, padding: '14px 16px',
+                border: `1.5px solid ${k.cor}22`, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: k.cor, letterSpacing: '0.06em' }}>
+                  {k.bandeira} {k.label}
+                </div>
+                <div style={{ fontSize: 32, fontWeight: 800, color: k.cor, lineHeight: 1.15,
+                  fontFamily: "'Space Grotesk', sans-serif" }}>
+                  {k.valor}
+                </div>
+                <div style={{ fontSize: 11, color: '#6b6b68' }}>{k.sub}</div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
       {carregado && prazos.length === 0 && (
         <EmptyState icon="📅" title="Nenhum prazo em aberto"
           subtitle="Prazos criados manualmente ou detectados pela IA nos andamentos aparecem aqui" />

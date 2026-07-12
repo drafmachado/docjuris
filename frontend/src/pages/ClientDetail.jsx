@@ -212,15 +212,15 @@ export default function ClientDetail() {
       </button>
 
       <Card style={{ padding: '1.5rem', marginBottom: '1rem', borderRadius: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
           <div style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(135deg, #0f2035, #1a3a5c)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 700, color: '#c5a859', fontFamily: "'Space Grotesk', sans-serif", flexShrink: 0 }}>
             {initials}
           </div>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 180 }}>
             <h2 style={{ fontSize: 21, fontWeight: 700, color: '#0f2035', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '-0.02em' }}>{client.nome}</h2>
             <p style={{ fontSize: 13, color: '#6b6b68' }}>CPF: {client.cpf || '—'} · {[client.cidade, client.estado].filter(Boolean).join(', ') || '—'}</p>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%', justifyContent: 'flex-start' }}>
             <Btn variant="secondary" onClick={() => setShowUploadLink(true)}>🔗 Link de upload</Btn>
             <Btn onClick={() => setShowGenerate(true)}>+ Gerar Documento</Btn>
             <button onClick={() => setShowExcModal(true)}

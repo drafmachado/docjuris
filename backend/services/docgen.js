@@ -1,4 +1,5 @@
 import PizZip from 'pizzip';
+import { parseValor, valorPorExtenso, percentualComExtenso } from './extenso.js';
 import Docxtemplater from 'docxtemplater';
 import fs from 'fs';
 import path from 'path';
@@ -301,5 +302,36 @@ export function buildFillValues(client, manualValues) {
     ...advogadasFields(client),
   };
 
-  return { ...clientFields, ...manualValues };
+  // ─── Formatação automática de valores e percentuais ───────────────────────
+  // A usuária digita só números: "2500" → "2.500,00" + extenso; "20" → "20% (vinte por cento)"
+  const manuaisFormatados = { ...manualValues };
+  for (const [chave, valor] of Object.entries(manuaisFormatados)) {
+    if (valor == null || valor === '') continue;
+    const k = chave.toLowerCase();
+
+    if (k.includes('percentual') || k.includes('porcent')) {
+      const fmt = percentualComExtenso(valor);
+      if (fmt) manuaisFormatados[chave] = fmt;
+      continue;
+    }
+
+    if (k.includes('valor') && !k.includes('extenso')) {
+      const p = parseValor(valor);
+      if (!p) continue;
+      if (k === 'valor_honorarios') {
+        // Este campo é texto completo no template: "R$ 3.000,00 (três mil reais)"
+        manuaisFormatados[chave] = `R$ ${p.formatado} (${valorPorExtenso(p.num)})`;
+      } else {
+        // Campo numérico ("Valor"): o template já tem o R$ na frente
+        manuaisFormatados[chave] = p.formatado;
+        // Gera o extenso automaticamente (o template usa {{valor_extenso}})
+        if (!manuaisFormatados['valor_extenso']) {
+          manuaisFormatados['valor_extenso'] = valorPorExtenso(p.num);
+        }
+      }
+    }
+  }
+
+  return { ...clientFields, ...manuaisFormatados };
 }
+

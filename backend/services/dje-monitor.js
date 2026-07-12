@@ -2,29 +2,39 @@ import { getDB } from '../db.js';
 
 const DJERJ_BASE = 'https://www3.tjrj.jus.br/consultadje';
 
+// OABs monitoradas: Dra. Andreia (RJ e SP) e Dra. Thaísa (RJ)
+export const OABS_MONITORADAS = [
+  { numero: '218586', uf: 'RJ', advogada: 'Dra. Andreia' },
+  { numero: '532488', uf: 'SP', advogada: 'Dra. Andreia' },
+  { numero: '226810', uf: 'RJ', advogada: 'Dra. Thaísa' },
+];
+
 // Busca publicações no DJEN (CNJ) e DJERJ por OAB/nome
 async function buscarDJERJ(data) {
   const dataISO = data.toISOString().split('T')[0]; // YYYY-MM-DD
   const resultados = [];
 
-  // 1. Buscar no DJEN (CNJ) - onde vão as intimações judiciais do TJRJ desde nov/2024
-  try {
-    const r = await fetch(
-      `https://djen.cnj.jus.br/pesquisar-publicacao?` +
-      `data=${dataISO}&` +
-      `tipoPesquisa=OAB&` +
-      `oabNumero=218586&` +
-      `oabEstado=RJ`,
-      { headers: { 'Accept': 'application/json', 'User-Agent': 'DocJuris/1.0' } }
-    );
-    if (r.ok) {
-      const d = await r.json();
-      const pubs = d.publicacoes || d.data || d.results || [];
-      pubs.forEach(p => resultados.push({ ...p, fonte: 'DJEN' }));
-      console.log(`  DJEN: ${pubs.length} publicação(ões)`);
+  // 1. Buscar no DJEN (CNJ) — todas as OABs do escritório
+  for (const oab of OABS_MONITORADAS) {
+    try {
+      const r = await fetch(
+        `https://djen.cnj.jus.br/pesquisar-publicacao?` +
+        `data=${dataISO}&` +
+        `tipoPesquisa=OAB&` +
+        `oabNumero=${oab.numero}&` +
+        `oabEstado=${oab.uf}`,
+        { headers: { 'Accept': 'application/json', 'User-Agent': 'DocJuris/1.0' } }
+      );
+      if (r.ok) {
+        const d = await r.json();
+        const pubs = d.publicacoes || d.data || d.results || [];
+        pubs.forEach(p => resultados.push({ ...p, fonte: 'DJEN', oab_advogada: oab.advogada }));
+        console.log(`  DJEN OAB/${oab.uf} ${oab.numero} (${oab.advogada}): ${pubs.length} publicação(ões)`);
+      }
+      await new Promise(r2 => setTimeout(r2, 500));
+    } catch(e) {
+      console.log(`  DJEN OAB/${oab.uf} ${oab.numero} indisponível:`, e.message);
     }
-  } catch(e) {
-    console.log('  DJEN indisponível:', e.message);
   }
 
   // 2. Buscar também no DJERJ (matérias administrativas)
@@ -252,3 +262,4 @@ export async function monitorarDJE() {
 
   console.log('✅ Monitoramento DJE concluído');
 }
+

@@ -190,7 +190,8 @@ export default function KanbanProcessos() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 12, WebkitOverflowScrolling: 'touch' }}>
+      <div className="quadro-scroll" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 12,
+        WebkitOverflowScrolling: 'touch', maxWidth: '100%' }}>
         {semEtapa.length > 0 && etapas.length > 0 && (
           <div style={{ minWidth: 250, maxWidth: 270, background: '#f3f1e8', borderRadius: 12, padding: '10px 8px', flexShrink: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 12.5, color: '#854f0b', padding: '0 6px', marginBottom: 8 }}>
@@ -243,6 +244,13 @@ export default function KanbanProcessos() {
           </div>
         ))}
       </Modal>
+      <style>{`
+        .quadro-scroll::-webkit-scrollbar { height: 12px; }
+        .quadro-scroll::-webkit-scrollbar-track { background: #e8e6dc; border-radius: 8px; }
+        .quadro-scroll::-webkit-scrollbar-thumb { background: #0f2035; border-radius: 8px; }
+        .quadro-scroll::-webkit-scrollbar-thumb:hover { background: #1a3a5c; }
+        .quadro-scroll { scrollbar-width: auto; scrollbar-color: #0f2035 #e8e6dc; }
+      `}</style>
     </div>
   );
 }

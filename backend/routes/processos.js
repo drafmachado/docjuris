@@ -166,7 +166,7 @@ router.delete('/etapas/:id', (req, res) => {
 router.get('/quadro', (req, res) => {
   const db = getDB();
   const processos = db.prepare(`
-    SELECT p.id, p.numero_cnj, p.tribunal, p.etapa_id, p.status,
+    SELECT p.id, p.numero_cnj, p.tribunal, p.etapa_id, p.status, p.trello_labels,
            c.nome as cliente_nome,
            (SELECT a.descricao FROM andamentos a WHERE a.processo_id = p.id ORDER BY a.data DESC LIMIT 1) as ultima_mov,
            (SELECT MAX(a.data) FROM andamentos a WHERE a.processo_id = p.id) as ultima_mov_data,
@@ -225,34 +225,72 @@ router.post('/importar-trello', (req, res) => {
     VALUES (?, ?, ?, 'trello', ?, 'Importado do Trello', ?)
   `);
 
+  const upLabels = db.prepare('UPDATE processos SET trello_labels = ? WHERE id = ?');
+  const upObs = db.prepare(`
+    UPDATE processos SET observacoes = CASE
+      WHEN observacoes IS NULL OR observacoes = '' THEN ?
+      ELSE observacoes || char(10) || '---' || char(10) || ?
+    END WHERE id = ?
+  `);
+  const insProcSemCnj = db.prepare(`
+    INSERT INTO processos (client_id, numero_cnj, tribunal, observacoes, status, etapa_id, trello_labels, created_by)
+    VALUES (?, ?, 'A DISTRIBUIR', ?, 'ativo', ?, ?, ?)
+  `);
+
   for (const card of cards) {
     const etapaId = mapaLista[card.idList] || null;
     const textoCompleto = `${card.name || ''} ${card.desc || ''}`;
     const m = textoCompleto.match(regexCNJ);
+    const labelsJson = JSON.stringify(card.labels || []);
+
+    // Anotações do cartão: descrição + comentários
+    const blocoNotas = [
+      card.desc && `📝 Trello — ${card.name}:\n${card.desc}`,
+      ...(card.comentarios || []).map(cm => `💬 ${cm.data?.slice(0,10) || ''}: ${cm.texto}`),
+    ].filter(Boolean).join('\n').slice(0, 3000);
+
+    let procId, clientId;
 
     if (!m) {
-      resultado.sem_cnj.push(card.name || '(sem título)');
+      // Cartão sem número (ex.: pré-distribuição) — preserva com o título do cartão
+      const jaExiste = db.prepare('SELECT id FROM processos WHERE numero_cnj = ?').get(card.name?.slice(0, 120));
+      if (jaExiste) { resultado.vinculados++; procId = jaExiste.id; clientId = triagemId; upEtapa.run(etapaId, jaExiste.id); }
+      else {
+        const r = insProcSemCnj.run(triagemId, (card.name || '(sem título)').slice(0, 120),
+          blocoNotas || 'Importado do Trello (sem número de processo)', etapaId, labelsJson, req.user.id);
+        procId = r.lastInsertRowid; clientId = triagemId;
+        resultado.sem_cnj.push(card.name || '(sem título)');
+        resultado.criados_triagem++;
+      }
+      if (labelsJson !== '[]') upLabels.run(labelsJson, procId);
+      if (card.due) {
+        const dataISO = String(card.due).slice(0, 10);
+        const ja = db.prepare('SELECT id FROM prazos WHERE processo_id = ? AND data_limite = ?').get(procId, dataISO);
+        if (!ja) { insPrazo.run(procId, clientId, `Trello: ${(card.name || 'entrega').slice(0, 120)}`, dataISO, req.user.id); resultado.prazos_criados++; }
+      }
       continue;
     }
+
     const digitos = m[0].replace(/\D/g, '');
     const existente = db.prepare(`
       SELECT p.id, p.client_id FROM processos p
       WHERE REPLACE(REPLACE(REPLACE(p.numero_cnj, '.', ''), '-', ''), ' ', '') = ?
     `).get(digitos);
 
-    let procId, clientId;
     if (existente) {
       upEtapa.run(etapaId, existente.id);
+      if (blocoNotas) upObs.run(blocoNotas, blocoNotas, existente.id);
       procId = existente.id; clientId = existente.client_id;
       resultado.vinculados++;
     } else {
       const fmt = `${digitos.slice(0,7)}-${digitos.slice(7,9)}.${digitos.slice(9,13)}.${digitos.slice(13,14)}.${digitos.slice(14,16)}.${digitos.slice(16,20)}`;
       const tribunal = inferirTribunal(digitos) || 'N/D';
-      const obs = ['Importado do Trello', card.name, card.desc].filter(Boolean).join(' | ').slice(0, 800);
+      const obs = [blocoNotas || null, 'Importado do Trello'].filter(Boolean).join('\n').slice(0, 3000);
       const r = insProc.run(triagemId, fmt, tribunal, obs, etapaId, req.user.id);
       procId = r.lastInsertRowid; clientId = triagemId;
       resultado.criados_triagem++;
     }
+    if (labelsJson !== '[]') upLabels.run(labelsJson, procId);
 
     // Data de entrega do cartão → prazo
     if (card.due) {

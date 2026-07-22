@@ -163,6 +163,64 @@ router.delete('/etapas/:id', (req, res) => {
 });
 
 // GET /api/processos/quadro — processos agrupáveis por etapa
+
+// GET /api/processos/etiquetas-quadro — catálogo de etiquetas em uso (para o editor)
+router.get('/etiquetas-quadro', (req, res) => {
+  const db = getDB();
+  const rows = db.prepare(`SELECT trello_labels FROM processos WHERE trello_labels IS NOT NULL AND trello_labels != '[]'`).all();
+  const vistas = new Map();
+  for (const r of rows) {
+    try {
+      for (const lb of JSON.parse(r.trello_labels)) {
+        const chave = `${lb.name}|${lb.color}`;
+        if (!vistas.has(chave)) vistas.set(chave, { name: lb.name || '', color: lb.color || 'blue' });
+      }
+    } catch {}
+  }
+  res.json([...vistas.values()].sort((a, b) => a.name.localeCompare(b.name)));
+});
+
+// PUT /api/processos/:id/etiquetas — define as etiquetas do processo
+router.put('/:id/etiquetas', (req, res) => {
+  const db = getDB();
+  const labels = Array.isArray(req.body.labels) ? req.body.labels : [];
+  db.prepare('UPDATE processos SET trello_labels = ? WHERE id = ?')
+    .run(JSON.stringify(labels.map(l => ({ name: String(l.name || '').slice(0, 60), color: String(l.color || 'blue') }))), req.params.id);
+  res.json({ ok: true });
+});
+
+// POST /api/processos/quadro-card — cria cartão direto do quadro
+// Se o título contém número CNJ → processo formal; senão → pré-distribuição com o título
+router.post('/quadro-card', (req, res) => {
+  const db = getDB();
+  const { titulo, etapa_id, client_id } = req.body;
+  if (!titulo?.trim()) return res.status(400).json({ error: 'Informe o título ou número do processo' });
+
+  const regexCNJ2 = /\d{7}[-.]?\d{2}[.]?\d{4}[.]?\d[.]?\d{2}[.]?\d{4}/;
+  const m = titulo.match(regexCNJ2);
+  const clienteFinal = client_id || getClienteTriagem(db, req.user.id);
+
+  let numero, tribunal;
+  if (m) {
+    const dig = m[0].replace(/\D/g, '');
+    const existe = db.prepare(`
+      SELECT id FROM processos WHERE REPLACE(REPLACE(REPLACE(numero_cnj,'.',''),'-',''),' ','') = ?
+    `).get(dig);
+    if (existe) return res.status(400).json({ error: 'Este processo já está cadastrado' });
+    numero = `${dig.slice(0,7)}-${dig.slice(7,9)}.${dig.slice(9,13)}.${dig.slice(13,14)}.${dig.slice(14,16)}.${dig.slice(16,20)}`;
+    tribunal = inferirTribunal(dig) || 'N/D';
+  } else {
+    numero = titulo.trim().slice(0, 120);
+    tribunal = 'A DISTRIBUIR';
+  }
+
+  const r = db.prepare(`
+    INSERT INTO processos (client_id, numero_cnj, tribunal, status, etapa_id, observacoes, created_by)
+    VALUES (?, ?, ?, 'ativo', ?, 'Criado pelo quadro Andamento', ?)
+  `).run(clienteFinal, numero, tribunal, etapa_id || null, req.user.id);
+  res.json({ id: r.lastInsertRowid });
+});
+
 router.get('/quadro', (req, res) => {
   const db = getDB();
   const processos = db.prepare(`
@@ -545,5 +603,6 @@ async function importarLoteAsync(jobId, numeros, userId) {
 }
 
 export default router;
+
 
 

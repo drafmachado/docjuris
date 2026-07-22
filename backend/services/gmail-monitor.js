@@ -4,6 +4,11 @@ const GMAIL_REMETENTES = [
   'tjrj.pjeadm-LD@tjrj.jus.br',
   'eproc@tjsp.jus.br',
   'nao.responda.12946977@tjrj.jus.br',
+  // Domicílio Judicial Eletrônico / DJEN — filtro por domínio captura
+  // qualquer remetente desses sistemas (a via que não sofre bloqueio de rede)
+  'pdpj.jus.br',
+  'pje.jus.br',
+  'cnj.jus.br',
 ];
 
 // Obtém access token usando refresh token OAuth2
@@ -319,3 +324,4 @@ export async function monitorarEmailsTribunal() {
 
   console.log(`✅ Monitoramento email concluído — ${novos} novo(s) andamento(s)`);
 }
+

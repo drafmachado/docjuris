@@ -368,6 +368,145 @@ router.post('/importar-trello', (req, res) => {
 
 // ─── CARTÃO DO QUADRO (detalhe estilo Trello) ──────────────────────────────
 // GET /api/processos/:id/card — tudo do cartão numa chamada
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TRIAGEM: cruza processos sem cliente real com clientes cadastrados e contatos do WhatsApp
+// ═══════════════════════════════════════════════════════════════════════════
+function normalizarNome(s) {
+  return String(s || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/PROC\.?|PROCESSO|N[º°]|\d{7}[-.]?\d{2}[.]?\d{4}[.]?\d[.]?\d{2}[.]?\d{4}/g, ' ')
+    .replace(/[^A-Z\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+const IRRELEVANTES = new Set(['DE','DA','DO','DAS','DOS','E','X','VS','CONTRA','SP','RJ','ACAO','RECURSO','TUTELA','PROVAS','REPLICA','RECORRER','REVISIONAL','REMISSAO','INVENTARIO','EXECUCAO']);
+function tokensNome(s) {
+  return normalizarNome(s).split(' ').filter(t => t.length >= 3 && !IRRELEVANTES.has(t));
+}
+// Pontuação de similaridade entre dois nomes (0 a 1)
+function similaridade(a, b) {
+  const ta = tokensNome(a), tb = tokensNome(b);
+  if (!ta.length || !tb.length) return 0;
+  const setB = new Set(tb);
+  const comuns = ta.filter(t => setB.has(t)).length;
+  return comuns / Math.min(ta.length, tb.length);
+}
+// Nome provável do cartão: do título do Trello nas observações ou do próprio campo
+function nomeDoCartao(proc) {
+  const m = String(proc.observacoes || '').match(/📝 Trello — ([^:\n]{3,120})/);
+  if (m) return m[1];
+  if (!/\d{7}/.test(proc.numero_cnj || '')) return proc.numero_cnj; // cartão sem CNJ
+  const m2 = String(proc.observacoes || '').match(/^(?:Importado do Trello \| )?([A-ZÀ-Ú][^|\n]{3,80})/);
+  return m2 ? m2[1] : null;
+}
+
+// GET /api/processos/triagem-sugestoes
+router.get('/triagem-sugestoes', async (req, res) => {
+  const db = getDB();
+  try {
+    // Processos vinculados ao cliente técnico de triagem
+    const triagem = db.prepare(`SELECT id FROM clients WHERE nome LIKE '%TRIAGEM%'`).get();
+    if (!triagem) return res.json({ processos: [], contatos_whatsapp: 0 });
+
+    const processos = db.prepare(`
+      SELECT id, numero_cnj, tribunal, observacoes, etapa_id
+      FROM processos WHERE client_id = ? AND status = 'ativo'
+      ORDER BY id
+    `).all(triagem.id);
+
+    const clientes = db.prepare(`SELECT id, nome, telefone, cpf FROM clients WHERE nome NOT LIKE '%TRIAGEM%'`).all();
+
+    // Contatos do WhatsApp (todas as instâncias conectadas)
+    let contatos = [];
+    try {
+      let url = process.env.EVOLUTION_API_URL || '';
+      if (url && !/^https?:\/\//.test(url)) url = 'https://' + url;
+      const headers = { 'apikey': process.env.EVOLUTION_API_KEY, 'Content-Type': 'application/json' };
+      const ri = await fetch(`${url}/instance/fetchInstances`, { headers });
+      const lista = ri.ok ? await ri.json() : [];
+      const nomes = (Array.isArray(lista) ? lista : [lista])
+        .map(x => (x?.instance || x)?.instanceName || (x?.instance || x)?.name).filter(Boolean);
+      for (const inst of (nomes.length ? nomes : [process.env.EVOLUTION_INSTANCE || 'docjuris'])) {
+        const rc = await fetch(`${url}/chat/findContacts/${inst}`, { method: 'POST', headers, body: JSON.stringify({}) });
+        if (!rc.ok) continue;
+        const bruto = await rc.json();
+        const arr = Array.isArray(bruto) ? bruto : (bruto.contacts || bruto.records || []);
+        for (const ct of arr) {
+          const jid = ct.remoteJid || ct.id || '';
+          if (!jid || jid.endsWith('@g.us') || jid.includes('broadcast')) continue;
+          const numero = jid.split('@')[0].replace(/\D/g, '');
+          const nome = ct.pushName || ct.name || ct.notify || '';
+          if (numero.length >= 10 && nome) contatos.push({ nome, numero });
+        }
+      }
+    } catch(e) { console.error('Contatos WhatsApp:', e.message); }
+
+    // Cruzamento
+    const sugestoes = processos.map(p => {
+      const nome = nomeDoCartao(p);
+      let melhorCliente = null, melhorContato = null;
+      if (nome) {
+        for (const cl of clientes) {
+          const s = similaridade(nome, cl.nome);
+          if (s >= 0.6 && (!melhorCliente || s > melhorCliente.score)) melhorCliente = { ...cl, score: s };
+        }
+        for (const ct of contatos) {
+          const s = similaridade(nome, ct.nome);
+          if (s >= 0.6 && (!melhorContato || s > melhorContato.score)) melhorContato = { ...ct, score: s };
+        }
+      }
+      return {
+        processo_id: p.id, numero_cnj: p.numero_cnj, tribunal: p.tribunal,
+        nome_extraido: nome,
+        cliente_sugerido: melhorCliente ? { id: melhorCliente.id, nome: melhorCliente.nome, telefone: melhorCliente.telefone, score: Math.round(melhorCliente.score * 100) } : null,
+        whatsapp_sugerido: melhorContato ? { nome: melhorContato.nome, numero: melhorContato.numero, score: Math.round(melhorContato.score * 100) } : null,
+      };
+    });
+
+    res.json({ processos: sugestoes, contatos_whatsapp: contatos.length });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/processos/triagem-aplicar { itens: [{ processo_id, client_id?, criar_nome?, telefone? }] }
+router.post('/triagem-aplicar', (req, res) => {
+  const db = getDB();
+  const itens = Array.isArray(req.body.itens) ? req.body.itens : [];
+  const r = { vinculados: 0, clientes_criados: 0, telefones_atualizados: 0 };
+
+  const tx = db.transaction(() => {
+    for (const it of itens) {
+      let clientId = it.client_id;
+
+      if (!clientId && it.criar_nome) {
+        const ins = db.prepare(`
+          INSERT INTO clients (nome, telefone, observacoes, advogadas, created_by)
+          VALUES (?, ?, 'Criado pela triagem de processos (Trello + WhatsApp) — completar cadastro', 'ambas', ?)
+        `).run(String(it.criar_nome).slice(0, 120), it.telefone || null, req.user.id);
+        clientId = ins.lastInsertRowid;
+        r.clientes_criados++;
+      } else if (clientId && it.telefone) {
+        // Só preenche telefone vazio — não sobrescreve dado bom
+        const cl = db.prepare('SELECT telefone FROM clients WHERE id = ?').get(clientId);
+        if (cl && (!cl.telefone || !cl.telefone.trim())) {
+          db.prepare('UPDATE clients SET telefone = ? WHERE id = ?').run(it.telefone, clientId);
+          r.telefones_atualizados++;
+        }
+      }
+
+      if (clientId) {
+        db.prepare('UPDATE processos SET client_id = ? WHERE id = ?').run(clientId, it.processo_id);
+        r.vinculados++;
+      }
+    }
+  });
+  tx();
+  res.json(r);
+});
+
 router.get('/:id/card', (req, res) => {
   const db = getDB();
   const p = db.prepare(`
@@ -688,6 +827,7 @@ async function importarLoteAsync(jobId, numeros, userId) {
 }
 
 export default router;
+
 
 
 

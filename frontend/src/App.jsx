@@ -10,6 +10,7 @@ import ClientDetail from './pages/ClientDetail.jsx';
 import Diagnostico from './pages/Diagnostico.jsx';
 import Portal from './pages/Portal.jsx';
 import Tarefas from './pages/Tarefas.jsx';
+import KanbanProcessos from './pages/KanbanProcessos.jsx';
 import Documents from './pages/Documents.jsx';
 import Templates from './pages/Templates.jsx';
 import Users from './pages/Users.jsx';
@@ -43,6 +44,7 @@ function AppRoutes() {
         <Route path="clients" element={<Clients />} />
         <Route path="diagnostico" element={<Diagnostico />} />
         <Route path="tarefas" element={<Tarefas />} />
+        <Route path="andamento" element={<KanbanProcessos />} />
         <Route path="clients/:id" element={<ClientDetail />} />
         <Route path="documents" element={<Documents />} />
         <Route path="templates" element={<Templates />} />
@@ -106,4 +108,5 @@ export default function App() {
     </BrowserRouter>
   );
 }
+
 

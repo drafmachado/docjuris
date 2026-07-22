@@ -122,27 +122,38 @@ export async function registrarWebhookMensagens() {
   try {
     const { webhookToken } = await import('../routes/whatsapp-webhook.js');
     const urlPublica = `https://advmachado.adv.br/api/whatsapp/webhook/${webhookToken()}`;
-    const inst = process.env.EVOLUTION_INSTANCE || 'docjuris';
+    const headers = { 'apikey': process.env.EVOLUTION_API_KEY, 'Content-Type': 'application/json' };
 
-    // Formato Evolution v2
-    let r = await fetch(`${EVOLUTION_URL}/webhook/set/${inst}`, {
-      method: 'POST',
-      headers: { 'apikey': process.env.EVOLUTION_API_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        webhook: { enabled: true, url: urlPublica, webhookByEvents: false, events: ['MESSAGES_UPSERT'] },
-      }),
-    });
-    if (!r.ok) {
-      // Formato alternativo (versões que aceitam body plano)
-      r = await fetch(`${EVOLUTION_URL}/webhook/set/${inst}`, {
-        method: 'POST',
-        headers: { 'apikey': process.env.EVOLUTION_API_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: true, url: urlPublica, events: ['MESSAGES_UPSERT'] }),
+    // Todas as instâncias (os 3 números do escritório) alimentam o mesmo webhook de leads
+    let nomes = [process.env.EVOLUTION_INSTANCE || 'docjuris'];
+    try {
+      const ri = await fetch(`${EVOLUTION_URL}/instance/fetchInstances`, { headers });
+      if (ri.ok) {
+        const lista = await ri.json();
+        const extraidos = (Array.isArray(lista) ? lista : [lista])
+          .map(x => (x?.instance || x)?.instanceName || (x?.instance || x)?.name)
+          .filter(Boolean);
+        if (extraidos.length) nomes = [...new Set([...nomes, ...extraidos])];
+      }
+    } catch {}
+
+    for (const inst of nomes) {
+      let r = await fetch(`${EVOLUTION_URL}/webhook/set/${inst}`, {
+        method: 'POST', headers,
+        body: JSON.stringify({
+          webhook: { enabled: true, url: urlPublica, webhookByEvents: false, events: ['MESSAGES_UPSERT'] },
+        }),
       });
+      if (!r.ok) {
+        r = await fetch(`${EVOLUTION_URL}/webhook/set/${inst}`, {
+          method: 'POST', headers,
+          body: JSON.stringify({ enabled: true, url: urlPublica, events: ['MESSAGES_UPSERT'] }),
+        });
+      }
+      console.log(r.ok
+        ? `💬 Webhook de leads ativo na instância "${inst}"`
+        : `⚠️ Webhook não registrado em "${inst}": HTTP ${r.status}`);
     }
-    console.log(r.ok
-      ? '💬 Webhook de mensagens registrado na Evolution (leads automáticos ativos)'
-      : `⚠️ Webhook Evolution não registrado: HTTP ${r.status}`);
   } catch(e) {
     console.error('⚠️ Registro do webhook Evolution falhou:', e.message);
   }

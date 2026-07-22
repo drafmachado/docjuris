@@ -116,6 +116,159 @@ router.put('/prazos/:prazo_id/concluir', (req, res) => {
 });
 
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// QUADRO DE ANDAMENTO (etapas estilo Trello) + importação do Trello
+// ═══════════════════════════════════════════════════════════════════════════
+
+// GET /api/processos/etapas — colunas do quadro
+router.get('/etapas', (req, res) => {
+  const db = getDB();
+  const etapas = db.prepare('SELECT * FROM etapas_processo ORDER BY ordem, id').all();
+  // Contagem de processos por etapa
+  const contagens = db.prepare(`
+    SELECT etapa_id, COUNT(*) as n FROM processos
+    WHERE status = 'ativo' AND etapa_id IS NOT NULL GROUP BY etapa_id
+  `).all();
+  const mapa = Object.fromEntries(contagens.map(x => [x.etapa_id, x.n]));
+  res.json(etapas.map(e => ({ ...e, processos: mapa[e.id] || 0 })));
+});
+
+// POST /api/processos/etapas — criar coluna
+router.post('/etapas', (req, res) => {
+  const db = getDB();
+  const { nome } = req.body;
+  if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
+  const max = db.prepare('SELECT COALESCE(MAX(ordem), -1) as m FROM etapas_processo').get();
+  const r = db.prepare('INSERT INTO etapas_processo (nome, ordem) VALUES (?, ?)').run(nome.trim(), max.m + 1);
+  res.json({ id: r.lastInsertRowid });
+});
+
+// PUT /api/processos/etapas/:id — renomear ou reordenar
+router.put('/etapas/:id', (req, res) => {
+  const db = getDB();
+  const { nome, ordem } = req.body;
+  db.prepare('UPDATE etapas_processo SET nome = COALESCE(?, nome), ordem = COALESCE(?, ordem) WHERE id = ?')
+    .run(nome ?? null, ordem ?? null, req.params.id);
+  res.json({ ok: true });
+});
+
+// DELETE /api/processos/etapas/:id — só se vazia
+router.delete('/etapas/:id', (req, res) => {
+  const db = getDB();
+  const tem = db.prepare(`SELECT COUNT(*) as n FROM processos WHERE etapa_id = ? AND status='ativo'`).get(req.params.id);
+  if (tem.n > 0) return res.status(400).json({ error: `Há ${tem.n} processo(s) nesta etapa. Mova-os antes de excluir.` });
+  db.prepare('DELETE FROM etapas_processo WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// GET /api/processos/quadro — processos agrupáveis por etapa
+router.get('/quadro', (req, res) => {
+  const db = getDB();
+  const processos = db.prepare(`
+    SELECT p.id, p.numero_cnj, p.tribunal, p.etapa_id, p.status,
+           c.nome as cliente_nome,
+           (SELECT a.descricao FROM andamentos a WHERE a.processo_id = p.id ORDER BY a.data DESC LIMIT 1) as ultima_mov,
+           (SELECT MAX(a.data) FROM andamentos a WHERE a.processo_id = p.id) as ultima_mov_data,
+           (SELECT MIN(pz.data_limite) FROM prazos pz WHERE pz.processo_id = p.id AND pz.concluido = 0) as proximo_prazo
+    FROM processos p
+    LEFT JOIN clients c ON c.id = p.client_id
+    WHERE p.status = 'ativo'
+    ORDER BY c.nome
+  `).all();
+  res.json(processos);
+});
+
+// PUT /api/processos/:id/etapa — mover processo de coluna
+router.put('/:id/etapa', (req, res) => {
+  const db = getDB();
+  db.prepare('UPDATE processos SET etapa_id = ? WHERE id = ?').run(req.body.etapa_id ?? null, req.params.id);
+  res.json({ ok: true });
+});
+
+// POST /api/processos/importar-trello — recebe { lists: [{id, nome}], cards: [{name, desc, idList, due}] }
+// (o navegador já filtra o JSON bruto do Trello para este formato compacto)
+router.post('/importar-trello', (req, res) => {
+  const db = getDB();
+  const { lists, cards } = req.body;
+  if (!Array.isArray(lists) || !Array.isArray(cards)) {
+    return res.status(400).json({ error: 'Formato inválido — envie o JSON exportado do Trello' });
+  }
+
+  const resultado = { etapas_criadas: 0, vinculados: 0, criados_triagem: 0, sem_cnj: [], prazos_criados: 0 };
+  const triagemId = getClienteTriagem(db, req.user.id);
+
+  // 1. Listas do Trello → etapas (na ordem; reaproveita etapas com mesmo nome)
+  const mapaLista = {}; // idList do Trello → etapa_id do Veredo
+  const maxOrdem = db.prepare('SELECT COALESCE(MAX(ordem), -1) as m FROM etapas_processo').get().m;
+  lists.forEach((l, i) => {
+    const nome = (l.nome || l.name || '').trim();
+    if (!nome) return;
+    let etapa = db.prepare('SELECT id FROM etapas_processo WHERE nome = ?').get(nome);
+    if (!etapa) {
+      const r = db.prepare('INSERT INTO etapas_processo (nome, ordem) VALUES (?, ?)').run(nome, maxOrdem + 1 + i);
+      etapa = { id: r.lastInsertRowid };
+      resultado.etapas_criadas++;
+    }
+    mapaLista[l.id] = etapa.id;
+  });
+
+  // 2. Cartões → processos (match por CNJ; sem match mas com CNJ → cria na triagem)
+  const regexCNJ = /\d{7}[-.]?\d{2}[.]?\d{4}[.]?\d[.]?\d{2}[.]?\d{4}/;
+  const upEtapa = db.prepare('UPDATE processos SET etapa_id = ? WHERE id = ?');
+  const insProc = db.prepare(`
+    INSERT INTO processos (client_id, numero_cnj, tribunal, observacoes, status, etapa_id, created_by)
+    VALUES (?, ?, ?, ?, 'ativo', ?, ?)
+  `);
+  const insPrazo = db.prepare(`
+    INSERT INTO prazos (processo_id, client_id, titulo, tipo, data_limite, observacoes, created_by)
+    VALUES (?, ?, ?, 'trello', ?, 'Importado do Trello', ?)
+  `);
+
+  for (const card of cards) {
+    const etapaId = mapaLista[card.idList] || null;
+    const textoCompleto = `${card.name || ''} ${card.desc || ''}`;
+    const m = textoCompleto.match(regexCNJ);
+
+    if (!m) {
+      resultado.sem_cnj.push(card.name || '(sem título)');
+      continue;
+    }
+    const digitos = m[0].replace(/\D/g, '');
+    const existente = db.prepare(`
+      SELECT p.id, p.client_id FROM processos p
+      WHERE REPLACE(REPLACE(REPLACE(p.numero_cnj, '.', ''), '-', ''), ' ', '') = ?
+    `).get(digitos);
+
+    let procId, clientId;
+    if (existente) {
+      upEtapa.run(etapaId, existente.id);
+      procId = existente.id; clientId = existente.client_id;
+      resultado.vinculados++;
+    } else {
+      const fmt = `${digitos.slice(0,7)}-${digitos.slice(7,9)}.${digitos.slice(9,13)}.${digitos.slice(13,14)}.${digitos.slice(14,16)}.${digitos.slice(16,20)}`;
+      const tribunal = inferirTribunal(digitos) || 'N/D';
+      const obs = ['Importado do Trello', card.name, card.desc].filter(Boolean).join(' | ').slice(0, 800);
+      const r = insProc.run(triagemId, fmt, tribunal, obs, etapaId, req.user.id);
+      procId = r.lastInsertRowid; clientId = triagemId;
+      resultado.criados_triagem++;
+    }
+
+    // Data de entrega do cartão → prazo
+    if (card.due) {
+      const dataISO = String(card.due).slice(0, 10);
+      const ja = db.prepare('SELECT id FROM prazos WHERE processo_id = ? AND data_limite = ?').get(procId, dataISO);
+      if (!ja) {
+        insPrazo.run(procId, clientId, `Trello: ${(card.name || 'entrega').slice(0, 120)}`, dataISO, req.user.id);
+        resultado.prazos_criados++;
+      }
+    }
+  }
+
+  res.json(resultado);
+});
+
+
 router.get('/:id', (req, res) => {
   const db = getDB();
   const processo = db.prepare(`
@@ -354,4 +507,5 @@ async function importarLoteAsync(jobId, numeros, userId) {
 }
 
 export default router;
+
 

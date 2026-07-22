@@ -122,7 +122,25 @@ router.post('/rodar', async (req, res) => {
     const data = await r.json();
     const estado = data?.instance?.state || data?.state || 'desconhecido';
     if (estado !== 'open') throw new Error(`Instância "${inst}" está: ${estado} (esperado: open)`);
-    return `Instância "${inst}" conectada`;
+
+    // Descobrir QUAL número de WhatsApp é o dono desta conexão
+    let numeroInfo = '';
+    try {
+      const ri = await fetch(`${url}/instance/fetchInstances?instanceName=${inst}`, { headers: { 'apikey': key } });
+      if (ri.ok) {
+        const insts = await ri.json();
+        const info = Array.isArray(insts) ? (insts[0]?.instance || insts[0]) : (insts?.instance || insts);
+        const owner = info?.owner || info?.ownerJid || '';
+        const nome = info?.profileName || info?.profilePictureUrl && '' || '';
+        const digitos = String(owner).replace(/@.*$/, '').replace(/\D/g, '');
+        if (digitos.length >= 12) {
+          const fmt = `+${digitos.slice(0,2)} (${digitos.slice(2,4)}) ${digitos.slice(4,9)}-${digitos.slice(9)}`;
+          numeroInfo = ` · NÚMERO CONECTADO: ${fmt}${info?.profileName ? ` — perfil "${info.profileName}"` : ''}`;
+        }
+      }
+    } catch {}
+
+    return `Instância "${inst}" conectada${numeroInfo}`;
   });
 
   // ─── 7. DataJud ───
@@ -275,5 +293,6 @@ router.post('/backup-agora', async (req, res) => {
 });
 
 export default router;
+
 
 

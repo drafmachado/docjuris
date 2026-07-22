@@ -5,7 +5,8 @@ import { Topbar, Btn, Modal, FormField, FormGrid } from '../components/UI.jsx';
 import api from '../utils/api.js';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Settings2, UploadCloud, Plus, Trash2, CalendarClock, ArrowUp, ArrowDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings2, UploadCloud, Plus, Trash2, CalendarClock, ArrowUp, ArrowDown, Search, Tag, X } from 'lucide-react';
+import SearchableSelect from '../components/SearchableSelect.jsx';
 
 const CORES_TRELLO = {
   green: '#4bce97', yellow: '#f5cd47', orange: '#fea362', red: '#f87168', purple: '#9f8fef',
@@ -32,6 +33,14 @@ export default function KanbanProcessos() {
   const fileRef = useRef(null);
   const quadroRef = useRef(null);
   const [alturaQuadro, setAlturaQuadro] = useState('70vh');
+  const [busca, setBusca] = useState('');
+  const [clientes, setClientes] = useState([]);
+  const [catalogoEtiquetas, setCatalogoEtiquetas] = useState([]);
+  const [modalNovo, setModalNovo] = useState(null);        // etapa_id do "+" clicado
+  const [novoCard, setNovoCard] = useState({ titulo: '', client_id: '' });
+  const [modalEtiquetas, setModalEtiquetas] = useState(null); // processo em edição
+  const [etiquetasSel, setEtiquetasSel] = useState([]);
+  const [novaEtiqueta, setNovaEtiqueta] = useState({ name: '', color: 'blue' });
 
   // O quadro ocupa exatamente o espaço da sua posição até a base da tela — sem sobra
   useEffect(() => {
@@ -50,7 +59,45 @@ export default function KanbanProcessos() {
     api.get('/processos/etapas').then(r => setEtapas(r.data)).catch(() => {});
     api.get('/processos/quadro').then(r => setProcessos(r.data)).catch(() => {});
   };
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+    api.get('/clients').then(r => setClientes(r.data || [])).catch(() => {});
+    api.get('/processos/etiquetas-quadro').then(r => setCatalogoEtiquetas(r.data || [])).catch(() => {});
+  }, []);
+
+  async function criarCartao() {
+    if (!novoCard.titulo.trim()) return toast.error('Informe o nome ou o número do processo');
+    try {
+      await api.post('/processos/quadro-card', { ...novoCard, etapa_id: modalNovo });
+      toast.success('Cartão criado!');
+      setModalNovo(null); setNovoCard({ titulo: '', client_id: '' });
+      load();
+    } catch(e) { toast.error(e.response?.data?.error || 'Erro ao criar'); }
+  }
+
+  function abrirEtiquetas(p, e) {
+    e.stopPropagation();
+    let atuais = [];
+    try { atuais = JSON.parse(p.trello_labels || '[]'); } catch {}
+    setEtiquetasSel(atuais);
+    setModalEtiquetas(p);
+  }
+
+  async function salvarEtiquetas() {
+    try {
+      await api.put(`/processos/${modalEtiquetas.id}/etiquetas`, { labels: etiquetasSel });
+      setProcessos(prev => prev.map(x => x.id === modalEtiquetas.id ? { ...x, trello_labels: JSON.stringify(etiquetasSel) } : x));
+      // Atualiza catálogo com etiquetas novas
+      api.get('/processos/etiquetas-quadro').then(r => setCatalogoEtiquetas(r.data || [])).catch(() => {});
+      setModalEtiquetas(null);
+      toast.success('Etiquetas salvas');
+    } catch { toast.error('Erro ao salvar'); }
+  }
+
+  const temEtiqueta = (lb) => etiquetasSel.some(x => x.name === lb.name && x.color === lb.color);
+  const toggleEtiqueta = (lb) => {
+    setEtiquetasSel(prev => temEtiqueta(lb) ? prev.filter(x => !(x.name === lb.name && x.color === lb.color)) : [...prev, lb]);
+  };
 
   async function mover(p, direcao) {
     const ids = etapas.map(e => e.id);
@@ -135,7 +182,15 @@ export default function KanbanProcessos() {
     reader.readAsText(file);
   }
 
-  const semEtapa = processos.filter(p => !p.etapa_id || !etapas.some(e => e.id === p.etapa_id));
+  const filtrados = busca.trim()
+    ? processos.filter(p => {
+        const t = busca.toLowerCase();
+        return (p.numero_cnj || '').toLowerCase().includes(t)
+            || (p.cliente_nome || '').toLowerCase().includes(t)
+            || (p.trello_labels || '').toLowerCase().includes(t);
+      })
+    : processos;
+  const semEtapa = filtrados.filter(p => !p.etapa_id || !etapas.some(e => e.id === p.etapa_id));
 
   const Card = ({ p, colIdx }) => (
     <div onClick={() => nav(`/processos/${p.id}`)} style={{
@@ -174,7 +229,11 @@ export default function KanbanProcessos() {
           <CalendarClock size={11} /> prazo: {fmtData(p.proximo_prazo)}
         </div>
       )}
-      <div style={{ display: 'flex', gap: 4, marginTop: 7 }} onClick={e => e.stopPropagation()}>
+      <div style={{ display: 'flex', gap: 4, marginTop: 7, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+        <button onClick={(e) => abrirEtiquetas(p, e)} title="Editar etiquetas"
+          style={{ background: '#fdf6e3', border: 'none', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', display: 'flex' }}>
+          <Tag size={12} color="#854f0b" />
+        </button>
         <button onClick={() => mover(p, -1)}
           style={{ background: '#f0f4ff', border: 'none', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', display: 'flex' }}>
           <ChevronLeft size={12} color="#185fa5" />
@@ -190,6 +249,13 @@ export default function KanbanProcessos() {
   return (
     <div>
       <Topbar title="Andamento">
+        <div style={{ position: 'relative', marginRight: 8 }}>
+          <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#9a9a97' }} />
+          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar cliente, nº, etiqueta..."
+            style={{ width: 210, padding: '8px 10px 8px 30px', fontSize: 13, border: '1px solid #d0cfc7', borderRadius: 9 }} />
+          {busca && <X size={13} onClick={() => setBusca('')}
+            style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', color: '#9a9a97', cursor: 'pointer' }} />}
+        </div>
         <input type="file" accept=".json,application/json" ref={fileRef} onChange={importarTrello} style={{ display: 'none' }} />
         <Btn variant="outline" onClick={() => fileRef.current?.click()} disabled={importando} style={{ marginRight: 8 }}>
           <UploadCloud size={14} /> {importando ? 'Importando...' : 'Importar do Trello'}
@@ -220,13 +286,20 @@ export default function KanbanProcessos() {
           </div>
         )}
         {etapas.map((et, i) => {
-          const itens = processos.filter(p => p.etapa_id === et.id);
+          const itens = filtrados.filter(p => p.etapa_id === et.id);
           return (
             <div key={et.id} style={{ minWidth: 250, maxWidth: 270, background: '#f0efe8', borderRadius: 12, padding: '10px 8px',
               flexShrink: 0, display: 'flex', flexDirection: 'column', maxHeight: '100%' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 6px', marginBottom: 8, flexShrink: 0 }}>
                 <span style={{ fontWeight: 700, fontSize: 12.5, color: '#0d2340' }}>{et.nome}</span>
-                <span style={{ background: '#fff', borderRadius: 20, padding: '1px 8px', fontSize: 11, fontWeight: 700, color: '#6b6b68' }}>{itens.length}</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ background: '#fff', borderRadius: 20, padding: '1px 8px', fontSize: 11, fontWeight: 700, color: '#6b6b68' }}>{itens.length}</span>
+                  <button onClick={() => { setModalNovo(et.id); setNovoCard({ titulo: '', client_id: '' }); }}
+                    title="Novo cartão nesta etapa"
+                    style={{ background: '#fff', border: 'none', borderRadius: 6, padding: '2px 6px', cursor: 'pointer', display: 'flex' }}>
+                    <Plus size={13} color="#0d2340" />
+                  </button>
+                </span>
               </div>
               <div className="coluna-scroll" style={{ overflowY: 'auto', flex: 1, paddingRight: 2 }}>
                 {itens.map(p => <Card key={p.id} p={p} colIdx={i} />)}
@@ -266,6 +339,61 @@ export default function KanbanProcessos() {
           </div>
         ))}
       </Modal>
+      {/* ─── Modal: novo cartão ─── */}
+      <Modal open={!!modalNovo} onClose={() => setModalNovo(null)} title="Novo cartão"
+        footer={<><Btn variant="outline" onClick={() => setModalNovo(null)}>Cancelar</Btn><Btn onClick={criarCartao}>Criar</Btn></>}>
+        <FormGrid cols={1}>
+          <FormField label="Nome do caso OU número do processo *">
+            <input value={novoCard.titulo} onChange={e => setNovoCard(f => ({ ...f, titulo: e.target.value }))}
+              placeholder='Ex: "Camila - revisional" ou "0801234-56.2026.8.19.0001"' autoFocus
+              onKeyDown={e => e.key === 'Enter' && criarCartao()} />
+          </FormField>
+          <FormField label="Cliente (opcional — sem cliente vai para a TRIAGEM)">
+            <SearchableSelect value={novoCard.client_id}
+              onChange={val => setNovoCard(f => ({ ...f, client_id: val }))}
+              options={clientes.map(cl => ({ value: cl.id, label: cl.nome }))}
+              placeholder="Buscar cliente..." />
+          </FormField>
+          <p style={{ fontSize: 11.5, color: '#6b6b68', margin: 0 }}>
+            Com número CNJ, o processo entra no monitoramento automático. Sem número, fica como pré-distribuição (igual ao seu Trello).
+          </p>
+        </FormGrid>
+      </Modal>
+
+      {/* ─── Modal: etiquetas ─── */}
+      <Modal open={!!modalEtiquetas} onClose={() => setModalEtiquetas(null)}
+        title={`Etiquetas — ${modalEtiquetas?.numero_cnj || ''}`}
+        footer={<><Btn variant="outline" onClick={() => setModalEtiquetas(null)}>Cancelar</Btn><Btn onClick={salvarEtiquetas}>Salvar</Btn></>}>
+        <p style={{ fontSize: 12, color: '#6b6b68', margin: '0 0 10px' }}>Clique para marcar/desmarcar:</p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+          {catalogoEtiquetas.map((lb, i) => (
+            <span key={i} onClick={() => toggleEtiqueta(lb)}
+              style={{ background: corLabel(lb.color), color: corTextoLabel(lb.color),
+                borderRadius: 6, padding: '4px 11px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                outline: temEtiqueta(lb) ? '2.5px solid #0f2035' : 'none', outlineOffset: 1,
+                opacity: temEtiqueta(lb) ? 1 : 0.65 }}>
+              {temEtiqueta(lb) ? '✓ ' : ''}{lb.name || '(sem nome)'}
+            </span>
+          ))}
+        </div>
+        <p style={{ fontSize: 12, fontWeight: 700, color: '#0d2340', margin: '0 0 6px' }}>Criar etiqueta nova:</p>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input value={novaEtiqueta.name} onChange={e => setNovaEtiqueta(f => ({ ...f, name: e.target.value }))}
+            placeholder="Nome da etiqueta" style={{ flex: 1 }} />
+          <select value={novaEtiqueta.color} onChange={e => setNovaEtiqueta(f => ({ ...f, color: e.target.value }))}
+            style={{ width: 130, background: corLabel(novaEtiqueta.color), color: corTextoLabel(novaEtiqueta.color), fontWeight: 700 }}>
+            {Object.keys(CORES_TRELLO).map(cor => <option key={cor} value={cor}>{cor.replace('_', ' ')}</option>)}
+          </select>
+          <Btn onClick={() => {
+            if (!novaEtiqueta.name.trim()) return toast.error('Dê um nome');
+            const nova = { name: novaEtiqueta.name.trim(), color: novaEtiqueta.color };
+            setCatalogoEtiquetas(prev => [...prev, nova]);
+            setEtiquetasSel(prev => [...prev, nova]);
+            setNovaEtiqueta({ name: '', color: 'blue' });
+          }}><Plus size={13} /></Btn>
+        </div>
+      </Modal>
+
       <style>{`
         .quadro-scroll::-webkit-scrollbar { height: 12px; }
         .quadro-scroll::-webkit-scrollbar-track { background: #e8e6dc; border-radius: 8px; }
@@ -279,3 +407,4 @@ export default function KanbanProcessos() {
     </div>
   );
 }
+

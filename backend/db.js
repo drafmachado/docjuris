@@ -314,6 +314,23 @@ export function initDB() {
   try { db.exec(`ALTER TABLE processos ADD COLUMN etapa_id INTEGER`); } catch {}
   try { db.exec(`ALTER TABLE processos ADD COLUMN trello_labels TEXT`); } catch {}
   db.exec(`
+    CREATE TABLE IF NOT EXISTS processo_comentarios (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      processo_id INTEGER NOT NULL REFERENCES processos(id) ON DELETE CASCADE,
+      texto TEXT NOT NULL,
+      autor_id INTEGER REFERENCES users(id),
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS processo_checklist (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      processo_id INTEGER NOT NULL REFERENCES processos(id) ON DELETE CASCADE,
+      texto TEXT NOT NULL,
+      concluido INTEGER NOT NULL DEFAULT 0,
+      ordem INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+  db.exec(`
     CREATE TABLE IF NOT EXISTS etapas_processo (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       nome TEXT NOT NULL,
@@ -413,5 +430,6 @@ export function initDB() {
 
   console.log('🗄️  Banco de dados inicializado');
 }
+
 
 

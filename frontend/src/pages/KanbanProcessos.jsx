@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Settings2, UploadCloud, Plus, Trash2, CalendarClock, ArrowUp, ArrowDown, Search, Tag, X } from 'lucide-react';
 import SearchableSelect from '../components/SearchableSelect.jsx';
+import CardModal from './CardModal.jsx';
 
 const CORES_TRELLO = {
   green: '#4bce97', yellow: '#f5cd47', orange: '#fea362', red: '#f87168', purple: '#9f8fef',
@@ -41,6 +42,7 @@ export default function KanbanProcessos() {
   const [modalEtiquetas, setModalEtiquetas] = useState(null); // processo em edição
   const [etiquetasSel, setEtiquetasSel] = useState([]);
   const [novaEtiqueta, setNovaEtiqueta] = useState({ name: '', color: 'blue' });
+  const [cardAberto, setCardAberto] = useState(null); // { id, etapaNome }
 
   // O quadro ocupa exatamente o espaço da sua posição até a base da tela — sem sobra
   useEffect(() => {
@@ -90,6 +92,7 @@ export default function KanbanProcessos() {
       // Atualiza catálogo com etiquetas novas
       api.get('/processos/etiquetas-quadro').then(r => setCatalogoEtiquetas(r.data || [])).catch(() => {});
       setModalEtiquetas(null);
+      if (cardAberto?.id === modalEtiquetas.id) setCardAberto(c => ({ ...c }));
       toast.success('Etiquetas salvas');
     } catch { toast.error('Erro ao salvar'); }
   }
@@ -193,7 +196,7 @@ export default function KanbanProcessos() {
   const semEtapa = filtrados.filter(p => !p.etapa_id || !etapas.some(e => e.id === p.etapa_id));
 
   const Card = ({ p, colIdx }) => (
-    <div onClick={() => nav(`/processos/${p.id}`)} style={{
+    <div onClick={() => setCardAberto({ id: p.id, etapaNome: etapas.find(e => e.id === p.etapa_id)?.nome })} style={{
       background: '#fff', borderRadius: 10, padding: '10px 12px', marginBottom: 8,
       boxShadow: '0 1px 4px rgba(0,0,0,0.05)', cursor: 'pointer',
     }}>
@@ -339,6 +342,23 @@ export default function KanbanProcessos() {
           </div>
         ))}
       </Modal>
+      {cardAberto && (
+        <CardModal
+          processoId={cardAberto.id}
+          etapaNome={cardAberto.etapaNome}
+          corLabel={corLabel}
+          corTextoLabel={corTextoLabel}
+          onClose={() => { setCardAberto(null); load(); }}
+          onChange={load}
+          onAbrirEtiquetas={(proc) => {
+            let atuais = [];
+            try { atuais = JSON.parse(proc.trello_labels || '[]'); } catch {}
+            setEtiquetasSel(atuais);
+            setModalEtiquetas(proc);
+          }}
+        />
+      )}
+
       {/* ─── Modal: novo cartão ─── */}
       <Modal open={!!modalNovo} onClose={() => setModalNovo(null)} title="Novo cartão"
         footer={<><Btn variant="outline" onClick={() => setModalNovo(null)}>Cancelar</Btn><Btn onClick={criarCartao}>Criar</Btn></>}>
@@ -407,4 +427,5 @@ export default function KanbanProcessos() {
     </div>
   );
 }
+
 

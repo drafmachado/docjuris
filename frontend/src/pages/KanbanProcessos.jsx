@@ -30,6 +30,21 @@ export default function KanbanProcessos() {
   const [novaEtapa, setNovaEtapa] = useState('');
   const [importando, setImportando] = useState(false);
   const fileRef = useRef(null);
+  const quadroRef = useRef(null);
+  const [alturaQuadro, setAlturaQuadro] = useState('70vh');
+
+  // O quadro ocupa exatamente o espaço da sua posição até a base da tela — sem sobra
+  useEffect(() => {
+    const medir = () => {
+      if (!quadroRef.current) return;
+      const topo = quadroRef.current.getBoundingClientRect().top;
+      setAlturaQuadro(`${Math.max(320, window.innerHeight - topo - 14)}px`);
+    };
+    medir();
+    const t = setTimeout(medir, 300); // remede após fontes/layout assentarem
+    window.addEventListener('resize', medir);
+    return () => { clearTimeout(t); window.removeEventListener('resize', medir); };
+  }, [etapas.length]);
 
   const load = () => {
     api.get('/processos/etapas').then(r => setEtapas(r.data)).catch(() => {});
@@ -190,9 +205,9 @@ export default function KanbanProcessos() {
         </div>
       )}
 
-      <div className="quadro-scroll" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 6,
+      <div ref={quadroRef} className="quadro-scroll" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 6,
         WebkitOverflowScrolling: 'touch', maxWidth: '100%',
-        height: 'calc(100vh - 190px)', alignItems: 'flex-start' }}>
+        height: alturaQuadro, alignItems: 'flex-start' }}>
         {semEtapa.length > 0 && etapas.length > 0 && (
           <div style={{ minWidth: 250, maxWidth: 270, background: '#f3f1e8', borderRadius: 12, padding: '10px 8px',
             flexShrink: 0, display: 'flex', flexDirection: 'column', maxHeight: '100%' }}>

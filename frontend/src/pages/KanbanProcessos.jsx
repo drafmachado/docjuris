@@ -7,6 +7,19 @@ import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Settings2, UploadCloud, Plus, Trash2, CalendarClock, ArrowUp, ArrowDown } from 'lucide-react';
 
+const CORES_TRELLO = {
+  green: '#4bce97', yellow: '#f5cd47', orange: '#fea362', red: '#f87168', purple: '#9f8fef',
+  blue: '#579dff', sky: '#6cc3e0', lime: '#94c748', pink: '#e774bb', black: '#8590a2',
+  green_dark: '#1f845a', yellow_dark: '#946f00', orange_dark: '#c25100', red_dark: '#c9372c',
+  purple_dark: '#6e5dc6', blue_dark: '#0c66e4', sky_dark: '#227d9b', lime_dark: '#5b7f24',
+  pink_dark: '#ae4787', black_dark: '#626f86',
+  green_light: '#baf3db', yellow_light: '#f8e6a0', orange_light: '#fedec8', red_light: '#ffd5d2',
+  purple_light: '#dfd8fd', blue_light: '#cce0ff', sky_light: '#c6edfb', lime_light: '#d3f1a7',
+  pink_light: '#fdd0ec', black_light: '#dcdfe4',
+};
+function corLabel(cor) { return CORES_TRELLO[cor] || '#8590a2'; }
+function corTextoLabel(cor) { return (cor || '').includes('light') || ['yellow','lime','sky'].includes(cor) ? '#172b4d' : '#fff'; }
+
 function fmtData(d) { try { return new Date((d||'').slice(0,10) + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'short' }); } catch { return d; } }
 
 export default function KanbanProcessos() {
@@ -70,8 +83,19 @@ export default function KanbanProcessos() {
       try {
         const bruto = JSON.parse(reader.result);
         const lists = (bruto.lists || []).filter(l => !l.closed).map(l => ({ id: l.id, nome: l.name }));
+        // Comentários por cartão (das actions do export)
+        const comentariosPorCard = {};
+        for (const a of (bruto.actions || [])) {
+          if (a.type === 'commentCard' && a.data?.card?.id) {
+            (comentariosPorCard[a.data.card.id] ||= []).push({
+              texto: (a.data.text || '').slice(0, 500), data: a.date,
+            });
+          }
+        }
         const cards = (bruto.cards || []).filter(cd => !cd.closed).map(cd => ({
           name: cd.name, desc: (cd.desc || '').slice(0, 2000), idList: cd.idList, due: cd.due,
+          labels: (cd.labels || []).map(lb => ({ name: lb.name || '', color: lb.color || '' })),
+          comentarios: comentariosPorCard[cd.id] || [],
         }));
         if (lists.length === 0 && cards.length === 0) throw new Error('Arquivo não parece um export do Trello');
 
@@ -103,6 +127,22 @@ export default function KanbanProcessos() {
       background: '#fff', borderRadius: 10, padding: '10px 12px', marginBottom: 8,
       boxShadow: '0 1px 4px rgba(0,0,0,0.05)', cursor: 'pointer',
     }}>
+      {p.trello_labels && (() => {
+        try {
+          const labels = JSON.parse(p.trello_labels);
+          if (!labels.length) return null;
+          return (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 5 }}>
+              {labels.slice(0, 4).map((lb, i) => (
+                <span key={i} style={{ background: corLabel(lb.color), color: corTextoLabel(lb.color),
+                  borderRadius: 4, padding: '1px 7px', fontSize: 9, fontWeight: 700, letterSpacing: '0.02em' }}>
+                  {lb.name || '   '}
+                </span>
+              ))}
+            </div>
+          );
+        } catch { return null; }
+      })()}
       <div style={{ fontWeight: 700, fontSize: 12, color: '#0f2035' }}>{p.numero_cnj}</div>
       <div style={{ fontSize: 11.5, color: '#6b6b68', margin: '2px 0 6px' }}>
         {p.cliente_nome?.split(' ').slice(0, 3).join(' ') || 'sem cliente'} · {p.tribunal}

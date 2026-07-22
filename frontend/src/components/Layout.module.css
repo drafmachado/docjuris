@@ -124,6 +124,8 @@
   margin-left: 240px;
   padding: 1.5rem;
   flex: 1;
+  min-width: 0; /* permite que conteúdo largo role internamente em vez de esticar a página */
+  max-width: 100%;
   min-height: 100vh;
   max-width: calc(100vw - 240px);
   overflow-x: hidden;
@@ -149,3 +151,4 @@
     padding-top: 3.5rem;
   }
 }
+

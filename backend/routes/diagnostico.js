@@ -205,8 +205,18 @@ router.post('/rodar', async (req, res) => {
       const dataISO = hoje.toISOString().split('T')[0];
       const r = await fetch(
         `https://comunicaapi.pje.jus.br/api/v1/comunicacao?numeroOab=${oab.numero}&ufOab=${oab.uf}&dataDisponibilizacaoInicio=${dataISO}&dataDisponibilizacaoFim=${dataISO}&itensPorPagina=5`,
-        { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0 (Veredo/1.0)' } }
+        { headers: { 'Accept': 'application/json', 'Accept-Language': 'pt-BR,pt;q=0.9', 'Referer': 'https://comunica.pje.jus.br/', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36' } }
       );
+      if (r.status === 403) {
+        // CNJ bloqueia consultas vindas de datacenters — fora do nosso controle.
+        // A cobertura de intimações fica pela via dos emails do Domicílio Eletrônico
+        // (monitorados no Gmail), que não sofre esse bloqueio.
+        const gmailOk = !!(process.env.GOOGLE_REFRESH_TOKEN || process.env.GMAIL_REFRESH_TOKEN);
+        if (gmailOk) {
+          return 'DJEN bloqueia servidores (403) — cobertura ativa pela via alternativa: emails do Domicílio Eletrônico monitorados no Gmail. Validação manual: comunica.pje.jus.br';
+        }
+        throw new Error('DJEN bloqueado (403) E monitor do Gmail sem credenciais — intimações SEM cobertura automática! Confira o Domicílio Eletrônico manualmente.');
+      }
       if (!r.ok && r.status !== 404) throw new Error(`DJEN inacessível para OAB/${oab.uf} ${oab.numero} (HTTP ${r.status})`);
       let n = 0;
       if (r.ok) {

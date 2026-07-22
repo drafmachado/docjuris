@@ -76,4 +76,174 @@ router.get('/instancias/:nome/qr', async (req, res) => {
   }
 });
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ANÁLISE RETROATIVA DAS CONVERSAS (IA classifica: cliente / negociação / outro)
+// ═══════════════════════════════════════════════════════════════════════════
+import { getDB } from '../db.js';
+
+const analiseJobs = new Map();
+setInterval(() => {
+  const agora = Date.now();
+  for (const [k, v] of analiseJobs) if (agora - v.createdAt > 60 * 60 * 1000) analiseJobs.delete(k);
+}, 10 * 60 * 1000);
+
+function sufixoTel(t) { return String(t || '').replace(/\D/g, '').slice(-8); }
+
+async function classificarConversaIA(transcricao, nomeContato) {
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': process.env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 300,
+      messages: [{
+        role: 'user',
+        content: `Você analisa conversas de WhatsApp de um escritório de advocacia (Dra. Andreia).
+Classifique este contato em UMA categoria:
+- "cliente": já é cliente ativo (fala de processo em andamento, envia documentos do caso, trata como advogada contratada)
+- "negociacao": potencial cliente (consulta jurídica, pergunta preços/honorários, avalia contratar, caso em análise)
+- "outro": pessoal, família, fornecedor, spam, grupo de trabalho, sem relação comercial
+
+Contato: "${nomeContato}"
+Conversa (últimas mensagens, [ELA]=advogada, [CONTATO]=a pessoa):
+${transcricao.slice(0, 3000)}
+
+Responda APENAS com JSON válido, sem markdown:
+{"classificacao":"cliente|negociacao|outro","nome":"nome real da pessoa se identificável na conversa, senão o nome do contato","area":"saude|civel|consumidor|inventario|trabalhista|outro","resumo":"1 frase: o que é o caso ou o que está sendo negociado"}`,
+      }],
+    }),
+  });
+  if (!r.ok) throw new Error(`IA respondeu ${r.status}`);
+  const d = await r.json();
+  const texto = (d.content || []).map(b => b.text || '').join('');
+  return JSON.parse(texto.replace(/```json|```/g, '').trim());
+}
+
+// POST /api/whatsapp-admin/analisar-conversas { instancia }
+router.post('/analisar-conversas', async (req, res) => {
+  const instancia = String(req.body.instancia || '').trim();
+  if (!instancia) return res.status(400).json({ error: 'Informe a instância' });
+
+  const jobId = 'wa_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  analiseJobs.set(jobId, {
+    status: 'processing', fase: 'buscando conversas', total: 0, processados: 0,
+    clientes_criados: 0, leads_criados: 0, ja_conhecidos: 0, irrelevantes: 0,
+    erros: [], detalhes: [], createdAt: Date.now(),
+  });
+
+  analisarConversasAsync(jobId, instancia, req.user.id).catch(e => {
+    const j = analiseJobs.get(jobId);
+    if (j) { j.status = 'error'; j.erroGeral = e.message; }
+  });
+
+  res.json({ jobId });
+});
+
+router.get('/analisar-conversas/status/:jobId', (req, res) => {
+  const j = analiseJobs.get(req.params.jobId);
+  if (!j) return res.status(404).json({ error: 'Job não encontrado' });
+  res.json(j);
+});
+
+async function analisarConversasAsync(jobId, instancia, userId) {
+  const job = analiseJobs.get(jobId);
+  const db = getDB();
+
+  // 1. Buscar todas as conversas da instância
+  const rc = await fetch(`${evoBase()}/chat/findChats/${instancia}`, {
+    method: 'POST', headers: evoHeaders(), body: JSON.stringify({}),
+  });
+  if (!rc.ok) throw new Error(`Evolution findChats: ${rc.status}`);
+  const brutoChats = await rc.json();
+  const chats = (Array.isArray(brutoChats) ? brutoChats : (brutoChats.chats || brutoChats.records || []))
+    .map(ch => ({
+      jid: ch.remoteJid || ch.id || '',
+      nome: ch.pushName || ch.name || '',
+    }))
+    .filter(ch => ch.jid && !ch.jid.endsWith('@g.us') && !ch.jid.includes('broadcast') && !ch.jid.includes('status'))
+    .slice(0, 300);
+
+  job.total = chats.length;
+  job.fase = 'analisando conversas';
+
+  // Telefones já conhecidos
+  const clientesDB = db.prepare(`SELECT id, telefone FROM clients WHERE telefone IS NOT NULL AND telefone != ''`).all();
+  const leadsDB = db.prepare(`SELECT id, telefone FROM leads WHERE telefone IS NOT NULL AND telefone != ''`).all();
+  const sufClientes = new Set(clientesDB.map(x => sufixoTel(x.telefone)));
+  const sufLeads = new Set(leadsDB.map(x => sufixoTel(x.telefone)));
+
+  for (const chat of chats) {
+    try {
+      const numero = chat.jid.split('@')[0].replace(/\D/g, '');
+      const suf = sufixoTel(numero);
+      if (numero.length < 10) { job.irrelevantes++; job.processados++; continue; }
+      if (sufClientes.has(suf) || sufLeads.has(suf)) { job.ja_conhecidos++; job.processados++; continue; }
+
+      // 2. Últimas mensagens da conversa
+      const rm = await fetch(`${evoBase()}/chat/findMessages/${instancia}`, {
+        method: 'POST', headers: evoHeaders(),
+        body: JSON.stringify({ where: { key: { remoteJid: chat.jid } }, limit: 15 }),
+      });
+      if (!rm.ok) { job.erros.push({ numero, erro: `mensagens: ${rm.status}` }); job.processados++; continue; }
+      const brutoMsgs = await rm.json();
+      const registros = Array.isArray(brutoMsgs) ? brutoMsgs
+        : (brutoMsgs.messages?.records || brutoMsgs.records || brutoMsgs.messages || []);
+
+      const linhas = registros.map(m => {
+        const texto = m.message?.conversation || m.message?.extendedTextMessage?.text
+          || m.message?.imageMessage?.caption || '';
+        if (!texto) return null;
+        return `[${m.key?.fromMe ? 'ELA' : 'CONTATO'}] ${texto.slice(0, 200)}`;
+      }).filter(Boolean);
+
+      if (linhas.length < 2) { job.irrelevantes++; job.processados++; continue; }
+
+      // 3. IA classifica
+      const analise = await classificarConversaIA(linhas.join('\n'), chat.nome || numero);
+
+      if (analise.classificacao === 'cliente') {
+        db.prepare(`
+          INSERT INTO clients (nome, telefone, observacoes, advogadas, created_by)
+          VALUES (?, ?, ?, 'ambas', ?)
+        `).run(
+          (analise.nome || chat.nome || `WhatsApp ${numero}`).slice(0, 120), numero,
+          `⚠️ Criado pela análise de WhatsApp — COMPLETAR CADASTRO (CPF, endereço, email)\nResumo da conversa: ${analise.resumo || ''}`,
+          userId
+        );
+        sufClientes.add(suf);
+        job.clientes_criados++;
+        job.detalhes.push({ tipo: 'cliente', nome: analise.nome || chat.nome, numero, resumo: analise.resumo });
+      } else if (analise.classificacao === 'negociacao') {
+        const r = db.prepare(`
+          INSERT INTO leads (nome, telefone, area, origem, etapa, observacoes)
+          VALUES (?, ?, ?, 'whatsapp', 'contato', ?)
+        `).run(
+          (analise.nome || chat.nome || `WhatsApp ${numero}`).slice(0, 120), numero,
+          analise.area || 'outro',
+          `Análise de WhatsApp: ${analise.resumo || 'em negociação'}`
+        );
+        db.prepare(`INSERT INTO leads_atividades (lead_id, tipo, descricao) VALUES (?, 'whatsapp', ?)`)
+          .run(r.lastInsertRowid, `Lead identificado pela análise das conversas: ${analise.resumo || ''}`);
+        sufLeads.add(suf);
+        job.leads_criados++;
+        job.detalhes.push({ tipo: 'lead', nome: analise.nome || chat.nome, numero, resumo: analise.resumo });
+      } else {
+        job.irrelevantes++;
+      }
+    } catch(e) {
+      job.erros.push({ numero: chat.jid?.split('@')[0], erro: e.message });
+    }
+    job.processados++;
+    await new Promise(r => setTimeout(r, 800)); // gentileza com Evolution + Anthropic
+  }
+
+  job.status = 'done';
+  job.fase = 'concluído';
+}
+
 export default router;

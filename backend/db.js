@@ -311,6 +311,15 @@ export function initDB() {
   try { db.exec(`ALTER TABLE clients ADD COLUMN advogadas TEXT NOT NULL DEFAULT 'ambas'`); } catch {}
   try { db.exec(`ALTER TABLE clients ADD COLUMN estado_civil TEXT`); } catch {}
   try { db.exec(`ALTER TABLE processos ADD COLUMN ultima_consulta TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE processos ADD COLUMN etapa_id INTEGER`); } catch {}
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS etapas_processo (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome TEXT NOT NULL,
+      ordem INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
   try { db.exec(`ALTER TABLE clients ADD COLUMN profissao TEXT`); } catch {}
   try { db.exec(`ALTER TABLE documents ADD COLUMN zapsign_doc_token TEXT`); } catch {}
   try { db.exec(`ALTER TABLE documents ADD COLUMN signed_pdf_filename TEXT`); } catch {}
@@ -403,4 +412,5 @@ export function initDB() {
 
   console.log('🗄️  Banco de dados inicializado');
 }
+
 

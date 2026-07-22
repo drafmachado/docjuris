@@ -312,6 +312,7 @@ export function initDB() {
   try { db.exec(`ALTER TABLE clients ADD COLUMN estado_civil TEXT`); } catch {}
   try { db.exec(`ALTER TABLE processos ADD COLUMN ultima_consulta TEXT`); } catch {}
   try { db.exec(`ALTER TABLE processos ADD COLUMN etapa_id INTEGER`); } catch {}
+  try { db.exec(`ALTER TABLE processos ADD COLUMN trello_labels TEXT`); } catch {}
   db.exec(`
     CREATE TABLE IF NOT EXISTS etapas_processo (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -204,14 +204,14 @@ router.post('/rodar', async (req, res) => {
       // Testa a API do DJEN ao vivo: publicações de hoje para cada OAB
       const dataISO = hoje.toISOString().split('T')[0];
       const r = await fetch(
-        `https://djen.cnj.jus.br/pesquisar-publicacao?data=${dataISO}&tipoPesquisa=OAB&oabNumero=${oab.numero}&oabEstado=${oab.uf}`,
-        { headers: { 'Accept': 'application/json', 'User-Agent': 'DocJuris/1.0' } }
+        `https://comunicaapi.pje.jus.br/api/v1/comunicacao?numeroOab=${oab.numero}&ufOab=${oab.uf}&dataDisponibilizacaoInicio=${dataISO}&dataDisponibilizacaoFim=${dataISO}&itensPorPagina=5`,
+        { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0 (Veredo/1.0)' } }
       );
       if (!r.ok && r.status !== 404) throw new Error(`DJEN inacessível para OAB/${oab.uf} ${oab.numero} (HTTP ${r.status})`);
       let n = 0;
       if (r.ok) {
         const d = await r.json().catch(() => ({}));
-        n = (d.publicacoes || d.data || d.results || []).length;
+        n = d.count ?? (d.items || d.content || []).length;
       }
       totalPubs += n;
       porOab.push(`${oab.advogada.replace('Dra. ', '')} OAB/${oab.uf}: ${n}`);

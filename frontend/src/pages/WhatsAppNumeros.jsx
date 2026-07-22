@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Topbar, Btn, Modal, FormField, FormGrid } from '../components/UI.jsx';
 import api from '../utils/api.js';
 import toast from 'react-hot-toast';
-import { Plus, Smartphone, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Plus, Smartphone, RefreshCw, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
 
 export default function WhatsAppNumeros() {
   const [instancias, setInstancias] = useState([]);
@@ -15,6 +15,37 @@ export default function WhatsAppNumeros() {
   const [qrDe, setQrDe] = useState(null);      // nome da instância exibindo QR
   const [qrImg, setQrImg] = useState(null);
   const pollRef = useRef(null);
+  const [analise, setAnalise] = useState(null);   // job em andamento
+  const analisePoll = useRef(null);
+
+  async function analisarConversas(instancia) {
+    if (!window.confirm(
+      `Analisar as conversas de "${instancia}" com IA?\n\n` +
+      `• Contatos que já são clientes ou leads são ignorados\n` +
+      `• Conversas de cliente → novo cadastro de cliente (a completar)\n` +
+      `• Conversas em negociação → lead no funil, com resumo do caso\n` +
+      `• Pessoais/irrelevantes → ignorados\n\n` +
+      `Leva alguns minutos e usa créditos da IA.`
+    )) return;
+    try {
+      const r = await api.post('/whatsapp-admin/analisar-conversas', { instancia });
+      const jobId = r.data.jobId;
+      setAnalise({ status: 'processing', processados: 0, total: 0 });
+      clearInterval(analisePoll.current);
+      analisePoll.current = setInterval(async () => {
+        try {
+          const s = await api.get(`/whatsapp-admin/analisar-conversas/status/${jobId}`);
+          setAnalise(s.data);
+          if (s.data.status === 'done' || s.data.status === 'error') {
+            clearInterval(analisePoll.current);
+            if (s.data.status === 'done') {
+              toast.success(`Análise concluída: ${s.data.clientes_criados} cliente(s) e ${s.data.leads_criados} lead(s) criados`, { duration: 8000 });
+            } else toast.error('Análise falhou: ' + (s.data.erroGeral || ''));
+          }
+        } catch { clearInterval(analisePoll.current); }
+      }, 3000);
+    } catch(e) { toast.error(e.response?.data?.error || 'Erro ao iniciar análise'); }
+  }
 
   const load = () => {
     api.get('/whatsapp-admin/instancias')
@@ -90,6 +121,16 @@ export default function WhatsAppNumeros() {
               {conectada(inst.estado) ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
               {conectada(inst.estado) ? 'Conectada — leads ativos' : `Desconectada (${inst.estado})`}
             </div>
+            {conectada(inst.estado) && (
+              <button onClick={() => analisarConversas(inst.nome)}
+                disabled={analise?.status === 'processing'}
+                style={{ width: '100%', padding: '9px', background: '#fdf6e3', color: '#854f0b',
+                  border: '1.5px solid #e8d9a8', borderRadius: 9, fontSize: 12.5, fontWeight: 700,
+                  cursor: analise?.status === 'processing' ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <Sparkles size={13} /> Analisar conversas com IA
+              </button>
+            )}
             {!conectada(inst.estado) && (
               <button onClick={() => abrirQR(inst.nome)}
                 style={{ width: '100%', padding: '9px', background: '#0f2035', color: '#fff', border: 'none',
@@ -100,6 +141,45 @@ export default function WhatsAppNumeros() {
           </div>
         ))}
       </div>
+
+      {analise && (
+        <div style={{ background: '#fff', borderRadius: 14, padding: '16px 18px', marginTop: 18,
+          border: '1.5px solid #e8d9a8' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8 }}>
+            <span style={{ fontWeight: 800, color: '#0f2035' }}>
+              {analise.status === 'done' ? '✅ Análise concluída' : `🔎 Analisando conversas... (${analise.fase || ''})`}
+            </span>
+            <span>{analise.processados}/{analise.total}</span>
+          </div>
+          <div style={{ background: '#e5e7eb', borderRadius: 10, height: 9, overflow: 'hidden', marginBottom: 10 }}>
+            <div style={{ background: '#0f2035', height: '100%', borderRadius: 10,
+              width: `${analise.total ? (analise.processados / analise.total) * 100 : 0}%`, transition: 'width .5s' }} />
+          </div>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: '#374151', marginBottom: 8 }}>
+            <span>👤 Clientes: <b>{analise.clientes_criados || 0}</b></span>
+            <span>🎯 Leads: <b>{analise.leads_criados || 0}</b></span>
+            <span>↩️ Já conhecidos: <b>{analise.ja_conhecidos || 0}</b></span>
+            <span>⚪ Irrelevantes: <b>{analise.irrelevantes || 0}</b></span>
+          </div>
+          {analise.detalhes?.length > 0 && (
+            <div style={{ maxHeight: 200, overflow: 'auto', fontSize: 11.5, background: '#fafaf6',
+              borderRadius: 8, padding: '8px 12px' }}>
+              {analise.detalhes.map((d, i) => (
+                <div key={i} style={{ padding: '3px 0', color: '#374151' }}>
+                  {d.tipo === 'cliente' ? '👤' : '🎯'} <b>{d.nome}</b> — {d.resumo}
+                </div>
+              ))}
+            </div>
+          )}
+          {analise.status === 'done' && (
+            <button onClick={() => setAnalise(null)}
+              style={{ marginTop: 10, padding: '7px 14px', background: '#0f2035', color: '#fff',
+                border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              Fechar
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Modal nova conexão */}
       <Modal open={modalNova} onClose={() => setModalNova(false)} title="Conectar novo número"

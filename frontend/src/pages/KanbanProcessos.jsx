@@ -190,26 +190,33 @@ export default function KanbanProcessos() {
         </div>
       )}
 
-      <div className="quadro-scroll" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 12,
-        WebkitOverflowScrolling: 'touch', maxWidth: '100%' }}>
+      <div className="quadro-scroll" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 6,
+        WebkitOverflowScrolling: 'touch', maxWidth: '100%',
+        height: 'calc(100vh - 190px)', alignItems: 'flex-start' }}>
         {semEtapa.length > 0 && etapas.length > 0 && (
-          <div style={{ minWidth: 250, maxWidth: 270, background: '#f3f1e8', borderRadius: 12, padding: '10px 8px', flexShrink: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 12.5, color: '#854f0b', padding: '0 6px', marginBottom: 8 }}>
+          <div style={{ minWidth: 250, maxWidth: 270, background: '#f3f1e8', borderRadius: 12, padding: '10px 8px',
+            flexShrink: 0, display: 'flex', flexDirection: 'column', maxHeight: '100%' }}>
+            <div style={{ fontWeight: 700, fontSize: 12.5, color: '#854f0b', padding: '0 6px', marginBottom: 8, flexShrink: 0 }}>
               📥 Sem etapa ({semEtapa.length})
             </div>
-            {semEtapa.map(p => <Card key={p.id} p={p} colIdx={-1} />)}
+            <div className="coluna-scroll" style={{ overflowY: 'auto', flex: 1, paddingRight: 2 }}>
+              {semEtapa.map(p => <Card key={p.id} p={p} colIdx={-1} />)}
+            </div>
           </div>
         )}
         {etapas.map((et, i) => {
           const itens = processos.filter(p => p.etapa_id === et.id);
           return (
-            <div key={et.id} style={{ minWidth: 250, maxWidth: 270, background: '#f0efe8', borderRadius: 12, padding: '10px 8px', flexShrink: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 6px', marginBottom: 8 }}>
+            <div key={et.id} style={{ minWidth: 250, maxWidth: 270, background: '#f0efe8', borderRadius: 12, padding: '10px 8px',
+              flexShrink: 0, display: 'flex', flexDirection: 'column', maxHeight: '100%' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 6px', marginBottom: 8, flexShrink: 0 }}>
                 <span style={{ fontWeight: 700, fontSize: 12.5, color: '#0d2340' }}>{et.nome}</span>
                 <span style={{ background: '#fff', borderRadius: 20, padding: '1px 8px', fontSize: 11, fontWeight: 700, color: '#6b6b68' }}>{itens.length}</span>
               </div>
-              {itens.map(p => <Card key={p.id} p={p} colIdx={i} />)}
-              {itens.length === 0 && <div style={{ textAlign: 'center', padding: '1.5rem 0', fontSize: 11.5, color: '#9a9a97' }}>vazio</div>}
+              <div className="coluna-scroll" style={{ overflowY: 'auto', flex: 1, paddingRight: 2 }}>
+                {itens.map(p => <Card key={p.id} p={p} colIdx={i} />)}
+                {itens.length === 0 && <div style={{ textAlign: 'center', padding: '1.5rem 0', fontSize: 11.5, color: '#9a9a97' }}>vazio</div>}
+              </div>
             </div>
           );
         })}
@@ -250,6 +257,9 @@ export default function KanbanProcessos() {
         .quadro-scroll::-webkit-scrollbar-thumb { background: #0f2035; border-radius: 8px; }
         .quadro-scroll::-webkit-scrollbar-thumb:hover { background: #1a3a5c; }
         .quadro-scroll { scrollbar-width: auto; scrollbar-color: #0f2035 #e8e6dc; }
+        .coluna-scroll::-webkit-scrollbar { width: 6px; }
+        .coluna-scroll::-webkit-scrollbar-track { background: transparent; }
+        .coluna-scroll::-webkit-scrollbar-thumb { background: #c9c6b8; border-radius: 6px; }
       `}</style>
     </div>
   );

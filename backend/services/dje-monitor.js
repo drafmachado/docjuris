@@ -26,7 +26,7 @@ async function buscarDJERJ(data) {
         `dataDisponibilizacaoInicio=${dataISO}&` +
         `dataDisponibilizacaoFim=${dataISO}&` +
         `itensPorPagina=100`,
-        { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0 (Veredo/1.0)' } }
+        { headers: { 'Accept': 'application/json', 'Accept-Language': 'pt-BR,pt;q=0.9', 'Referer': 'https://comunica.pje.jus.br/', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36' } }
       );
       if (r.ok) {
         const d = await r.json();

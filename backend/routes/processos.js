@@ -365,6 +365,91 @@ router.post('/importar-trello', (req, res) => {
 });
 
 
+
+// ─── CARTÃO DO QUADRO (detalhe estilo Trello) ──────────────────────────────
+// GET /api/processos/:id/card — tudo do cartão numa chamada
+router.get('/:id/card', (req, res) => {
+  const db = getDB();
+  const p = db.prepare(`
+    SELECT p.*, c.nome as cliente_nome, c.id as cliente_id
+    FROM processos p LEFT JOIN clients c ON c.id = p.client_id
+    WHERE p.id = ?
+  `).get(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Processo não encontrado' });
+
+  p.comentarios = db.prepare(`
+    SELECT pc.id, pc.texto, pc.created_at, u.name as autor
+    FROM processo_comentarios pc LEFT JOIN users u ON u.id = pc.autor_id
+    WHERE pc.processo_id = ? ORDER BY pc.created_at DESC
+  `).all(p.id);
+
+  p.checklist = db.prepare(`
+    SELECT id, texto, concluido FROM processo_checklist
+    WHERE processo_id = ? ORDER BY ordem, id
+  `).all(p.id);
+
+  p.prazos = db.prepare(`
+    SELECT id, titulo, data_limite, concluido FROM prazos
+    WHERE processo_id = ? ORDER BY concluido, data_limite
+  `).all(p.id);
+
+  p.andamentos = db.prepare(`
+    SELECT data, descricao FROM andamentos WHERE processo_id = ? ORDER BY data DESC LIMIT 8
+  `).all(p.id);
+
+  res.json(p);
+});
+
+// PUT /api/processos/:id/card — título (numero_cnj) e descrição (observacoes)
+router.put('/:id/card', (req, res) => {
+  const db = getDB();
+  const { numero_cnj, observacoes, client_id } = req.body;
+  db.prepare(`
+    UPDATE processos SET
+      numero_cnj = COALESCE(?, numero_cnj),
+      observacoes = COALESCE(?, observacoes),
+      client_id = COALESCE(?, client_id)
+    WHERE id = ?
+  `).run(numero_cnj ?? null, observacoes ?? null, client_id ?? null, req.params.id);
+  res.json({ ok: true });
+});
+
+// Comentários
+router.post('/:id/comentarios', (req, res) => {
+  const db = getDB();
+  const texto = String(req.body.texto || '').trim();
+  if (!texto) return res.status(400).json({ error: 'Comentário vazio' });
+  const r = db.prepare('INSERT INTO processo_comentarios (processo_id, texto, autor_id) VALUES (?, ?, ?)')
+    .run(req.params.id, texto.slice(0, 4000), req.user.id);
+  res.json({ id: r.lastInsertRowid });
+});
+router.delete('/:id/comentarios/:comId', (req, res) => {
+  getDB().prepare('DELETE FROM processo_comentarios WHERE id = ? AND processo_id = ?')
+    .run(req.params.comId, req.params.id);
+  res.json({ ok: true });
+});
+
+// Checklist
+router.post('/:id/checklist', (req, res) => {
+  const db = getDB();
+  const texto = String(req.body.texto || '').trim();
+  if (!texto) return res.status(400).json({ error: 'Item vazio' });
+  const max = db.prepare('SELECT COALESCE(MAX(ordem), -1) as m FROM processo_checklist WHERE processo_id = ?').get(req.params.id);
+  const r = db.prepare('INSERT INTO processo_checklist (processo_id, texto, ordem) VALUES (?, ?, ?)')
+    .run(req.params.id, texto.slice(0, 500), max.m + 1);
+  res.json({ id: r.lastInsertRowid });
+});
+router.put('/:id/checklist/:itemId', (req, res) => {
+  getDB().prepare('UPDATE processo_checklist SET concluido = ? WHERE id = ? AND processo_id = ?')
+    .run(req.body.concluido ? 1 : 0, req.params.itemId, req.params.id);
+  res.json({ ok: true });
+});
+router.delete('/:id/checklist/:itemId', (req, res) => {
+  getDB().prepare('DELETE FROM processo_checklist WHERE id = ? AND processo_id = ?')
+    .run(req.params.itemId, req.params.id);
+  res.json({ ok: true });
+});
+
 router.get('/:id', (req, res) => {
   const db = getDB();
   const processo = db.prepare(`
@@ -603,6 +688,7 @@ async function importarLoteAsync(jobId, numeros, userId) {
 }
 
 export default router;
+
 
 
 

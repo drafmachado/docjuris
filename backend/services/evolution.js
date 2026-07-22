@@ -115,3 +115,35 @@ export async function notifyDocumentoAssinado({ clienteNome, clienteTelefone, te
   await Promise.allSettled(tasks);
 }
 
+// ─── Auto-registro do webhook de mensagens (chamado no boot) ─────────────────
+// Configura a Evolution para avisar o Veredo a cada mensagem recebida —
+// é o que alimenta a criação automática de leads no CRM.
+export async function registrarWebhookMensagens() {
+  try {
+    const { webhookToken } = await import('../routes/whatsapp-webhook.js');
+    const urlPublica = `https://advmachado.adv.br/api/whatsapp/webhook/${webhookToken()}`;
+    const inst = process.env.EVOLUTION_INSTANCE || 'docjuris';
+
+    // Formato Evolution v2
+    let r = await fetch(`${EVOLUTION_URL}/webhook/set/${inst}`, {
+      method: 'POST',
+      headers: { 'apikey': process.env.EVOLUTION_API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        webhook: { enabled: true, url: urlPublica, webhookByEvents: false, events: ['MESSAGES_UPSERT'] },
+      }),
+    });
+    if (!r.ok) {
+      // Formato alternativo (versões que aceitam body plano)
+      r = await fetch(`${EVOLUTION_URL}/webhook/set/${inst}`, {
+        method: 'POST',
+        headers: { 'apikey': process.env.EVOLUTION_API_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: true, url: urlPublica, events: ['MESSAGES_UPSERT'] }),
+      });
+    }
+    console.log(r.ok
+      ? '💬 Webhook de mensagens registrado na Evolution (leads automáticos ativos)'
+      : `⚠️ Webhook Evolution não registrado: HTTP ${r.status}`);
+  } catch(e) {
+    console.error('⚠️ Registro do webhook Evolution falhou:', e.message);
+  }
+}

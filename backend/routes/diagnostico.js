@@ -221,6 +221,29 @@ router.post('/rodar', async (req, res) => {
     return `API do DJEN acessível · publicações hoje — ${porOab.join(' · ')} · monitor roda a cada 6h`;
   });
 
+  // ─── 13. Token GitHub (manutenção via Claude) ───
+  resultados.github = await tempo(async () => {
+    const token = process.env.GITHUB_TOKEN;
+    if (!token) {
+      return 'Não configurado (opcional) — para monitorar a validade, adicione GITHUB_TOKEN nas variáveis do Railway';
+    }
+    const r = await fetch('https://api.github.com/user', {
+      headers: { 'Authorization': `token ${token}`, 'User-Agent': 'Veredo/1.0' },
+    });
+    if (r.status === 401) throw new Error('Token INVÁLIDO ou expirado! Gere um novo em github.com/settings/tokens e atualize no Railway.');
+    if (!r.ok) throw new Error(`GitHub respondeu ${r.status}`);
+
+    const exp = r.headers.get('github-authentication-token-expiration');
+    if (!exp) return 'Token válido, sem data de expiração definida';
+
+    const dataExp = new Date(exp.replace(' UTC', 'Z').replace(' ', 'T'));
+    const dias = Math.floor((dataExp - Date.now()) / (1000 * 60 * 60 * 24));
+    if (isNaN(dias)) return `Token válido · expiração: ${exp}`;
+    if (dias <= 0) throw new Error('Token EXPIRADO! Gere um novo em github.com/settings/tokens e atualize no Railway.');
+    if (dias <= 10) throw new Error(`Token expira em ${dias} dia(s)! Gere um novo em github.com/settings/tokens (e informe ao Claude).`);
+    return `Token válido · expira em ${dias} dias (${dataExp.toLocaleDateString('pt-BR')})`;
+  });
+
   const total = Object.keys(resultados).length;
   const ok = Object.values(resultados).filter(r => r.ok).length;
 

@@ -5,7 +5,7 @@ import { Topbar, Btn, Modal, FormField, FormGrid } from '../components/UI.jsx';
 import api from '../utils/api.js';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Settings2, UploadCloud, Plus, Trash2, CalendarClock, ArrowUp, ArrowDown, Search, Tag, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings2, UploadCloud, Plus, Trash2, CalendarClock, ArrowUp, ArrowDown, Search, Tag, X, Users } from 'lucide-react';
 import SearchableSelect from '../components/SearchableSelect.jsx';
 import CardModal from './CardModal.jsx';
 
@@ -43,6 +43,41 @@ export default function KanbanProcessos() {
   const [etiquetasSel, setEtiquetasSel] = useState([]);
   const [novaEtiqueta, setNovaEtiqueta] = useState({ name: '', color: 'blue' });
   const [cardAberto, setCardAberto] = useState(null); // { id, etapaNome }
+  const [modalTriagem, setModalTriagem] = useState(false);
+  const [triagem, setTriagem] = useState(null);
+  const [selecao, setSelecao] = useState({});   // processo_id → { client_id | criar_nome, telefone }
+  const [aplicandoTriagem, setAplicandoTriagem] = useState(false);
+
+  async function abrirTriagem() {
+    setModalTriagem(true); setTriagem(null);
+    try {
+      const r = await api.get('/processos/triagem-sugestoes', { timeout: 90000 });
+      setTriagem(r.data);
+      // Pré-seleciona as sugestões com boa confiança
+      const pre = {};
+      for (const s of r.data.processos) {
+        if (s.cliente_sugerido && s.cliente_sugerido.score >= 75) {
+          pre[s.processo_id] = { client_id: s.cliente_sugerido.id, telefone: s.whatsapp_sugerido?.numero || null };
+        } else if (s.nome_extraido && s.whatsapp_sugerido && s.whatsapp_sugerido.score >= 75) {
+          pre[s.processo_id] = { criar_nome: s.whatsapp_sugerido.nome || s.nome_extraido, telefone: s.whatsapp_sugerido.numero };
+        }
+      }
+      setSelecao(pre);
+    } catch(e) { toast.error(e.response?.data?.error || 'Erro ao cruzar dados'); setModalTriagem(false); }
+  }
+
+  async function aplicarTriagem() {
+    const itens = Object.entries(selecao).filter(([, v]) => v).map(([pid, v]) => ({ processo_id: Number(pid), ...v }));
+    if (!itens.length) return toast.error('Marque ao menos um processo');
+    if (!window.confirm(`Aplicar ${itens.length} vinculação(ões)?`)) return;
+    setAplicandoTriagem(true);
+    try {
+      const r = await api.post('/processos/triagem-aplicar', { itens }, { timeout: 60000 });
+      toast.success(`${r.data.vinculados} processo(s) vinculado(s), ${r.data.clientes_criados} cliente(s) criado(s), ${r.data.telefones_atualizados} telefone(s) atualizado(s)`, { duration: 8000 });
+      setModalTriagem(false); load();
+    } catch(e) { toast.error(e.response?.data?.error || 'Erro ao aplicar'); }
+    finally { setAplicandoTriagem(false); }
+  }
 
   // O quadro ocupa exatamente o espaço da sua posição até a base da tela — sem sobra
   useEffect(() => {
@@ -263,6 +298,7 @@ export default function KanbanProcessos() {
         <Btn variant="outline" onClick={() => fileRef.current?.click()} disabled={importando} style={{ marginRight: 8 }}>
           <UploadCloud size={14} /> {importando ? 'Importando...' : 'Importar do Trello'}
         </Btn>
+        <Btn variant="outline" onClick={abrirTriagem} style={{ marginRight: 8 }}><Users size={14} /> Vincular clientes</Btn>
         <Btn variant="outline" onClick={() => setGerenciar(true)}><Settings2 size={14} /> Etapas</Btn>
       </Topbar>
 
@@ -359,6 +395,70 @@ export default function KanbanProcessos() {
         />
       )}
 
+      {/* ─── Modal: triagem de clientes ─── */}
+      <Modal open={modalTriagem} onClose={() => setModalTriagem(false)} title="Vincular processos aos clientes"
+        footer={<><Btn variant="outline" onClick={() => setModalTriagem(false)}>Cancelar</Btn>
+          <Btn onClick={aplicarTriagem} disabled={aplicandoTriagem || !triagem}>
+            {aplicandoTriagem ? 'Aplicando...' : `Aplicar (${Object.values(selecao).filter(Boolean).length})`}</Btn></>}>
+        {!triagem && <p style={{ color: '#6b6b68', fontSize: 13 }}>Cruzando processos da triagem com clientes cadastrados e contatos do WhatsApp...</p>}
+        {triagem && (
+          <>
+            <p style={{ fontSize: 12.5, color: '#6b6b68', margin: '0 0 12px' }}>
+              <b>{triagem.processos.length}</b> processo(s) sem cliente definido · <b>{triagem.contatos_whatsapp}</b> contatos do WhatsApp consultados.
+              Sugestões com boa confiança já vêm marcadas — revise e desmarque o que não fizer sentido.
+            </p>
+            <div style={{ maxHeight: '55vh', overflowY: 'auto' }}>
+              {triagem.processos.map(s => {
+                const sel = selecao[s.processo_id];
+                return (
+                  <div key={s.processo_id} style={{ background: sel ? '#f0f7ea' : '#fafaf6', borderRadius: 9,
+                    padding: '9px 12px', marginBottom: 7, border: `1px solid ${sel ? '#c5ddb0' : '#eceade'}` }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#0f2035' }}>{s.numero_cnj}</div>
+                    <div style={{ fontSize: 11.5, color: '#6b6b68', marginBottom: 6 }}>
+                      Nome no cartão: <b>{s.nome_extraido || '— não identificado —'}</b>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {s.cliente_sugerido && (
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer' }}>
+                          <input type="radio" name={`s${s.processo_id}`}
+                            checked={!!sel?.client_id}
+                            onChange={() => setSelecao(p => ({ ...p, [s.processo_id]: { client_id: s.cliente_sugerido.id, telefone: s.whatsapp_sugerido?.numero || null } }))} />
+                          👤 Vincular a <b>{s.cliente_sugerido.nome}</b>
+                          <span style={{ color: '#9a9a97' }}>({s.cliente_sugerido.score}% match{s.cliente_sugerido.telefone ? '' : ', sem telefone'})</span>
+                        </label>
+                      )}
+                      {s.whatsapp_sugerido && (
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer' }}>
+                          <input type="radio" name={`s${s.processo_id}`}
+                            checked={!!sel?.criar_nome}
+                            onChange={() => setSelecao(p => ({ ...p, [s.processo_id]: { criar_nome: s.whatsapp_sugerido.nome || s.nome_extraido, telefone: s.whatsapp_sugerido.numero } }))} />
+                          ➕ Criar cliente <b>{s.whatsapp_sugerido.nome}</b>
+                          <span style={{ color: '#3b6d11' }}>📱 {s.whatsapp_sugerido.numero}</span>
+                          <span style={{ color: '#9a9a97' }}>({s.whatsapp_sugerido.score}%)</span>
+                        </label>
+                      )}
+                      {s.nome_extraido && (
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer' }}>
+                          <input type="radio" name={`s${s.processo_id}`}
+                            checked={!!(sel?.criar_nome && !sel?.telefone)}
+                            onChange={() => setSelecao(p => ({ ...p, [s.processo_id]: { criar_nome: s.nome_extraido } }))} />
+                          ➕ Criar cliente <b>{s.nome_extraido}</b> <span style={{ color: '#9a9a97' }}>(sem telefone)</span>
+                        </label>
+                      )}
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer', color: '#9a9a97' }}>
+                        <input type="radio" name={`s${s.processo_id}`} checked={!sel}
+                          onChange={() => setSelecao(p => ({ ...p, [s.processo_id]: null }))} />
+                        Deixar na triagem
+                      </label>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </Modal>
+
       {/* ─── Modal: novo cartão ─── */}
       <Modal open={!!modalNovo} onClose={() => setModalNovo(null)} title="Novo cartão"
         footer={<><Btn variant="outline" onClick={() => setModalNovo(null)}>Cancelar</Btn><Btn onClick={criarCartao}>Criar</Btn></>}>
@@ -427,5 +527,6 @@ export default function KanbanProcessos() {
     </div>
   );
 }
+
 
 

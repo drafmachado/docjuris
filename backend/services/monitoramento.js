@@ -42,58 +42,83 @@ async function consultarDataJud(numeroCNJ, tribunal) {
   } catch { return null; }
 }
 
-async function notificarNovoAndamento(processo, andamento) {
-  // Email via Resend
+// Notificação AGRUPADA: UM email e UM WhatsApp por processo por ciclo,
+// independentemente de quantas movimentações novas houver.
+// (Antes era 1 email POR movimentação — 20 históricos = 20 emails = estouro do Resend.)
+async function notificarMovimentacoes(processo, andamentos) {
+  if (!andamentos || andamentos.length === 0) return;
+
+  // Ordenar da mais recente para a mais antiga; a mais recente é o destaque
+  const ordenados = [...andamentos].sort((a, b) => String(b.data).localeCompare(String(a.data)));
+  const recente = ordenados[0];
+  const eHistorico = andamentos.length > 5; // enxurrada = atualização de histórico, não novidade
+
+  const fmtD = d => { try { return new Date(d).toLocaleDateString('pt-BR'); } catch { return String(d).slice(0,10); } };
+
+  // ─── Email (Resend) ───
   try {
     const { Resend } = await import('resend');
     const resend = new Resend(process.env.RESEND_API_KEY);
     const destinatario = process.env.ALERT_EMAIL || 'dra.andreia@advmachado.adv.br';
     const senderName = process.env.SENDER_NAME || 'Veredo';
-    const data = new Date(andamento.data).toLocaleDateString('pt-BR');
+
+    const assunto = andamentos.length === 1
+      ? `📋 Nova movimentação — ${processo.numero_cnj}`
+      : eHistorico
+        ? `📚 ${andamentos.length} movimentações registradas (histórico) — ${processo.numero_cnj}`
+        : `📋 ${andamentos.length} novas movimentações — ${processo.numero_cnj}`;
+
+    const listaHtml = ordenados.slice(0, 10).map((a, i) => `
+      <div style="background:white;border-left:4px solid ${i === 0 ? '#0f2035' : '#d1d5db'};padding:10px 12px;margin:8px 0;border-radius:4px">
+        <span style="font-size:12px;color:#6b7280">${fmtD(a.data)}</span><br>
+        <strong style="${i === 0 ? '' : 'font-weight:normal'}">${a.descricao}</strong>
+      </div>`).join('');
+    const maisNota = ordenados.length > 10
+      ? `<p style="font-size:12px;color:#6b7280">+ ${ordenados.length - 10} movimentação(ões) mais antiga(s) registrada(s) no sistema.</p>` : '';
 
     await resend.emails.send({
       from: `${senderName} <docjuris@advmachado.adv.br>`,
       to: destinatario,
-      subject: `📋 Nova movimentação — ${processo.numero_cnj}`,
+      subject: assunto,
       html: `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
           <div style="background:#0f2035;padding:20px;border-radius:8px 8px 0 0">
-            <h2 style="color:white;margin:0">📋 Nova Movimentação Processual</h2>
+            <h2 style="color:white;margin:0">${eHistorico ? '📚 Atualização de Histórico' : '📋 Movimentação Processual'}</h2>
           </div>
           <div style="padding:20px;background:#f9fafb;border:1px solid #e5e7eb">
             <p><strong>Processo:</strong> ${processo.numero_cnj}</p>
             <p><strong>Cliente:</strong> ${processo.client_nome || 'N/A'}</p>
             <p><strong>Tribunal:</strong> ${processo.tribunal}</p>
-            <p><strong>Data:</strong> ${data}</p>
-            <div style="background:white;border-left:4px solid #0f2035;padding:12px;margin:12px 0;border-radius:4px">
-              <strong>${andamento.descricao}</strong>
-            </div>
+            ${eHistorico ? `<p style="color:#854f0b"><strong>${andamentos.length} movimentações</strong> foram registradas de uma vez (provável primeira sincronização completa deste processo). A mais recente:</p>` : ''}
+            ${listaHtml}
+            ${maisNota}
             <p style="font-size:12px;color:#6b7280">Acesse o Veredo para mais detalhes.</p>
           </div>
         </div>`,
     });
-    console.log(`  📧 Email enviado: ${andamento.descricao}`);
+    console.log(`  📧 Email agrupado enviado: ${andamentos.length} movimentação(ões)`);
   } catch(e) {
     console.error('  Erro email:', e.message);
   }
 
-  // WhatsApp via Evolution API
+  // ─── WhatsApp (Evolution) — sempre UMA mensagem ───
   try {
     const evolutionUrl = process.env.EVOLUTION_API_URL;
     const evolutionKey = process.env.EVOLUTION_API_KEY;
     const instance = process.env.EVOLUTION_INSTANCE || 'docjuris';
     const whatsappNumber = process.env.ANDREIA_WHATSAPP || '5511967351199';
-    
+
     if (evolutionUrl && evolutionKey) {
-      const data = new Date(andamento.data).toLocaleDateString('pt-BR');
-      const msg = `📋 *Nova movimentação*\n\n*Processo:* ${processo.numero_cnj}\n*Cliente:* ${processo.client_nome || 'N/A'}\n*Data:* ${data}\n\n_${andamento.descricao}_`;
-      
+      const msg = andamentos.length === 1
+        ? `📋 *Nova movimentação*\n\n*Processo:* ${processo.numero_cnj}\n*Cliente:* ${processo.client_nome || 'N/A'}\n*Data:* ${fmtD(recente.data)}\n\n_${recente.descricao}_`
+        : `📋 *${andamentos.length} movimentações ${eHistorico ? 'registradas (histórico)' : 'novas'}*\n\n*Processo:* ${processo.numero_cnj}\n*Cliente:* ${processo.client_nome || 'N/A'}\n\n*Mais recente (${fmtD(recente.data)}):*\n_${recente.descricao}_`;
+
       await fetch(`${evolutionUrl}/message/sendText/${instance}`, {
         method: 'POST',
         headers: { 'apikey': evolutionKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({ number: whatsappNumber, text: msg }),
       });
-      console.log(`  💬 WhatsApp enviado`);
+      console.log(`  💬 WhatsApp agrupado enviado`);
     }
   } catch(e) {
     console.error('  Erro WhatsApp:', e.message);
@@ -213,19 +238,44 @@ export async function monitorarProcessos() {
         continue;
       }
 
-      // Verificar andamentos novos (não salvos ainda)
+      // Verificar andamentos novos — dedupe NORMALIZADO:
+      // data reduzida a YYYY-MM-DD e descrição sem variações de espaços/caixa.
+      // (O dedupe exato anterior tratava histórico como novidade quando o DataJud
+      //  mudava o formato — causa da enxurrada de emails.)
+      const normalizar = (data, desc) =>
+        `${String(data).slice(0, 10)}|${String(desc || '').trim().replace(/\s+/g, ' ').toLowerCase()}`;
+
       const salvos = db.prepare('SELECT data, descricao FROM andamentos WHERE processo_id = ?').all(proc.id);
-      const salvoSet = new Set(salvos.map(a => `${a.data}|${a.descricao}`));
+      const salvoSet = new Set(salvos.map(a => normalizar(a.data, a.descricao)));
 
       const insert = db.prepare('INSERT OR IGNORE INTO andamentos (processo_id, data, descricao) VALUES (?, ?, ?)');
-      
+
+      const novosDoProcesso = [];
       for (const m of movimentos) {
-        const key = `${m.data}|${m.descricao}`;
+        const key = normalizar(m.data, m.descricao);
         if (!salvoSet.has(key)) {
           insert.run(proc.id, m.data, m.descricao);
+          salvoSet.add(key); // evita duplicar dentro do mesmo lote
           novosAndamentos++;
+          novosDoProcesso.push(m);
           console.log(`  ✨ NOVO: ${proc.numero_cnj} — ${m.descricao}`);
-          await notificarNovoAndamento(proc, m);
+        }
+      }
+
+      // UMA notificação por processo, com todas as novidades do ciclo
+      if (novosDoProcesso.length > 0) {
+        await notificarMovimentacoes(proc, novosDoProcesso);
+
+        // IA analisa as movimentações em busca de prazos e audiências.
+        // (Esta chamada estava desconectada — a função existia mas nunca rodava.)
+        // Em atualização de histórico, analisa só as 3 mais recentes: prazo de
+        // movimentação de 2 anos atrás já venceu; gastar IA nisso é desperdício.
+        const paraAnalisar = [...novosDoProcesso]
+          .sort((a, b) => String(b.data).localeCompare(String(a.data)))
+          .slice(0, 3);
+        for (const m of paraAnalisar) {
+          try { await analisarECriarPrazo(db, proc, m); }
+          catch(e) { console.error('  Erro análise de prazo:', e.message); }
         }
       }
 
@@ -238,5 +288,6 @@ export async function monitorarProcessos() {
 
   console.log(`✅ Monitoramento concluído — ${novosAndamentos} novo(s) andamento(s)`);
 }
+
 
 

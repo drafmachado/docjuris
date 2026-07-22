@@ -14,22 +14,34 @@ async function buscarDJERJ(data) {
   const dataISO = data.toISOString().split('T')[0]; // YYYY-MM-DD
   const resultados = [];
 
-  // 1. Buscar no DJEN (CNJ) — todas as OABs do escritório
+  // 1. Buscar no DJEN via Comunica PJe (API pública oficial do CNJ) — todas as OABs
+  //    Endpoint que alimenta comunica.pje.jus.br. O endereço anterior
+  //    (djen.cnj.jus.br) não existia — o monitor nunca havia funcionado.
   for (const oab of OABS_MONITORADAS) {
     try {
       const r = await fetch(
-        `https://djen.cnj.jus.br/pesquisar-publicacao?` +
-        `data=${dataISO}&` +
-        `tipoPesquisa=OAB&` +
-        `oabNumero=${oab.numero}&` +
-        `oabEstado=${oab.uf}`,
-        { headers: { 'Accept': 'application/json', 'User-Agent': 'DocJuris/1.0' } }
+        `https://comunicaapi.pje.jus.br/api/v1/comunicacao?` +
+        `numeroOab=${oab.numero}&` +
+        `ufOab=${oab.uf}&` +
+        `dataDisponibilizacaoInicio=${dataISO}&` +
+        `dataDisponibilizacaoFim=${dataISO}&` +
+        `itensPorPagina=100`,
+        { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0 (Veredo/1.0)' } }
       );
       if (r.ok) {
         const d = await r.json();
-        const pubs = d.publicacoes || d.data || d.results || [];
-        pubs.forEach(p => resultados.push({ ...p, fonte: 'DJEN', oab_advogada: oab.advogada }));
-        console.log(`  DJEN OAB/${oab.uf} ${oab.numero} (${oab.advogada}): ${pubs.length} publicação(ões)`);
+        const pubs = d.items || d.content || [];
+        pubs.forEach(p => resultados.push({
+          ...p,
+          // Normalizar campos usados pela análise de IA
+          texto: p.texto || p.textoComunicacao || p.conteudo || '',
+          numeroProcesso: p.numero_processo || p.numeroprocessocommascara || p.numeroProcesso || '',
+          fonte: 'DJEN',
+          oab_advogada: oab.advogada,
+        }));
+        console.log(`  DJEN OAB/${oab.uf} ${oab.numero} (${oab.advogada}): ${pubs.length} comunicação(ões)`);
+      } else {
+        console.log(`  DJEN OAB/${oab.uf} ${oab.numero}: HTTP ${r.status}`);
       }
       await new Promise(r2 => setTimeout(r2, 500));
     } catch(e) {

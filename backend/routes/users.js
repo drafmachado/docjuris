@@ -21,8 +21,19 @@ router.post('/', (req, res) => {
   if (!['admin', 'colaborador'].includes(role)) return res.status(400).json({ error: 'Perfil inválido' });
 
   const db = getDB();
-  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase().trim());
-  if (existing) return res.status(409).json({ error: 'Email já cadastrado' });
+  const existing = db.prepare('SELECT id, active FROM users WHERE email = ?').get(email.toLowerCase().trim());
+  if (existing && existing.active) {
+    return res.status(409).json({ error: 'Email já cadastrado em um usuário ativo' });
+  }
+  if (existing && !existing.active) {
+    // Conta desativada com este email: reativa com os dados e a senha novos.
+    // (Exclusão é lógica para preservar o histórico de documentos e petições.)
+    const hashNovo = bcrypt.hashSync(password, 12);
+    db.prepare(`UPDATE users SET name = ?, role = ?, password_hash = ?, active = 1 WHERE id = ?`)
+      .run(name, role || 'colaborador', hashNovo, existing.id);
+    const reativado = db.prepare('SELECT id, name, email, role, active, created_at FROM users WHERE id = ?').get(existing.id);
+    return res.json({ ...reativado, reativado: true });
+  }
 
   const hash = bcrypt.hashSync(password, 12);
   const result = db.prepare(`
@@ -70,3 +81,4 @@ router.delete('/:id', (req, res) => {
 });
 
 export default router;
+

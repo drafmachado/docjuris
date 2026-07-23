@@ -305,6 +305,13 @@ export function initDB() {
   try { db.exec(`ALTER TABLE processos ADD COLUMN etapa_id INTEGER`); } catch {}
   try { db.exec(`ALTER TABLE processos ADD COLUMN trello_labels TEXT`); } catch {}
   db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_diario_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      executado_em TEXT NOT NULL,
+      resumo TEXT
+    );
+  `);
+  db.exec(`
     CREATE TABLE IF NOT EXISTS processo_comentarios (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       processo_id INTEGER NOT NULL REFERENCES processos(id) ON DELETE CASCADE,
@@ -421,6 +428,7 @@ export function initDB() {
 
   console.log('🗄️  Banco de dados inicializado');
 }
+
 
 
 

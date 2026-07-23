@@ -18,6 +18,7 @@ const NOMES = {
   prazos:         { titulo: 'Prazos & Monitoramento', desc: 'Vencidos, críticos e sincronização DataJud' },
   dje:            { titulo: 'DJE / Intimações',       desc: 'DJEN consultado para as 3 OABs do escritório' },
   github:         { titulo: 'Token GitHub',           desc: 'Validade da credencial de manutenção do sistema' },
+  crm:            { titulo: 'CRM diário (WhatsApp)',  desc: 'Leitura das conversas e alimentação do funil' },
 };
 
 export default function Diagnostico() {
@@ -140,4 +141,5 @@ export default function Diagnostico() {
     </div>
   );
 }
+
 

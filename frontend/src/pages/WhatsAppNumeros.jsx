@@ -17,6 +17,23 @@ export default function WhatsAppNumeros() {
   const pollRef = useRef(null);
   const [analise, setAnalise] = useState(null);   // job em andamento
   const analisePoll = useRef(null);
+  const [ultimoCrm, setUltimoCrm] = useState(null);
+  const [rodandoCrm, setRodandoCrm] = useState(false);
+
+  useEffect(() => {
+    api.get('/whatsapp-admin/crm-diario/ultimo').then(r => setUltimoCrm(r.data)).catch(() => {});
+  }, []);
+
+  async function rodarCrmAgora() {
+    setRodandoCrm(true);
+    try {
+      const r = await api.post('/whatsapp-admin/crm-diario/rodar');
+      if (r.data.ja_rodando) toast('Análise já em andamento', { icon: '⏳' });
+      else toast.success('Análise diária iniciada — leva alguns minutos. Confira o Funil de Leads depois.', { duration: 8000 });
+      setTimeout(() => api.get('/whatsapp-admin/crm-diario/ultimo').then(x => setUltimoCrm(x.data)).catch(() => {}), 120000);
+    } catch(e) { toast.error(e.response?.data?.error || 'Erro'); }
+    finally { setTimeout(() => setRodandoCrm(false), 5000); }
+  }
 
   async function analisarConversas(instancia) {
     if (!window.confirm(
@@ -101,6 +118,31 @@ export default function WhatsAppNumeros() {
         Cada número conectado aqui alimenta o CRM: mensagem de número desconhecido vira <b>lead automático</b> no funil.
         Os envios do sistema (códigos do portal, comunicados, alertas) continuam saindo apenas pelo número principal.
       </p>
+
+      <div style={{ background: '#fff', borderRadius: 14, padding: '14px 18px', marginBottom: 18,
+        border: '1.5px solid #eceade', display: 'flex', justifyContent: 'space-between',
+        alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 13.5, fontWeight: 800, color: '#0f2035' }}>🎯 Análise diária do CRM</div>
+          <div style={{ fontSize: 12, color: '#6b6b68', marginTop: 3, maxWidth: 560, lineHeight: 1.5 }}>
+            Todo dia às 7h30 o sistema lê as conversas das últimas 24h: contato novo com interesse jurídico vira <b>lead</b>,
+            negociação em andamento tem a <b>etapa atualizada</b> (e vira <b>cliente</b> ao fechar), e cliente pedindo
+            serviço novo abre <b>lead adicional</b>. Você recebe o resumo por email.
+          </div>
+          {ultimoCrm && (
+            <div style={{ fontSize: 11.5, color: '#3b6d11', marginTop: 5, fontWeight: 600 }}>
+              Última execução: {new Date(String(ultimoCrm.executado_em).replace(' ', 'T') + 'Z').toLocaleString('pt-BR')} ·
+              {' '}{ultimoCrm.resumo?.leads_novos || 0} lead(s) novo(s), {ultimoCrm.resumo?.convertidos || 0} convertido(s)
+            </div>
+          )}
+        </div>
+        <button onClick={rodarCrmAgora} disabled={rodandoCrm}
+          style={{ padding: '10px 18px', background: rodandoCrm ? '#e5e7eb' : '#0f2035',
+            color: rodandoCrm ? '#6b7280' : '#fff', border: 'none', borderRadius: 9, fontSize: 13,
+            fontWeight: 700, cursor: rodandoCrm ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>
+          {rodandoCrm ? 'Rodando...' : 'Rodar agora'}
+        </button>
+      </div>
 
       {carregando && <p style={{ color: '#9a9a97' }}>Carregando conexões...</p>}
 
@@ -220,3 +262,4 @@ export default function WhatsAppNumeros() {
     </div>
   );
 }
+

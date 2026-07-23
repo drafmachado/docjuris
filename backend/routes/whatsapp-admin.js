@@ -91,19 +91,8 @@ setInterval(() => {
 function sufixoTel(t) { return String(t || '').replace(/\D/g, '').slice(-8); }
 
 async function classificarConversaIA(transcricao, nomeContato) {
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 300,
-      messages: [{
-        role: 'user',
-        content: `Você analisa conversas de WhatsApp de um escritório de advocacia (Dra. Andreia).
+  const { classificarJSON } = await import('../services/ia-texto.js');
+  return classificarJSON(`Você analisa conversas de WhatsApp de um escritório de advocacia (Dra. Andreia).
 Classifique este contato em UMA categoria:
 - "cliente": já é cliente ativo (fala de processo em andamento, envia documentos do caso, trata como advogada contratada)
 - "negociacao": potencial cliente (consulta jurídica, pergunta preços/honorários, avalia contratar, caso em análise)
@@ -114,14 +103,7 @@ Conversa (últimas mensagens, [ELA]=advogada, [CONTATO]=a pessoa):
 ${transcricao.slice(0, 3000)}
 
 Responda APENAS com JSON válido, sem markdown:
-{"classificacao":"cliente|negociacao|outro","nome":"nome real da pessoa se identificável na conversa, senão o nome do contato","area":"saude|civel|consumidor|inventario|trabalhista|outro","resumo":"1 frase: o que é o caso ou o que está sendo negociado"}`,
-      }],
-    }),
-  });
-  if (!r.ok) throw new Error(`IA respondeu ${r.status}`);
-  const d = await r.json();
-  const texto = (d.content || []).map(b => b.text || '').join('');
-  return JSON.parse(texto.replace(/```json|```/g, '').trim());
+{"classificacao":"cliente|negociacao|outro","nome":"nome real da pessoa se identificável na conversa, senão o nome do contato","area":"saude|civel|consumidor|inventario|trabalhista|outro","resumo":"1 frase: o que é o caso ou o que está sendo negociado"}`, 320);
 }
 
 // POST /api/whatsapp-admin/analisar-conversas { instancia }
@@ -349,6 +331,7 @@ router.get('/analise-status', (req, res) => {
 });
 
 export default router;
+
 
 
 

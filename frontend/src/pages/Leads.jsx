@@ -1,326 +1,405 @@
-import { useState, useEffect } from 'react';
+// Funil de Vendas — visão executiva (KPIs), quadro por etapa e painel do lead.
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { Topbar, Btn, Modal, FormGrid, FormField } from '../components/UI.jsx';
 import api from '../utils/api.js';
 import toast from 'react-hot-toast';
-import { Plus, Phone, Mail, ChevronRight, UserCheck, Trash2, X, MessageCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import {
+  Plus, Search, X, ChevronLeft, ChevronRight, Phone, Mail, Clock, TrendingUp,
+  Target, CheckCircle2, DollarSign, MessageSquare, UserPlus, Trash2, Filter,
+} from 'lucide-react';
 
 const ETAPAS = [
-  { id: 'contato',    label: 'Contato',    cor: '#6b6b68', bg: '#f0f0ec' },
-  { id: 'consulta',   label: 'Consulta',   cor: '#b45309', bg: '#fef3c7' },
-  { id: 'proposta',   label: 'Proposta',   cor: '#1e40af', bg: '#dbeafe' },
-  { id: 'contratado', label: 'Contratado', cor: '#166534', bg: '#dcfce7' },
-  { id: 'perdido',    label: 'Perdido',    cor: '#991b1b', bg: '#fee2e2' },
+  { id: 'contato',    label: 'Contato',    cor: '#6b7280', bg: '#f3f4f6' },
+  { id: 'consulta',   label: 'Consulta',   cor: '#0c66e4', bg: '#e8f0fe' },
+  { id: 'proposta',   label: 'Proposta',   cor: '#b45309', bg: '#fef3c7' },
+  { id: 'contratado', label: 'Contratado', cor: '#1f845a', bg: '#dcfce7' },
+  { id: 'perdido',    label: 'Perdido',    cor: '#c9372c', bg: '#fee2e2' },
 ];
+const AREAS = {
+  saude: 'Saúde', civel: 'Cível', consumidor: 'Consumidor', inventario: 'Inventário',
+  familia: 'Família', trabalhista: 'Trabalhista', previdenciario: 'Previdenciário', outro: 'Outro',
+};
+const CORES_AREA = {
+  saude: '#0891b2', civel: '#7c3aed', consumidor: '#ea580c', inventario: '#4d7c0f',
+  familia: '#db2777', trabalhista: '#0284c7', previdenciario: '#65a30d', outro: '#6b7280',
+};
 
-const AREAS = [
-  { id: 'medico',      label: 'Direito Médico' },
-  { id: 'inventarios', label: 'Inventários' },
-  { id: 'civel',       label: 'Cível' },
-  { id: 'outro',       label: 'Outro' },
-];
-
-const ORIGENS = [
-  { id: 'site',        label: 'Site' },
-  { id: 'instagram',   label: 'Instagram' },
-  { id: 'indicacao',   label: 'Indicação' },
-  { id: 'whatsapp',    label: 'WhatsApp' },
-  { id: 'linkedin',    label: 'LinkedIn' },
-  { id: 'outro',       label: 'Outro' },
-];
-
-const BLANK = { nome:'', telefone:'', email:'', area:'medico', origem:'site', valor_estimado:'', observacoes:'' };
+const brl = v => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+const iniciais = n => String(n || '?').trim().split(/\s+/).slice(0, 2).map(p => p[0]).join('').toUpperCase();
+function diasDesde(d) {
+  if (!d) return null;
+  const ms = Date.now() - new Date(String(d).replace(' ', 'T') + 'Z').getTime();
+  return Math.max(0, Math.floor(ms / 86400000));
+}
+function fmtDataHora(d) {
+  try { return new Date(String(d).replace(' ', 'T') + 'Z').toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+  catch { return d; }
+}
+const zap = t => `https://wa.me/${String(t || '').replace(/\D/g, '')}`;
 
 export default function Leads() {
-  const [leads, setLeads]         = useState([]);
-  const [filtro, setFiltro]       = useState('');
-  const [modal, setModal]         = useState(null); // 'novo' | lead object
-  const [form, setForm]           = useState(BLANK);
-  const [saving, setSaving]       = useState(false);
-  const [nota, setNota]           = useState('');
-  const [atividades, setAtividades] = useState([]);
-  const navigate = useNavigate();
+  const [leads, setLeads] = useState([]);
+  const [busca, setBusca] = useState('');
+  const [filtroArea, setFiltroArea] = useState('');
+  const [filtroOrigem, setFiltroOrigem] = useState('');
+  const [modalNovo, setModalNovo] = useState(false);
+  const [form, setForm] = useState({ nome: '', telefone: '', email: '', area: 'outro', origem: 'whatsapp', etapa: 'contato', valor_estimado: '', observacoes: '' });
+  const [leadAberto, setLeadAberto] = useState(null);
+  const [detalhe, setDetalhe] = useState(null);
+  const [novaAtividade, setNovaAtividade] = useState('');
+  const [alturaQuadro, setAlturaQuadro] = useState('60vh');
+  const quadroRef = useRef(null);
 
-  useEffect(() => { carregar(); }, [filtro]);
+  const load = () => api.get('/leads').then(r => setLeads(r.data || [])).catch(() => {});
+  useEffect(() => { load(); }, []);
 
-  async function carregar() {
-    const params = filtro ? `?etapa=${filtro}` : '';
-    const r = await api.get(`/leads${params}`);
-    setLeads(r.data);
-  }
+  useEffect(() => {
+    const medir = () => {
+      if (!quadroRef.current) return;
+      const topo = quadroRef.current.getBoundingClientRect().top;
+      setAlturaQuadro(`${Math.max(300, window.innerHeight - topo - 14)}px`);
+    };
+    medir();
+    const t = setTimeout(medir, 300);
+    window.addEventListener('resize', medir);
+    return () => { clearTimeout(t); window.removeEventListener('resize', medir); };
+  }, [leads.length]);
 
-  async function abrirLead(lead) {
-    const r = await api.get(`/leads/${lead.id}`);
-    setForm({ ...r.data, valor_estimado: r.data.valor_estimado || '' });
-    setAtividades(r.data.atividades || []);
-    setModal(r.data);
-  }
+  useEffect(() => {
+    if (!leadAberto) { setDetalhe(null); return; }
+    api.get(`/leads/${leadAberto}`).then(r => setDetalhe(r.data)).catch(() => toast.error('Erro ao abrir lead'));
+  }, [leadAberto]);
 
-  async function salvar() {
-    setSaving(true);
+  const filtrados = useMemo(() => leads.filter(l => {
+    if (filtroArea && l.area !== filtroArea) return false;
+    if (filtroOrigem && l.origem !== filtroOrigem) return false;
+    if (!busca.trim()) return true;
+    const t = busca.toLowerCase();
+    return [l.nome, l.telefone, l.email, l.observacoes].some(x => String(x || '').toLowerCase().includes(t));
+  }), [leads, busca, filtroArea, filtroOrigem]);
+
+  // KPIs
+  const kpis = useMemo(() => {
+    const abertos = filtrados.filter(l => !['contratado', 'perdido'].includes(l.etapa));
+    const contratados = filtrados.filter(l => l.etapa === 'contratado');
+    const perdidos = filtrados.filter(l => l.etapa === 'perdido');
+    const fechados = contratados.length + perdidos.length;
+    const pipeline = abertos.reduce((s, l) => s + (Number(l.valor_estimado) || 0), 0);
+    const ganho = contratados.reduce((s, l) => s + (Number(l.valor_estimado) || 0), 0);
+    const conversao = fechados ? Math.round((contratados.length / fechados) * 100) : 0;
+    const novos30 = filtrados.filter(l => diasDesde(l.created_at) !== null && diasDesde(l.created_at) <= 30).length;
+    return { abertos: abertos.length, pipeline, ganho, conversao, novos30 };
+  }, [filtrados]);
+
+  async function moverEtapa(lead, dir) {
+    const idx = ETAPAS.findIndex(e => e.id === lead.etapa);
+    const nova = ETAPAS[idx + dir];
+    if (!nova) return;
+    setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, etapa: nova.id } : l));
     try {
-      if (modal === 'novo') {
-        await api.post('/leads', form);
-        toast.success('Lead adicionado!');
-      } else {
-        await api.put(`/leads/${modal.id}`, form);
-        toast.success('Atualizado!');
-      }
-      setModal(null); setForm(BLANK); carregar();
+      await api.put(`/leads/${lead.id}`, { ...lead, etapa: nova.id });
+      if (nova.id === 'contratado') toast('Lead contratado! Use "Converter em cliente" no painel.', { icon: '🎉', duration: 6000 });
+    } catch { toast.error('Erro ao mover'); load(); }
+  }
+
+  async function criar() {
+    if (!form.nome.trim()) return toast.error('Informe o nome');
+    try {
+      await api.post('/leads', { ...form, valor_estimado: form.valor_estimado ? Number(String(form.valor_estimado).replace(/\./g, '').replace(',', '.')) : null });
+      toast.success('Lead criado');
+      setModalNovo(false);
+      setForm({ nome: '', telefone: '', email: '', area: 'outro', origem: 'whatsapp', etapa: 'contato', valor_estimado: '', observacoes: '' });
+      load();
     } catch(e) { toast.error(e.response?.data?.error || 'Erro'); }
-    finally { setSaving(false); }
   }
 
-  async function moverEtapa(lead, etapa) {
-    await api.put(`/leads/${lead.id}`, { ...lead, etapa });
-    carregar();
-  }
-
-  async function addNota() {
-    if (!nota.trim()) return;
-    await api.post(`/leads/${modal.id}/atividades`, { tipo: 'nota', descricao: nota });
-    setNota('');
-    const r = await api.get(`/leads/${modal.id}`);
-    setAtividades(r.data.atividades || []);
-  }
-
-  async function converter(lead) {
-    if (!window.confirm(`Converter "${lead.nome}" em cliente?\n\nO sistema irá:\n✅ Criar o cliente no Veredo\n✅ Gerar link de documentos (30 dias)\n✅ Enviar WhatsApp de boas-vindas`)) return;
+  async function salvarDetalhe(campos) {
     try {
-      const r = await api.post(`/leads/${lead.id}/converter`);
-      if (r.data.uploadLink) {
-        await navigator.clipboard.writeText(r.data.uploadLink).catch(()=>{});
-        toast.success(`Cliente criado! Link de documentos gerado e copiado.`, { duration: 6000 });
-      } else {
-        toast.success('Cliente criado com sucesso!');
-      }
-      setModal(null); carregar();
-      navigate(`/clients/${r.data.clienteId}`);
-    } catch(e) {
-      toast.error(e.response?.data?.error || 'Erro ao converter');
-    }
+      await api.put(`/leads/${detalhe.id}`, { ...detalhe, ...campos });
+      setDetalhe(d => ({ ...d, ...campos }));
+      load();
+      toast.success('Salvo');
+    } catch { toast.error('Erro ao salvar'); }
   }
 
-  async function excluir(lead) {
-    if (!window.confirm(`Excluir lead "${lead.nome}"?`)) return;
-    await api.delete(`/leads/${lead.id}`);
-    setModal(null); carregar();
+  async function addAtividade() {
+    if (!novaAtividade.trim()) return;
+    try {
+      await api.post(`/leads/${detalhe.id}/atividades`, { tipo: 'nota', descricao: novaAtividade });
+      setNovaAtividade('');
+      api.get(`/leads/${detalhe.id}`).then(r => setDetalhe(r.data));
+    } catch { toast.error('Erro'); }
   }
 
-  const etapa = (id) => ETAPAS.find(e => e.id === id) || ETAPAS[0];
-  const contagens = ETAPAS.map(e => ({ ...e, n: leads.filter(l => l.etapa === e.id).length }));
+  async function converter() {
+    if (!window.confirm(`Converter "${detalhe.nome}" em cliente?\n\nCria o cadastro e gera o link de envio de documentos.`)) return;
+    try {
+      const r = await api.post(`/leads/${detalhe.id}/converter`);
+      toast.success('Convertido em cliente!', { duration: 7000 });
+      if (r.data?.upload_link) navigator.clipboard?.writeText(r.data.upload_link).catch(() => {});
+      setLeadAberto(null); load();
+    } catch(e) { toast.error(e.response?.data?.error || 'Erro ao converter'); }
+  }
+
+  async function excluir(lead, e) {
+    e.stopPropagation();
+    if (!window.confirm(`Excluir o lead "${lead.nome}"?`)) return;
+    try { await api.delete(`/leads/${lead.id}`); setLeads(p => p.filter(x => x.id !== lead.id)); toast.success('Excluído'); }
+    catch { toast.error('Erro'); }
+  }
+
+  const KPI = ({ icone, label, valor, sub, cor }) => (
+    <div style={{ background: '#fff', borderRadius: 14, padding: '13px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+      borderLeft: `3px solid ${cor}`, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 700,
+        color: '#6b7280', letterSpacing: '0.06em', marginBottom: 4 }}>
+        {icone} {label}
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: cor, lineHeight: 1.1, fontFamily: "'Space Grotesk', sans-serif" }}>{valor}</div>
+      {sub && <div style={{ fontSize: 11, color: '#9a9a97', marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '1.5rem 1rem' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
-        <div>
-          <h2 style={{ fontSize: 22, fontWeight: 700, color: '#0d2340', margin: 0, fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '-0.02em' }}>CRM — Funil de Leads</h2>
-          <p style={{ fontSize: 13, color: '#6b6b68', margin: '2px 0 0' }}>{leads.length} lead(s) encontrado(s)</p>
+    <div>
+      <Topbar title="Funil de Vendas">
+        <div style={{ position: 'relative', marginRight: 8 }}>
+          <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#9a9a97' }} />
+          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar lead..."
+            style={{ width: 180, padding: '8px 10px 8px 30px', fontSize: 13, border: '1px solid #d0cfc7', borderRadius: 9 }} />
         </div>
-        <button onClick={() => { setForm(BLANK); setModal('novo'); }}
-          style={{ background: '#0d2340', color: '#fff', border: 'none', borderRadius: 8,
-            padding: '10px 16px', fontWeight: 600, fontSize: 13, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Plus size={16} /> Novo Lead
-        </button>
+        <select value={filtroArea} onChange={e => setFiltroArea(e.target.value)}
+          style={{ width: 'auto', minWidth: 120, marginRight: 8, padding: '8px 10px', fontSize: 13, borderRadius: 9 }}>
+          <option value="">Todas as áreas</option>
+          {Object.entries(AREAS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+        <Btn onClick={() => setModalNovo(true)}><Plus size={14} /> Novo Lead</Btn>
+      </Topbar>
+
+      {/* KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(155px, 1fr))', gap: 12, marginBottom: 16 }}>
+        <KPI icone={<Target size={12} />} label="EM ABERTO" valor={kpis.abertos} sub="leads ativos no funil" cor="#0c66e4" />
+        <KPI icone={<DollarSign size={12} />} label="PIPELINE" valor={brl(kpis.pipeline)} sub="valor em negociação" cor="#b45309" />
+        <KPI icone={<CheckCircle2 size={12} />} label="CONVERSÃO" valor={`${kpis.conversao}%`} sub="contratados / fechados" cor="#1f845a" />
+        <KPI icone={<TrendingUp size={12} />} label="GANHO" valor={brl(kpis.ganho)} sub="contratos fechados" cor="#1f845a" />
+        <KPI icone={<UserPlus size={12} />} label="NOVOS (30d)" valor={kpis.novos30} sub="entradas recentes" cor="#7c3aed" />
       </div>
 
-      {/* Funil — contadores */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: '1.2rem', overflowX: 'auto', paddingBottom: 4 }}>
-        <button onClick={() => setFiltro('')}
-          style={{ padding: '6px 14px', borderRadius: 20, border: '1.5px solid',
-            borderColor: filtro === '' ? '#0d2340' : '#d0cfc7',
-            background: filtro === '' ? '#0d2340' : '#fff',
-            color: filtro === '' ? '#fff' : '#333', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-          Todos ({leads.length})
-        </button>
-        {contagens.map(e => (
-          <button key={e.id} onClick={() => setFiltro(e.id)}
-            style={{ padding: '6px 14px', borderRadius: 20, border: '1.5px solid',
-              borderColor: filtro === e.id ? e.cor : '#d0cfc7',
-              background: filtro === e.id ? e.bg : '#fff',
-              color: e.cor, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap', fontWeight: filtro === e.id ? 700 : 400 }}>
-            {e.label} ({e.n})
-          </button>
-        ))}
-      </div>
-
-      {/* Lista */}
-      {leads.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: '#6b6b68' }}>
-          <p style={{ fontSize: 32, marginBottom: 8 }}>👥</p>
-          <p>Nenhum lead {filtro ? 'nesta etapa' : 'cadastrado'}.</p>
-          <button onClick={() => { setForm(BLANK); setModal('novo'); }}
-            style={{ marginTop: 12, background: '#c5a859', color: '#fff', border: 'none',
-              borderRadius: 8, padding: '10px 20px', fontWeight: 600, cursor: 'pointer' }}>
-            + Adicionar primeiro lead
-          </button>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {leads.map(l => {
-            const et = etapa(l.etapa);
-            return (
-              <div key={l.id} onClick={() => abrirLead(l)}
-                style={{ background: '#fff', border: '1px solid #e5e2d6', borderRadius: 10,
-                  padding: '12px 16px', cursor: 'pointer', display: 'flex',
-                  alignItems: 'center', gap: 12 }}>
-                {/* Avatar */}
-                <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#0d2340',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#c5a859', fontWeight: 700, fontSize: 16, flexShrink: 0 }}>
-                  {l.nome.charAt(0).toUpperCase()}
+      {/* Quadro */}
+      <div ref={quadroRef} className="funil-scroll" style={{ display: 'flex', gap: 12, overflowX: 'auto',
+        height: alturaQuadro, alignItems: 'flex-start', paddingBottom: 6, maxWidth: '100%' }}>
+        {ETAPAS.map((et, i) => {
+          const itens = filtrados.filter(l => l.etapa === et.id);
+          const valorEtapa = itens.reduce((s, l) => s + (Number(l.valor_estimado) || 0), 0);
+          return (
+            <div key={et.id} style={{ minWidth: 268, maxWidth: 290, background: '#f0efe8', borderRadius: 12,
+              padding: '10px 8px', flexShrink: 0, display: 'flex', flexDirection: 'column', maxHeight: '100%' }}>
+              <div style={{ flexShrink: 0, padding: '0 6px 8px', borderBottom: `2px solid ${et.cor}33`, marginBottom: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 800, fontSize: 12.5, color: et.cor, letterSpacing: '0.03em' }}>{et.label}</span>
+                  <span style={{ background: '#fff', borderRadius: 20, padding: '1px 9px', fontSize: 11, fontWeight: 700, color: '#6b6b68' }}>{itens.length}</span>
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: '#0d2340', marginBottom: 2 }}>{l.nome}</div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {l.telefone && <span style={{ fontSize: 11, color: '#6b6b68', display: 'flex', alignItems: 'center', gap: 3 }}><Phone size={10} />{l.telefone}</span>}
-                    {l.email && <span style={{ fontSize: 11, color: '#6b6b68', display: 'flex', alignItems: 'center', gap: 3 }}><Mail size={10} />{l.email}</span>}
-                    <span style={{ fontSize: 11, color: '#6b6b68' }}>{AREAS.find(a=>a.id===l.area)?.label}</span>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20,
-                    background: et.bg, color: et.cor }}>{et.label}</span>
-                  <ChevronRight size={16} color="#6b6b68" />
-                </div>
+                {valorEtapa > 0 && <div style={{ fontSize: 10.5, color: '#6b6b68', marginTop: 2 }}>{brl(valorEtapa)}</div>}
               </div>
-            );
-          })}
-        </div>
-      )}
 
-      {/* Modal */}
-      {modal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000,
-          display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
-          onClick={e => e.target === e.currentTarget && setModal(null)}>
-          <div style={{ background: '#fff', width: '100%', maxWidth: 600, maxHeight: '92vh',
-            borderRadius: '16px 16px 0 0', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <div className="coluna-scroll" style={{ overflowY: 'auto', flex: 1, paddingRight: 2 }}>
+                {itens.map(l => {
+                  const dias = diasDesde(l.updated_at);
+                  const parado = dias !== null && dias >= 7 && !['contratado', 'perdido'].includes(l.etapa);
+                  return (
+                    <div key={l.id} onClick={() => setLeadAberto(l.id)} style={{ background: '#fff', borderRadius: 10,
+                      padding: '11px 12px', marginBottom: 8, cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+                      borderLeft: `3px solid ${CORES_AREA[l.area] || '#6b7280'}` }}>
+                      <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+                        <div style={{ width: 30, height: 30, borderRadius: 9, flexShrink: 0, background: '#0f2035',
+                          color: '#c5a859', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {iniciais(l.nome)}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1a1a18', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.nome}</div>
+                          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 3 }}>
+                            <span style={{ background: `${CORES_AREA[l.area]}18`, color: CORES_AREA[l.area],
+                              borderRadius: 4, padding: '1px 7px', fontSize: 9.5, fontWeight: 700 }}>{AREAS[l.area] || 'Outro'}</span>
+                            {l.origem === 'whatsapp' && <span style={{ background: '#dcfce7', color: '#1f845a', borderRadius: 4, padding: '1px 7px', fontSize: 9.5, fontWeight: 700 }}>WhatsApp</span>}
+                            {l.origem === 'cliente-existente' && <span style={{ background: '#fef3c7', color: '#b45309', borderRadius: 4, padding: '1px 7px', fontSize: 9.5, fontWeight: 700 }}>Cliente atual</span>}
+                          </div>
+                        </div>
+                      </div>
 
-            {/* Header modal */}
-            <div style={{ padding: '1rem 1.2rem', borderBottom: '1px solid #e5e2d6',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0d2340' }}>
-                {modal === 'novo' ? 'Novo Lead' : form.nome}
-              </h3>
-              <button onClick={() => setModal(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                <X size={20} color="#6b6b68" />
-              </button>
+                      {l.valor_estimado > 0 && (
+                        <div style={{ fontSize: 12.5, fontWeight: 800, color: '#1f845a', marginTop: 7 }}>{brl(l.valor_estimado)}</div>
+                      )}
+                      {l.observacoes && (
+                        <div style={{ fontSize: 11, color: '#6b6b68', marginTop: 5, overflow: 'hidden',
+                          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4 }}>
+                          {l.observacoes}
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10,
+                          color: parado ? '#c9372c' : '#9a9a97', fontWeight: parado ? 700 : 400 }}>
+                          <Clock size={10} /> {dias === 0 ? 'hoje' : `${dias}d parado`}
+                        </span>
+                        <div style={{ display: 'flex', gap: 3 }} onClick={e => e.stopPropagation()}>
+                          {l.telefone && (
+                            <a href={zap(l.telefone)} target="_blank" rel="noreferrer" title="Abrir no WhatsApp"
+                              style={{ background: '#dcfce7', borderRadius: 6, padding: '3px 7px', display: 'flex' }}>
+                              <MessageSquare size={11} color="#1f845a" />
+                            </a>
+                          )}
+                          <button onClick={() => moverEtapa(l, -1)} disabled={i === 0}
+                            style={{ background: i === 0 ? '#f5f5f0' : '#e8f0fe', border: 'none', borderRadius: 6, padding: '3px 7px', cursor: i === 0 ? 'default' : 'pointer', display: 'flex' }}>
+                            <ChevronLeft size={11} color={i === 0 ? '#ccc' : '#0c66e4'} />
+                          </button>
+                          <button onClick={() => moverEtapa(l, 1)} disabled={i === ETAPAS.length - 1}
+                            style={{ background: i === ETAPAS.length - 1 ? '#f5f5f0' : '#dcfce7', border: 'none', borderRadius: 6, padding: '3px 7px', cursor: i === ETAPAS.length - 1 ? 'default' : 'pointer', display: 'flex' }}>
+                            <ChevronRight size={11} color={i === ETAPAS.length - 1 ? '#ccc' : '#1f845a'} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {itens.length === 0 && <div style={{ textAlign: 'center', padding: '1.5rem 0', fontSize: 11.5, color: '#9a9a97' }}>vazio</div>}
+              </div>
             </div>
+          );
+        })}
+      </div>
 
-            {/* Corpo modal */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.2rem' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <input placeholder="Nome completo *" value={form.nome}
-                  onChange={e => setForm(p=>({...p, nome:e.target.value}))}
-                  style={inp} />
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <input placeholder="Telefone" value={form.telefone||''}
-                    onChange={e => setForm(p=>({...p, telefone:e.target.value}))} style={inp} />
-                  <input placeholder="E-mail" value={form.email||''}
-                    onChange={e => setForm(p=>({...p, email:e.target.value}))} style={inp} />
+      {/* Painel do lead */}
+      {leadAberto && (
+        <div onClick={() => setLeadAberto(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,32,53,0.55)', zIndex: 200,
+          display: 'flex', justifyContent: 'flex-end' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fbfbf9', width: '100%', maxWidth: 520,
+            height: '100%', overflowY: 'auto', boxShadow: '-8px 0 30px rgba(0,0,0,0.2)' }}>
+            {!detalhe && <p style={{ padding: '2rem', color: '#9a9a97' }}>Carregando...</p>}
+            {detalhe && (<>
+              <div style={{ background: '#0f2035', padding: '18px 22px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                  <div style={{ display: 'flex', gap: 11, alignItems: 'center' }}>
+                    <div style={{ width: 42, height: 42, borderRadius: 12, background: '#c5a859', color: '#0f2035',
+                      fontSize: 15, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {iniciais(detalhe.nome)}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 17, fontWeight: 800, color: '#fff' }}>{detalhe.nome}</div>
+                      <div style={{ fontSize: 12, color: '#d8d5c8' }}>
+                        {AREAS[detalhe.area] || 'Outro'} · {detalhe.origem} · criado há {diasDesde(detalhe.created_at)}d
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={() => setLeadAberto(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff' }}><X size={19} /></button>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <select value={form.area||'outro'} onChange={e=>setForm(p=>({...p,area:e.target.value}))} style={inp}>
-                    {AREAS.map(a=><option key={a.id} value={a.id}>{a.label}</option>)}
-                  </select>
-                  <select value={form.origem||'outro'} onChange={e=>setForm(p=>({...p,origem:e.target.value}))} style={inp}>
-                    {ORIGENS.map(o=><option key={o.id} value={o.id}>{o.label}</option>)}
-                  </select>
+                <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
+                  {ETAPAS.map(et => (
+                    <span key={et.id} onClick={() => salvarDetalhe({ etapa: et.id })}
+                      style={{ cursor: 'pointer', borderRadius: 20, padding: '4px 12px', fontSize: 11, fontWeight: 700,
+                        background: detalhe.etapa === et.id ? et.cor : 'rgba(255,255,255,0.12)',
+                        color: detalhe.etapa === et.id ? '#fff' : '#d8d5c8' }}>
+                      {et.label}
+                    </span>
+                  ))}
                 </div>
-                {modal !== 'novo' && (
-                  <select value={form.etapa||'contato'} onChange={e=>setForm(p=>({...p,etapa:e.target.value}))} style={inp}>
-                    {ETAPAS.map(e=><option key={e.id} value={e.id}>{e.label}</option>)}
-                  </select>
-                )}
-                <input placeholder="Valor estimado (R$)" type="number" value={form.valor_estimado||''}
-                  onChange={e=>setForm(p=>({...p,valor_estimado:e.target.value}))} style={inp} />
-                <textarea placeholder="Observações" rows={3} value={form.observacoes||''}
-                  onChange={e=>setForm(p=>({...p,observacoes:e.target.value}))}
-                  style={{...inp, resize:'vertical', fontFamily:'inherit'}} />
               </div>
 
-              {/* Ações rápidas */}
-              {modal !== 'novo' && (
-                <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                  {form.telefone && (
-                    <a href={`https://wa.me/55${form.telefone.replace(/\D/g,'')}`} target="_blank" rel="noreferrer"
-                      style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 14px',
-                        background:'#dcfce7', color:'#166534', borderRadius:8, fontSize:12,
-                        fontWeight:600, textDecoration:'none' }}>
-                      <MessageCircle size={13} /> WhatsApp
+              <div style={{ padding: '16px 22px' }}>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+                  {detalhe.telefone && (
+                    <a href={zap(detalhe.telefone)} target="_blank" rel="noreferrer"
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#dcfce7', color: '#1f845a',
+                        borderRadius: 9, padding: '8px 14px', fontSize: 12.5, fontWeight: 700, textDecoration: 'none' }}>
+                      <MessageSquare size={13} /> WhatsApp
                     </a>
                   )}
-                  <button onClick={() => converter(modal)}
-                    style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 14px',
-                      background:'#0d2340', color:'#fff', border:'none', borderRadius:8,
-                      fontSize:12, fontWeight:600, cursor:'pointer' }}>
-                    <UserCheck size={13} /> Converter em Cliente
-                  </button>
-                  <button onClick={() => excluir(modal)}
-                    style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 14px',
-                      background:'#fee2e2', color:'#991b1b', border:'none', borderRadius:8,
-                      fontSize:12, fontWeight:600, cursor:'pointer' }}>
-                    <Trash2 size={13} /> Excluir
-                  </button>
-                </div>
-              )}
-
-              {/* Atividades */}
-              {modal !== 'novo' && (
-                <div style={{ marginTop: 16 }}>
-                  <p style={{ fontSize: 12, fontWeight: 700, color: '#6b6b68', marginBottom: 8 }}>HISTÓRICO</p>
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                    <input placeholder="Adicionar nota..." value={nota}
-                      onChange={e=>setNota(e.target.value)}
-                      onKeyDown={e=>e.key==='Enter' && addNota()}
-                      style={{...inp, flex:1}} />
-                    <button onClick={addNota}
-                      style={{ padding:'8px 14px', background:'#c5a859', color:'#fff',
-                        border:'none', borderRadius:8, fontWeight:600, cursor:'pointer', fontSize:12 }}>
-                      Add
+                  {detalhe.etapa !== 'contratado' && (
+                    <button onClick={converter} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0f2035',
+                      color: '#fff', border: 'none', borderRadius: 9, padding: '8px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+                      <UserPlus size={13} /> Converter em cliente
                     </button>
+                  )}
+                </div>
+
+                <FormGrid cols={2}>
+                  <FormField label="Telefone">
+                    <input defaultValue={detalhe.telefone || ''} onBlur={e => e.target.value !== (detalhe.telefone || '') && salvarDetalhe({ telefone: e.target.value })} />
+                  </FormField>
+                  <FormField label="Email">
+                    <input defaultValue={detalhe.email || ''} onBlur={e => e.target.value !== (detalhe.email || '') && salvarDetalhe({ email: e.target.value })} />
+                  </FormField>
+                  <FormField label="Área">
+                    <select value={detalhe.area || 'outro'} onChange={e => salvarDetalhe({ area: e.target.value })}>
+                      {Object.entries(AREAS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                  </FormField>
+                  <FormField label="Valor estimado (R$)">
+                    <input defaultValue={detalhe.valor_estimado || ''} inputMode="decimal"
+                      onBlur={e => salvarDetalhe({ valor_estimado: e.target.value ? Number(String(e.target.value).replace(/\./g, '').replace(',', '.')) : null })} />
+                  </FormField>
+                  <FormField label="Anotações" col={2}>
+                    <textarea defaultValue={detalhe.observacoes || ''} rows={4}
+                      onBlur={e => e.target.value !== (detalhe.observacoes || '') && salvarDetalhe({ observacoes: e.target.value })} />
+                  </FormField>
+                </FormGrid>
+
+                <div style={{ marginTop: 18 }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: '#0f2035', marginBottom: 8 }}>Histórico e atividades</div>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+                    <input value={novaAtividade} onChange={e => setNovaAtividade(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && addAtividade()} placeholder="Registrar contato, proposta, observação..."
+                      style={{ flex: 1, padding: '9px 12px', borderRadius: 8, border: '1px solid #d0cfc7', fontSize: 13 }} />
+                    <button onClick={addAtividade} style={{ background: '#0f2035', color: '#fff', border: 'none',
+                      borderRadius: 8, padding: '0 16px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>Registrar</button>
                   </div>
-                  <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                    {atividades.map(a => (
-                      <div key={a.id} style={{ padding:'8px 12px', background:'#f8f7f3',
-                        borderRadius:8, fontSize:13 }}>
-                        <span style={{ color:'#0d2340' }}>{a.descricao}</span>
-                        <span style={{ color:'#6b6b68', fontSize:11, marginLeft:8 }}>
-                          {new Date(a.created_at).toLocaleString('pt-BR')}
-                        </span>
+                  {(detalhe.atividades || []).length === 0 && <p style={{ fontSize: 12.5, color: '#9a9a97' }}>Nenhuma atividade ainda.</p>}
+                  <div style={{ position: 'relative', paddingLeft: 14 }}>
+                    {(detalhe.atividades || []).map((a, i) => (
+                      <div key={a.id || i} style={{ position: 'relative', paddingBottom: 12 }}>
+                        <span style={{ position: 'absolute', left: -14, top: 5, width: 8, height: 8, borderRadius: '50%',
+                          background: a.tipo === 'conversao' ? '#1f845a' : a.tipo === 'whatsapp' ? '#25d366' : '#c5a859' }} />
+                        {i < (detalhe.atividades.length - 1) && (
+                          <span style={{ position: 'absolute', left: -11, top: 15, bottom: 0, width: 2, background: '#e5e3d8' }} />
+                        )}
+                        <div style={{ fontSize: 12.5, color: '#374151', lineHeight: 1.45 }}>{a.descricao}</div>
+                        <div style={{ fontSize: 10.5, color: '#9a9a97', marginTop: 2 }}>
+                          {fmtDataHora(a.created_at)}{a.autor ? ` · ${a.autor}` : ''}
+                        </div>
                       </div>
                     ))}
                   </div>
                 </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div style={{ padding:'12px 1.2rem', borderTop:'1px solid #e5e2d6',
-              display:'flex', justifyContent:'flex-end', gap:10 }}>
-              <button onClick={() => setModal(null)}
-                style={{ padding:'10px 20px', borderRadius:8, border:'1px solid #d0cfc7',
-                  background:'#fff', fontSize:14, cursor:'pointer' }}>
-                Cancelar
-              </button>
-              <button onClick={salvar} disabled={saving}
-                style={{ padding:'10px 24px', borderRadius:8, border:'none',
-                  background: saving ? '#ccc' : '#0d2340', color:'#fff',
-                  fontWeight:700, fontSize:14, cursor: saving ? 'not-allowed' : 'pointer' }}>
-                {saving ? 'Salvando...' : 'Salvar'}
-              </button>
-            </div>
+              </div>
+            </>)}
           </div>
         </div>
       )}
+
+      {/* Novo lead */}
+      <Modal open={modalNovo} onClose={() => setModalNovo(false)} title="Novo Lead"
+        footer={<><Btn variant="outline" onClick={() => setModalNovo(false)}>Cancelar</Btn><Btn onClick={criar}>Criar lead</Btn></>}>
+        <FormGrid cols={2}>
+          <FormField label="Nome *" col={2}><input value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} autoFocus /></FormField>
+          <FormField label="Telefone"><input value={form.telefone} onChange={e => setForm(f => ({ ...f, telefone: e.target.value }))} placeholder="21999998888" /></FormField>
+          <FormField label="Email"><input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></FormField>
+          <FormField label="Área">
+            <select value={form.area} onChange={e => setForm(f => ({ ...f, area: e.target.value }))}>
+              {Object.entries(AREAS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </FormField>
+          <FormField label="Valor estimado (R$)"><input value={form.valor_estimado} inputMode="decimal"
+            onChange={e => setForm(f => ({ ...f, valor_estimado: e.target.value.replace(/[^0-9,]/g, '') }))} placeholder="3000" /></FormField>
+          <FormField label="Anotações" col={2}><textarea rows={3} value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} /></FormField>
+        </FormGrid>
+      </Modal>
+
+      <style>{`
+        .funil-scroll::-webkit-scrollbar { height: 11px; }
+        .funil-scroll::-webkit-scrollbar-track { background: #e8e6dc; border-radius: 8px; }
+        .funil-scroll::-webkit-scrollbar-thumb { background: #0f2035; border-radius: 8px; }
+        .coluna-scroll::-webkit-scrollbar { width: 6px; }
+        .coluna-scroll::-webkit-scrollbar-thumb { background: #c9c6b8; border-radius: 6px; }
+      `}</style>
     </div>
   );
 }
-
-const inp = {
-  width: '100%', boxSizing: 'border-box', padding: '9px 12px',
-  border: '1px solid #d0cfc7', borderRadius: 8, fontSize: 14,
-};

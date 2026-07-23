@@ -19,6 +19,7 @@ const NOMES = {
   dje:            { titulo: 'DJE / Intimações',       desc: 'DJEN consultado para as 3 OABs do escritório' },
   github:         { titulo: 'Token GitHub',           desc: 'Validade da credencial de manutenção do sistema' },
   crm:            { titulo: 'CRM diário (WhatsApp)',  desc: 'Leitura das conversas e alimentação do funil' },
+  transcricao:    { titulo: 'Transcrição de áudios',  desc: 'Whisper (OpenAI) para áudios do WhatsApp' },
 };
 
 export default function Diagnostico() {
@@ -141,5 +142,6 @@ export default function Diagnostico() {
     </div>
   );
 }
+
 
 

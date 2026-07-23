@@ -272,6 +272,17 @@ router.post('/rodar', async (req, res) => {
     return `Token válido · expira em ${dias} dias (${dataExp.toLocaleDateString('pt-BR')})`;
   });
 
+  // ─── 14. CRM diário (WhatsApp → funil) ───
+  resultados.crm = await tempo(async () => {
+    let log = null;
+    try { log = db.prepare('SELECT executado_em, resumo FROM crm_diario_log ORDER BY id DESC LIMIT 1').get(); } catch {}
+    if (!log) return 'Ainda não executado — roda diariamente às 7h30 (ou manualmente em WhatsApp)';
+    const horas = (Date.now() - new Date(log.executado_em.replace(' ', 'T') + 'Z').getTime()) / 3600000;
+    const r = JSON.parse(log.resumo || '{}');
+    if (horas > 36) throw new Error(`Última análise há ${Math.round(horas)}h (deveria rodar diariamente). Rode manualmente na tela WhatsApp.`);
+    return `Há ${Math.round(horas)}h · ${r.conversas || 0} conversa(s) lida(s) · ${r.leads_novos || 0} lead(s) novo(s) · ${r.convertidos || 0} convertido(s)`;
+  });
+
   const total = Object.keys(resultados).length;
   const ok = Object.values(resultados).filter(r => r.ok).length;
 
@@ -293,6 +304,7 @@ router.post('/backup-agora', async (req, res) => {
 });
 
 export default router;
+
 
 
 

@@ -20,6 +20,39 @@ router.get('/', authMiddleware, (req, res) => {
   res.json(db.prepare(sql).all(...params));
 });
 
+
+// ─── Contatos ignorados: silenciam o contato em toda a automação ────────────
+const sufTel = t => String(t || '').replace(/\D/g, '').slice(-8);
+
+// POST /api/leads/:id/ignorar — "não é cliente": exclui o lead e para de monitorar
+router.post('/:id/ignorar', authMiddleware, (req, res) => {
+  const db = getDB();
+  const lead = db.prepare('SELECT * FROM leads WHERE id = ?').get(req.params.id);
+  if (!lead) return res.status(404).json({ error: 'Lead não encontrado' });
+
+  if (lead.telefone) {
+    const ja = db.prepare('SELECT id FROM contatos_ignorados WHERE sufixo = ?').get(sufTel(lead.telefone));
+    if (!ja) {
+      db.prepare(`INSERT INTO contatos_ignorados (telefone, sufixo, nome, motivo) VALUES (?, ?, ?, ?)`)
+        .run(lead.telefone, sufTel(lead.telefone), lead.nome, req.body.motivo || 'Marcado como "não é cliente" no funil');
+    }
+  }
+  db.prepare('DELETE FROM leads WHERE id = ?').run(lead.id);
+  res.json({ ok: true, telefone: lead.telefone });
+});
+
+// GET /api/leads/ignorados — lista
+router.get('/ignorados/lista', authMiddleware, (req, res) => {
+  const db = getDB();
+  res.json(db.prepare('SELECT * FROM contatos_ignorados ORDER BY created_at DESC').all());
+});
+
+// DELETE /api/leads/ignorados/:id — volta a monitorar
+router.delete('/ignorados/:id', authMiddleware, (req, res) => {
+  getDB().prepare('DELETE FROM contatos_ignorados WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
 // GET /api/leads/:id — detalhe + atividades
 router.get('/:id', authMiddleware, (req, res) => {
   const db = getDB();
@@ -146,3 +179,4 @@ router.delete('/:id', authMiddleware, (req, res) => {
 });
 
 export default router;
+

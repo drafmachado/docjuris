@@ -69,7 +69,7 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-app.use(express.json({ limit: '1mb' })); // Limite no body para prevenir DoS
+app.use(express.json({ limit: '8mb' })); // 8MB: comporta imagem de comunicado em base64 (protege contra DoS)
 app.use(fileUpload({
   limits: { fileSize: 10 * 1024 * 1024 },
   useTempFiles: true,
@@ -222,4 +222,5 @@ function agendarDJE() {
   console.log(`📰 Monitoramento DJE agendado para ${alvo.toLocaleTimeString('pt-BR')}`);
 }
 agendarDJE();
+
 

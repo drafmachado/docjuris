@@ -1,13 +1,52 @@
 import { useState, useEffect } from 'react';
 import api from '../utils/api.js';
 import toast from 'react-hot-toast';
-import { Send, Clock, Users, CheckCircle } from 'lucide-react';
+import { Send, Clock, Users, CheckCircle, Image as ImageIcon, X, Smartphone } from 'lucide-react';
+import { useRef } from 'react';
 
 export default function Comunicados() {
   const [mensagem, setMensagem] = useState('');
   const [historico, setHistorico] = useState([]);
   const [enviando, setEnviando] = useState(false);
   const [preview, setPreview] = useState(false);
+  const [imagem, setImagem] = useState(null);        // { base64, mimetype, filename, url }
+  const [publico, setPublico] = useState('clientes');
+  const [totalDest, setTotalDest] = useState(null);
+  const [linhas, setLinhas] = useState([]);
+  const [instancia, setInstancia] = useState('');
+  const fileRef = useRef(null);
+
+  // Prévia de quantos vão receber
+  useEffect(() => {
+    api.get(`/comunicados/destinatarios?publico=${publico}`)
+      .then(r => setTotalDest(r.data)).catch(() => setTotalDest(null));
+  }, [publico]);
+
+  useEffect(() => {
+    api.get('/whatsapp-admin/instancias').then(r => {
+      const ativas = (r.data || []).filter(i => ['open', 'connected'].includes(String(i.estado).toLowerCase()));
+      setLinhas(ativas);
+      if (ativas.length && !instancia) setInstancia(ativas[0].nome);
+    }).catch(() => {});
+  }, []);
+
+  function escolherImagem(ev) {
+    const f = ev.target.files?.[0];
+    if (!f) return;
+    if (!f.type.startsWith('image/')) return toast.error('Selecione uma imagem');
+    if (f.size > 5 * 1024 * 1024) return toast.error('Imagem acima de 5MB — reduza antes de enviar');
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result);
+      setImagem({
+        base64: dataUrl.split(',')[1],
+        mimetype: f.type,
+        filename: f.name,
+        url: dataUrl,
+      });
+    };
+    reader.readAsDataURL(f);
+  }
 
   useEffect(() => { carregarHistorico(); }, []);
 
@@ -19,14 +58,21 @@ export default function Comunicados() {
   }
 
   async function enviar() {
-    if (!mensagem.trim()) return toast.error('Escreva a mensagem antes de enviar');
-    if (!window.confirm(`Enviar para TODOS os clientes com WhatsApp cadastrado?\n\nMensagem:\n${mensagem}`)) return;
+    if (!mensagem.trim() && !imagem) return toast.error('Escreva a mensagem ou anexe uma imagem');
+    const rotulo = { clientes: 'CLIENTES', leads: 'LEADS do funil', clientes_e_leads: 'CLIENTES e LEADS' }[publico];
+    if (!window.confirm(
+      `Enviar para ${totalDest?.total ?? '?'} destinatário(s) — ${rotulo}?\n\n` +
+      `Linha de envio: ${instancia || 'padrão'}\n` +
+      (imagem ? `Com imagem: ${imagem.filename}\n` : '') +
+      `\nMensagem:\n${mensagem || '(somente imagem)'}`
+    )) return;
 
     setEnviando(true);
     try {
-      const res = await api.post('/comunicados/send', { mensagem });
-      toast.success(`Enviando para ${res.data.total} clientes...`);
+      const res = await api.post('/comunicados/send', { mensagem, publico, instancia, imagem: imagem ? { base64: imagem.base64, mimetype: imagem.mimetype, filename: imagem.filename } : null });
+      toast.success(`Enviando para ${res.data.total} destinatário(s)...`);
       setMensagem('');
+      setImagem(null);
       setPreview(false);
       setTimeout(carregarHistorico, 3000);
     } catch (e) {
@@ -49,6 +95,32 @@ export default function Comunicados() {
 
       {/* Editor */}
       <div style={{ background: '#fff', border: '1px solid #e5e2d6', borderRadius: 12, padding: '1.2rem', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div style={{ flex: 1, minWidth: 170 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#6b6b68', display: 'block', marginBottom: 5 }}>PARA QUEM</label>
+            <select value={publico} onChange={e => setPublico(e.target.value)}
+              style={{ width: '100%', padding: '9px 11px', borderRadius: 9, border: '1px solid #d0cfc7', fontSize: 13 }}>
+              <option value="clientes">Clientes</option>
+              <option value="leads">Leads do funil (em negociação)</option>
+              <option value="clientes_e_leads">Clientes + Leads</option>
+            </select>
+            {totalDest && (
+              <div style={{ fontSize: 11.5, color: '#3b6d11', marginTop: 4, fontWeight: 600 }}>
+                {totalDest.total} destinatário(s){totalDest.amostra?.length ? ` — ex: ${totalDest.amostra.slice(0, 2).join(', ')}...` : ''}
+              </div>
+            )}
+          </div>
+          {linhas.length > 1 && (
+            <div style={{ flex: 1, minWidth: 170 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: '#6b6b68', display: 'block', marginBottom: 5 }}>ENVIAR PELA LINHA</label>
+              <select value={instancia} onChange={e => setInstancia(e.target.value)}
+                style={{ width: '100%', padding: '9px 11px', borderRadius: 9, border: '1px solid #d0cfc7', fontSize: 13 }}>
+                {linhas.map(l => <option key={l.nome} value={l.nome}>{l.numero || l.nome}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+
         <label style={{ fontSize: 12, fontWeight: 600, color: '#6b6b68', display: 'block', marginBottom: 8 }}>
           MENSAGEM
         </label>
@@ -138,3 +210,4 @@ export default function Comunicados() {
     </div>
   );
 }
+

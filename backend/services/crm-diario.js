@@ -208,11 +208,39 @@ export async function rodarCrmDiario() {
 Lead: "${lead.nome}" — etapa atual: "${lead.etapa}" (contato → consulta → proposta → contratado/perdido)
 Contexto anterior: ${String(lead.observacoes || '').slice(0, 300)}
 
-Conversa mais recente no WhatsApp:
+Conversa mais recente no WhatsApp (🎙️ indica áudio transcrito):
 ${transcricao}
 
-Responda APENAS JSON: {"etapa":"contato|consulta|proposta|contratado|perdido","mudou":true|false,"resumo":"1 frase sobre o andamento da negociação"}
-Regras: "contratado" só se o cliente CLARAMENTE aceitou contratar/assinou/pagou. "perdido" só se recusou explicitamente ou desistiu. Na dúvida, mantenha a etapa atual e mudou=false.`);
+Responda APENAS JSON:
+{"juridico":true|false,"etapa":"contato|consulta|proposta|contratado|perdido","mudou":true|false,
+ "valor_proposto":number|null,"valor_acordado":number|null,"nome_real":"nome da pessoa se identificável, senão null",
+ "resumo":"1 frase sobre o andamento"}
+
+Regras:
+- "juridico": false se a conversa for pessoal/social/administrativa, SEM qualquer assunto jurídico ou de contratação. Nesse caso este contato não deveria estar no funil.
+- "contratado" só se aceitou contratar/assinou/pagou de forma CLARA. "perdido" só se recusou ou desistiu explicitamente.
+- valor_proposto: honorários propostos pela advogada (só o número, ex: 3000). valor_acordado: valor efetivamente aceito. null se não houver.
+- Na dúvida sobre a etapa, mudou=false.`, 420);
+
+          // Conversa sem qualquer natureza jurídica → sai do funil (foi falso positivo)
+          if (a.juridico === false && String(lead.origem || '') !== 'manual') {
+            db.prepare('DELETE FROM leads WHERE id = ?').run(lead.id);
+            resumo.removidos = (resumo.removidos || 0) + 1;
+            statusCrmDiario.ultimos.unshift({ tipo: 'removido', nome: lead.nome, resumo: 'sem assunto jurídico — removido do funil' });
+            console.log(`  🗑️ Lead removido (sem assunto jurídico): ${lead.nome}`);
+            continue;
+          }
+
+          // Valores citados na conversa alimentam o card
+          const valorDetectado = a.valor_acordado || a.valor_proposto || null;
+          if (valorDetectado) {
+            db.prepare(`UPDATE leads SET valor_estimado = ?, updated_at = datetime('now') WHERE id = ?`).run(valorDetectado, lead.id);
+            insAtividade.run(lead.id, `💰 Valor identificado na conversa: R$ ${Number(valorDetectado).toLocaleString('pt-BR')}${a.valor_acordado ? ' (acordado)' : ' (proposto)'}`);
+          }
+          // Nome real dito na conversa substitui número/apelido
+          if (a.nome_real && /^\d+$/.test(String(lead.nome).replace(/\D/g, '')) === false && String(lead.nome).length < 4) {
+            db.prepare('UPDATE leads SET nome = ? WHERE id = ?').run(a.nome_real.slice(0, 120), lead.id);
+          }
 
           if (a.mudou && a.etapa && a.etapa !== lead.etapa) {
             db.prepare(`UPDATE leads SET etapa = ?, updated_at = datetime('now') WHERE id = ?`).run(a.etapa, lead.id);
@@ -255,8 +283,8 @@ Conversa recente no WhatsApp:
 ${transcricao}
 
 O cliente está pedindo um SERVIÇO JURÍDICO NOVO (caso diferente do que já é atendido), ou apenas tratando do caso em andamento / assunto administrativo?
-Responda APENAS JSON: {"servico_novo":true|false,"area":"saude|civel|consumidor|inventario|familia|trabalhista|outro","resumo":"1 frase: qual a nova demanda"}
-Seja conservador: só true se ficar claro que é um caso/assunto jurídico NOVO.`);
+Responda APENAS JSON: {"servico_novo":true|false,"area":"saude|civel|consumidor|inventario|familia|trabalhista|outro","valor_proposto":number|null,"valor_acordado":number|null,"resumo":"1 frase: qual a nova demanda"}
+Seja conservador: só true se ficar claro que é um caso/assunto jurídico NOVO. valor_*: honorários citados, só o número; null se não houver.`, 380);
 
           if (a.servico_novo) {
             // Evita duplicar lead de serviço novo em aberto para o mesmo telefone
@@ -265,9 +293,10 @@ Seja conservador: só true se ficar claro que é um caso/assunto jurídico NOVO.
             `).get(cliente.telefone);
             if (!jaAberto) {
               const r = db.prepare(`
-                INSERT INTO leads (nome, telefone, area, origem, etapa, observacoes)
-                VALUES (?, ?, ?, 'cliente-existente', 'contato', ?)
+                INSERT INTO leads (nome, telefone, area, origem, etapa, valor_estimado, observacoes)
+                VALUES (?, ?, ?, 'cliente-existente', 'contato', ?, ?)
               `).run(`${cliente.nome} (novo serviço)`, cliente.telefone, a.area || 'outro',
+                     a.valor_acordado || a.valor_proposto || null,
                      `Demanda nova detectada no WhatsApp em ${new Date().toLocaleDateString('pt-BR')}: ${a.resumo || ''}`);
               insAtividade.run(r.lastInsertRowid, `Lead aberto pela análise diária — cliente existente pediu serviço novo: ${a.resumo || ''}`);
               mapaLeads.set(suf, { id: r.lastInsertRowid, nome: cliente.nome, telefone: cliente.telefone, etapa: 'contato' });
@@ -284,23 +313,40 @@ Seja conservador: só true se ficar claro que é um caso/assunto jurídico NOVO.
         if (leadsFechados.has(suf)) continue; // negociação já encerrada antes
 
         const a = await perguntarIA(
-`Você triagem contatos de WhatsApp de um escritório de advocacia (Dra. Andreia Machado).
+`Você faz a triagem de contatos de WhatsApp de um escritório de advocacia (Dra. Andreia Machado).
 
 Contato: "${conv.nome || conv.numero}"
-Conversa:
+Conversa (🎙️ indica áudio transcrito):
 ${transcricao}
 
-Este contato é um POTENCIAL CLIENTE (busca ajuda jurídica, consulta, pergunta honorários) ou é assunto pessoal/fornecedor/spam/irrelevante?
-Responda APENAS JSON: {"potencial_cliente":true|false,"nome":"nome real da pessoa se identificável, senão o nome do contato","area":"saude|civel|consumidor|inventario|familia|trabalhista|outro","resumo":"1 frase: o que a pessoa procura"}`);
+Este contato é um POTENCIAL CLIENTE? Responda APENAS JSON:
+{"potencial_cliente":true|false,"nome":"nome real da pessoa se identificável, senão null",
+ "area":"saude|civel|consumidor|inventario|familia|trabalhista|previdenciario|outro",
+ "valor_proposto":number|null,"valor_acordado":number|null,
+ "resumo":"1 frase: o que a pessoa procura"}
+
+REGRA RÍGIDA para potencial_cliente = true: a conversa precisa ter um ASSUNTO JURÍDICO EXPLÍCITO
+(descrição de um problema legal, consulta sobre direitos, pedido de orientação, pergunta sobre honorários,
+processo, documento, prazo). Marque FALSE para: conversa social ou pessoal, cumprimentos, correntes,
+mensagens religiosas, vendas/fornecedores, cobranças, grupos, spam, ou quando não houver conteúdo
+suficiente para saber (ex.: só "oi" ou "bom dia"). Na dúvida, FALSE.
+valor_proposto/valor_acordado: honorários citados na conversa, só o número (ex: 3000); null se não houver.`, 420);
 
         if (a.potencial_cliente) {
+          // Nome: prioriza o dito na conversa; descarta apelidos numéricos/JID
+          const nomeContato = String(conv.nome || '').trim();
+          const nomeUtil = a.nome && a.nome.length > 2 ? a.nome
+            : (nomeContato && !/^\d{6,}$/.test(nomeContato.replace(/\D/g, '')) ? nomeContato
+            : `WhatsApp (${conv.numero.slice(2, 4)}) ${conv.numero.slice(4)}`);
+          const valorDetectado = a.valor_acordado || a.valor_proposto || null;
+
           const r = db.prepare(`
-            INSERT INTO leads (nome, telefone, area, origem, etapa, observacoes)
-            VALUES (?, ?, ?, 'whatsapp', 'contato', ?)
-          `).run((a.nome || conv.nome || `WhatsApp ${conv.numero}`).slice(0, 120), conv.numero,
-                 a.area || 'outro',
-                 `Lead criado pela análise diária do WhatsApp em ${new Date().toLocaleDateString('pt-BR')}.\n${a.resumo || ''}`);
+            INSERT INTO leads (nome, telefone, area, origem, etapa, valor_estimado, observacoes)
+            VALUES (?, ?, ?, 'whatsapp', 'contato', ?, ?)
+          `).run(nomeUtil.slice(0, 120), conv.numero, a.area || 'outro', valorDetectado,
+                 `Lead criado pela análise diária do WhatsApp em ${new Date().toLocaleDateString('pt-BR')}.\n${a.resumo || ''}${valorDetectado ? `\n💰 Valor citado: R$ ${Number(valorDetectado).toLocaleString('pt-BR')}` : ''}`);
           insAtividade.run(r.lastInsertRowid, `Primeiro contato analisado: ${a.resumo || ''}`);
+          if (valorDetectado) insAtividade.run(r.lastInsertRowid, `💰 Valor identificado na conversa: R$ ${Number(valorDetectado).toLocaleString('pt-BR')}`);
           mapaLeads.set(suf, { id: r.lastInsertRowid, nome: a.nome, telefone: conv.numero, etapa: 'contato' });
           resumo.leads_novos++;
           statusCrmDiario.leads_novos++;
@@ -314,6 +360,9 @@ Responda APENAS JSON: {"potencial_cliente":true|false,"nome":"nome real da pesso
       await new Promise(r => setTimeout(r, 700));
     }
   }
+
+  // Fila de pendentes já foi avaliada nesta rodada
+  try { db.prepare(`DELETE FROM contatos_pendentes WHERE atualizado_em < datetime('now', '-2 days')`).run(); } catch {}
 
   Object.assign(statusCrmDiario, { rodando: false, fase: 'concluído', concluido_em: new Date().toISOString() });
 
@@ -344,6 +393,7 @@ Responda APENAS JSON: {"potencial_cliente":true|false,"nome":"nome real da pesso
               <li><b>${resumo.leads_atualizados}</b> negociação(ões) com etapa atualizada</li>
               <li><b>${resumo.convertidos}</b> convertido(s) em cliente ✅</li>
               <li><b>${resumo.servicos_novos}</b> cliente(s) pedindo serviço novo</li>
+              ${resumo.removidos ? `<li><b>${resumo.removidos}</b> lead(s) removido(s) — conversa sem assunto jurídico</li>` : ''}
             </ul>
             <p style="font-size:12.5px">Linhas lidas: <b>${resumo.linhas_lidas || 0}</b></p>
             ${(resumo.linhas_caidas || []).length ? `<p style="background:#fdf2f2;border-left:4px solid #dc2626;padding:8px 12px;color:#7f1d1d"><b>⚠️ Atenção:</b> ${resumo.linhas_caidas.length} conexão(ões) de WhatsApp desconectada(s) (${resumo.linhas_caidas.join(', ')}) — mensagens desses números NÃO foram lidas. Reconecte na tela WhatsApp do Veredo.</p>` : ''}

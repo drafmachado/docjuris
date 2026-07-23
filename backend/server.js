@@ -13,6 +13,7 @@ import { aplicarTemplatesV2, limparCamposSistema } from './services/templates-mi
 import diagnosticoRoutes from './routes/diagnostico.js';
 import portalRoutes from './routes/portal.js';
 import { registrarWebhookMensagens } from './services/evolution.js';
+import { rodarCrmDiario } from './services/crm-diario.js';
 import whatsappWebhookRoutes from './routes/whatsapp-webhook.js';
 import whatsappAdminRoutes from './routes/whatsapp-admin.js';
 import tarefasRoutes from './routes/tarefas.js';
@@ -177,6 +178,17 @@ console.log('⏰ Verificação de prazos agendada (a cada 1h)');
 setTimeout(() => {
   monitorarProcessos();
   setTimeout(() => registrarWebhookMensagens(), 20 * 1000);
+
+  // CRM diário do WhatsApp — 7h30 (horário de Brasília). Verifica a cada 30 min.
+  let ultimoCrmDiario = null;
+  setInterval(async () => {
+    const agora = new Date(Date.now() - 3 * 60 * 60 * 1000); // UTC-3
+    const hoje = agora.toISOString().slice(0, 10);
+    if (agora.getUTCHours() === 7 && ultimoCrmDiario !== hoje) {
+      ultimoCrmDiario = hoje;
+      try { await rodarCrmDiario(); } catch (e) { console.error('CRM diário:', e.message); }
+    }
+  }, 30 * 60 * 1000);
   setInterval(monitorarProcessos, 6 * 60 * 60 * 1000);
 }, 30 * 1000); // aguarda 30s após iniciar para não sobrecarregar o boot
 console.log('🔍 Monitoramento de andamentos agendado (a cada 6h)');
@@ -210,3 +222,4 @@ function agendarDJE() {
   console.log(`📰 Monitoramento DJE agendado para ${alvo.toLocaleTimeString('pt-BR')}`);
 }
 agendarDJE();
+

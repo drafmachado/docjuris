@@ -305,6 +305,19 @@ export function initDB() {
   try { db.exec(`ALTER TABLE processos ADD COLUMN etapa_id INTEGER`); } catch {}
   try { db.exec(`ALTER TABLE processos ADD COLUMN trello_labels TEXT`); } catch {}
   db.exec(`
+    CREATE TABLE IF NOT EXISTS contatos_pendentes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      telefone TEXT NOT NULL,
+      sufixo TEXT NOT NULL UNIQUE,
+      nome TEXT,
+      ultima_mensagem TEXT,
+      mensagens INTEGER DEFAULT 1,
+      criado_em TEXT NOT NULL DEFAULT (datetime('now')),
+      atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS contatos_ignorados (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       telefone TEXT NOT NULL,

@@ -7,6 +7,14 @@
 // Tudo é registrado como atividade do lead; nada é apagado.
 import { getDB } from '../db.js';
 
+// Estado observável da execução (a tela acompanha por polling)
+export const statusCrmDiario = {
+  rodando: false, fase: null, linha: null, linhas_total: 0, linha_atual: 0,
+  total: 0, processadas: 0,
+  leads_novos: 0, leads_atualizados: 0, convertidos: 0, servicos_novos: 0,
+  ultimos: [], iniciado_em: null, concluido_em: null,
+};
+
 const JANELA_HORAS = 26;      // margem sobre 24h
 const MAX_CONVERSAS = 80;     // teto diário (controle de custo de IA)
 
@@ -130,6 +138,13 @@ export async function rodarCrmDiario() {
   const desde = Date.now() - JANELA_HORAS * 60 * 60 * 1000;
   const resumo = { conversas: 0, leads_novos: 0, leads_atualizados: 0, convertidos: 0, servicos_novos: 0, erros: 0 };
 
+  Object.assign(statusCrmDiario, {
+    rodando: true, fase: 'consultando as linhas de WhatsApp', linha: null,
+    linhas_total: 0, linha_atual: 0, total: 0, processadas: 0,
+    leads_novos: 0, leads_atualizados: 0, convertidos: 0, servicos_novos: 0,
+    ultimos: [], iniciado_em: new Date().toISOString(), concluido_em: null,
+  });
+
   console.log('🔄 CRM diário: lendo conversas das últimas 24h...');
 
   const clientes = db.prepare(`SELECT id, nome, telefone FROM clients WHERE telefone IS NOT NULL AND telefone != ''`).all();
@@ -144,12 +159,20 @@ export async function rodarCrmDiario() {
   resumo.linhas_lidas = linhas.conectadas.length;
   resumo.linhas_caidas = linhas.caidas;
 
+  statusCrmDiario.linhas_total = linhas.conectadas.length;
+
   for (const inst of linhas.conectadas) {
+    statusCrmDiario.linha_atual++;
+    statusCrmDiario.linha = inst;
+    statusCrmDiario.fase = `buscando conversas de ${inst}`;
     const conversas = await conversasRecentes(inst, desde);
+    statusCrmDiario.total += conversas.length;
+    statusCrmDiario.fase = `analisando conversas de ${inst}`;
     console.log(`  ${inst}: ${conversas.length} conversa(s) com movimento`);
 
     for (const conv of conversas) {
       resumo.conversas++;
+      statusCrmDiario.processadas++;
       const suf = sufixo(conv.numero);
       const transcricao = transcrever(conv);
       if (conv.mensagens.filter(m => !m.fromMe).length === 0) continue;
@@ -175,6 +198,7 @@ Regras: "contratado" só se o cliente CLARAMENTE aceitou contratar/assinou/pagou
             db.prepare(`UPDATE leads SET etapa = ?, updated_at = datetime('now') WHERE id = ?`).run(a.etapa, lead.id);
             insAtividade.run(lead.id, `Análise diária do WhatsApp: ${lead.etapa} → ${a.etapa}. ${a.resumo || ''}`);
             resumo.leads_atualizados++;
+            statusCrmDiario.leads_atualizados++;
 
             // Fechou positivamente → vira cliente
             if (a.etapa === 'contratado') {
@@ -188,6 +212,8 @@ Regras: "contratado" só se o cliente CLARAMENTE aceitou contratar/assinou/pagou
                 mapaClientes.set(suf, { id: r.lastInsertRowid, nome: lead.nome, telefone: lead.telefone });
                 insAtividade.run(lead.id, `✅ Convertido em cliente automaticamente (ID ${r.lastInsertRowid}) — completar cadastro`);
                 resumo.convertidos++;
+                statusCrmDiario.convertidos++;
+                statusCrmDiario.ultimos.unshift({ tipo: 'convertido', nome: lead.nome, resumo: a.resumo || '' });
                 console.log(`  ✅ Lead "${lead.nome}" fechou → cliente criado`);
               }
               mapaLeads.delete(suf);
@@ -226,6 +252,8 @@ Seja conservador: só true se ficar claro que é um caso/assunto jurídico NOVO.
               insAtividade.run(r.lastInsertRowid, `Lead aberto pela análise diária — cliente existente pediu serviço novo: ${a.resumo || ''}`);
               mapaLeads.set(suf, { id: r.lastInsertRowid, nome: cliente.nome, telefone: cliente.telefone, etapa: 'contato' });
               resumo.servicos_novos++;
+              statusCrmDiario.servicos_novos++;
+              statusCrmDiario.ultimos.unshift({ tipo: 'servico', nome: cliente.nome, resumo: a.resumo || '' });
               console.log(`  🆕 Serviço novo de cliente: ${cliente.nome}`);
             }
           }
@@ -255,6 +283,8 @@ Responda APENAS JSON: {"potencial_cliente":true|false,"nome":"nome real da pesso
           insAtividade.run(r.lastInsertRowid, `Primeiro contato analisado: ${a.resumo || ''}`);
           mapaLeads.set(suf, { id: r.lastInsertRowid, nome: a.nome, telefone: conv.numero, etapa: 'contato' });
           resumo.leads_novos++;
+          statusCrmDiario.leads_novos++;
+          statusCrmDiario.ultimos.unshift({ tipo: 'lead', nome: a.nome || conv.numero, resumo: a.resumo || '' });
           console.log(`  🎯 Lead novo: ${a.nome || conv.numero} — ${a.resumo || ''}`);
         }
       } catch (e) {
@@ -264,6 +294,8 @@ Responda APENAS JSON: {"potencial_cliente":true|false,"nome":"nome real da pesso
       await new Promise(r => setTimeout(r, 700));
     }
   }
+
+  Object.assign(statusCrmDiario, { rodando: false, fase: 'concluído', concluido_em: new Date().toISOString() });
 
   console.log(`✅ CRM diário concluído: ${resumo.leads_novos} lead(s) novo(s), ${resumo.leads_atualizados} atualizado(s), ${resumo.convertidos} convertido(s) em cliente, ${resumo.servicos_novos} serviço(s) novo(s)`);
 
@@ -303,3 +335,4 @@ Responda APENAS JSON: {"potencial_cliente":true|false,"nome":"nome real da pesso
 
   return resumo;
 }
+

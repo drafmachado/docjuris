@@ -246,4 +246,26 @@ async function analisarConversasAsync(jobId, instancia, userId) {
   job.fase = 'concluído';
 }
 
+// POST /api/whatsapp-admin/crm-diario/rodar — dispara a análise diária manualmente
+let crmRodando = false;
+router.post('/crm-diario/rodar', async (req, res) => {
+  if (crmRodando) return res.json({ ok: true, ja_rodando: true });
+  crmRodando = true;
+  const { rodarCrmDiario } = await import('../services/crm-diario.js');
+  rodarCrmDiario()
+    .catch(e => console.error('CRM diário manual:', e.message))
+    .finally(() => { crmRodando = false; });
+  res.json({ ok: true, iniciado: true });
+});
+
+// GET /api/whatsapp-admin/crm-diario/ultimo
+router.get('/crm-diario/ultimo', (req, res) => {
+  const db = getDB();
+  try {
+    const log = db.prepare('SELECT executado_em, resumo FROM crm_diario_log ORDER BY id DESC LIMIT 1').get();
+    res.json(log ? { ...log, resumo: JSON.parse(log.resumo || '{}') } : null);
+  } catch { res.json(null); }
+});
+
 export default router;
+

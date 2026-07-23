@@ -297,17 +297,30 @@ router.post('/rodar', async (req, res) => {
 
   // ─── 15. Transcrição de áudios (Whisper) ───
   resultados.transcricao = await tempo(async () => {
-    const { transcricaoDisponivel, estatisticasTranscricao } = await import('../services/transcricao.js');
+    const { provedorTranscricao, estatisticasTranscricao } = await import('../services/transcricao.js');
+    const prov = provedorTranscricao();
     const st = estatisticasTranscricao();
-    if (!transcricaoDisponivel()) {
-      throw new Error('OPENAI_API_KEY não configurada — áudios do WhatsApp NÃO são transcritos (leads por áudio ficam sem conteúdo). Configure no Railway.');
+
+    if (!prov) {
+      throw new Error('Nenhuma chave de transcrição configurada — áudios do WhatsApp NÃO são transcritos. Opção gratuita: crie GROQ_API_KEY em console.groq.com e adicione no Railway.');
     }
-    const r = await fetch('https://api.openai.com/v1/models', {
-      headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
-    });
+
+    // Validação da chave conforme o provedor
+    if (prov === 'groq') {
+      const r = await fetch('https://api.groq.com/openai/v1/models', { headers: { 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` } });
+      if (r.status === 401) throw new Error('Chave da Groq inválida (401)');
+      if (!r.ok) throw new Error(`Groq respondeu ${r.status}`);
+      return `Ativa via Groq (gratuita) · ${st.total} áudio(s), ${st.minutos} min transcritos`;
+    }
+    if (prov === 'gemini') {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${process.env.GEMINI_API_KEY}`);
+      if (!r.ok) throw new Error(`Gemini respondeu ${r.status} — verifique a chave`);
+      return `Ativa via Gemini (gratuita) · ${st.total} áudio(s), ${st.minutos} min transcritos`;
+    }
+    const r = await fetch('https://api.openai.com/v1/models', { headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` } });
     if (r.status === 401) throw new Error('Chave da OpenAI inválida (401)');
     if (!r.ok) throw new Error(`OpenAI respondeu ${r.status}`);
-    return `Ativa · ${st.total} áudio(s) transcrito(s), ${st.minutos} min, custo estimado US$ ${st.custo_estimado_usd}`;
+    return `Ativa via OpenAI (paga) · ${st.total} áudio(s), ${st.minutos} min, custo estimado US$ ${st.custo_estimado_usd}`;
   });
 
   const total = Object.keys(resultados).length;
@@ -331,6 +344,7 @@ router.post('/backup-agora', async (req, res) => {
 });
 
 export default router;
+
 
 
 

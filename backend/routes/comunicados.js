@@ -17,59 +17,97 @@ router.get('/', authMiddleware, (req, res) => {
 });
 
 // ─── POST /api/comunicados/send — enviar broadcast ───────────────────────────
+// Destinatários conforme o público escolhido
+function buscarDestinatarios(db, publico) {
+  const comTel = `telefone IS NOT NULL AND telefone != ''`;
+  if (publico === 'leads') {
+    return db.prepare(`SELECT id, nome, telefone FROM leads WHERE ${comTel} AND etapa NOT IN ('contratado','perdido')`).all();
+  }
+  if (publico === 'clientes_e_leads') {
+    const a = db.prepare(`SELECT id, nome, telefone FROM clients WHERE ${comTel} AND nome NOT LIKE '%TRIAGEM%'`).all();
+    const b = db.prepare(`SELECT id, nome, telefone FROM leads WHERE ${comTel} AND etapa NOT IN ('contratado','perdido')`).all();
+    const vistos = new Set(a.map(x => String(x.telefone).replace(/\D/g, '').slice(-8)));
+    return [...a, ...b.filter(x => !vistos.has(String(x.telefone).replace(/\D/g, '').slice(-8)))];
+  }
+  // padrão: clientes
+  return db.prepare(`SELECT id, nome, telefone FROM clients WHERE ${comTel} AND nome NOT LIKE '%TRIAGEM%'`).all();
+}
+
+// GET /api/comunicados/destinatarios?publico=... — prévia da quantidade
+router.get('/destinatarios', authMiddleware, (req, res) => {
+  const db = getDB();
+  const lista = buscarDestinatarios(db, req.query.publico);
+  res.json({ total: lista.length, amostra: lista.slice(0, 5).map(x => x.nome) });
+});
+
 router.post('/send', authMiddleware, async (req, res) => {
   const db = getDB();
-  const { mensagem, filtro } = req.body; // filtro: 'todos' | 'medico' | 'inventarios' | 'civel'
+  // imagem: { base64, mimetype, filename } — opcional
+  const { mensagem, filtro, publico, imagem, instancia } = req.body;
 
-  if (!mensagem?.trim()) return res.status(400).json({ error: 'Mensagem obrigatória' });
+  if (!mensagem?.trim() && !imagem?.base64) {
+    return res.status(400).json({ error: 'Escreva uma mensagem ou anexe uma imagem' });
+  }
 
-  const evolutionUrl = process.env.EVOLUTION_API_URL;
+  let evolutionUrl = process.env.EVOLUTION_API_URL;
+  if (evolutionUrl && !/^https?:\/\//.test(evolutionUrl)) evolutionUrl = 'https://' + evolutionUrl;
   const evolutionKey = process.env.EVOLUTION_API_KEY;
-  const instance = process.env.EVOLUTION_INSTANCE || 'docjuris';
+  const instance = instancia || process.env.EVOLUTION_INSTANCE || 'docjuris';
 
   if (!evolutionUrl || !evolutionKey) {
     return res.status(500).json({ error: 'WhatsApp não configurado' });
   }
 
-  // Buscar clientes com telefone
-  const query = `SELECT id, nome, telefone FROM clients WHERE telefone IS NOT NULL AND telefone != ''`;
-  const clientes = db.prepare(query).all();
-
-  if (clientes.length === 0) {
-    return res.status(400).json({ error: 'Nenhum cliente com telefone cadastrado' });
+  const destinatarios = buscarDestinatarios(db, publico);
+  if (destinatarios.length === 0) {
+    return res.status(400).json({ error: 'Nenhum destinatário com telefone cadastrado' });
   }
 
-  // Salvar comunicado no histórico
   const result = db.prepare(`
     INSERT INTO comunicados (mensagem, filtro, total_destinatarios, created_by)
     VALUES (?, ?, ?, ?)
-  `).run(mensagem, filtro || 'todos', clientes.length, req.user.id);
+  `).run(mensagem || '[imagem]', publico || filtro || 'clientes', destinatarios.length, req.user.id);
 
   const comunicadoId = result.lastInsertRowid;
+  res.json({ ok: true, comunicadoId, total: destinatarios.length });
 
-  // Enviar em background (não bloquear resposta)
-  res.json({ ok: true, comunicadoId, total: clientes.length });
-
-  // Disparar envios assíncronos
+  // Envio assíncrono
   let enviados = 0, erros = 0;
-  for (const cliente of clientes) {
+  for (const dest of destinatarios) {
     try {
-      const number = cliente.telefone.replace(/\D/g, '');
+      const number = String(dest.telefone).replace(/\D/g, '');
       const fullNumber = number.startsWith('55') ? number : `55${number}`;
       if (fullNumber.length < 12) { erros++; continue; }
 
-      await fetch(`${evolutionUrl}/message/sendText/${instance}`, {
-        method: 'POST',
-        headers: { apikey: evolutionKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ number: fullNumber, text: mensagem }),
-      });
+      // Personalização simples: {nome} vira o primeiro nome do destinatário
+      const texto = String(mensagem || '').replace(/\{nome\}/gi, String(dest.nome || '').split(' ')[0]);
+
+      if (imagem?.base64) {
+        // Imagem com legenda (a mensagem vai como caption)
+        await fetch(`${evolutionUrl}/message/sendMedia/${instance}`, {
+          method: 'POST',
+          headers: { apikey: evolutionKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            number: fullNumber,
+            mediatype: 'image',
+            mimetype: imagem.mimetype || 'image/jpeg',
+            media: imagem.base64,
+            fileName: imagem.filename || 'comunicado.jpg',
+            caption: texto || undefined,
+          }),
+        });
+      } else {
+        await fetch(`${evolutionUrl}/message/sendText/${instance}`, {
+          method: 'POST',
+          headers: { apikey: evolutionKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ number: fullNumber, text: texto }),
+        });
+      }
       enviados++;
     } catch { erros++; }
-    // Delay entre envios para não sobrecarregar
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 800)); // ritmo seguro (evita bloqueio do WhatsApp)
   }
 
-  // Atualizar resultado
   db.prepare('UPDATE comunicados SET enviados = ?, erros = ? WHERE id = ?')
     .run(enviados, erros, comunicadoId);
 
@@ -77,3 +115,4 @@ router.post('/send', authMiddleware, async (req, res) => {
 });
 
 export default router;
+

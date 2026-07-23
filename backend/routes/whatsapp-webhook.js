@@ -78,22 +78,23 @@ router.post('/webhook/:token', (req, res) => {
         continue;
       }
 
-      // 3. Desconhecido → LEAD NOVO na etapa Contato
-      const nomeLead = nomePush || `WhatsApp +${numero.slice(0,2)} (${numero.slice(2,4)}) ${numero.slice(4)}`;
-      const obs = [
-        `Lead automático — primeira mensagem no WhatsApp em ${new Date().toLocaleString('pt-BR')}`,
-        texto && `Mensagem: "${texto}"`,
-      ].filter(Boolean).join('\n');
-
-      const r = db.prepare(`
-        INSERT INTO leads (nome, telefone, origem, etapa, observacoes)
-        VALUES (?, ?, 'whatsapp', 'contato', ?)
-      `).run(nomeLead, numero, obs);
-
-      db.prepare(`INSERT INTO leads_atividades (lead_id, tipo, descricao) VALUES (?, 'whatsapp', 'Lead criado automaticamente a partir de mensagem no WhatsApp')`)
-        .run(r.lastInsertRowid);
-
-      console.log(`💬→🎯 Lead novo do WhatsApp: ${nomeLead} (${numero})`);
+      // 3. Desconhecido → NÃO cria lead aqui.
+      // Uma única mensagem não permite julgar se é assunto jurídico (gerava leads de
+      // conversas pessoais). O contato fica na fila e a análise diária, que lê a conversa
+      // inteira com IA, decide se vira lead.
+      try {
+        const ja = db.prepare('SELECT id FROM contatos_pendentes WHERE sufixo = ?').get(suf);
+        if (ja) {
+          db.prepare(`UPDATE contatos_pendentes SET ultima_mensagem = ?, atualizado_em = datetime('now'), mensagens = mensagens + 1 WHERE id = ?`)
+            .run(texto || '', ja.id);
+        } else {
+          db.prepare(`
+            INSERT INTO contatos_pendentes (telefone, sufixo, nome, ultima_mensagem, mensagens, criado_em, atualizado_em)
+            VALUES (?, ?, ?, ?, 1, datetime('now'), datetime('now'))
+          `).run(numero, suf, nomePush || '', texto || '');
+          console.log(`💬 Contato novo na fila de triagem: ${nomePush || numero}`);
+        }
+      } catch(e) { console.error('Fila de pendentes:', e.message); }
     }
   } catch(e) {
     console.error('Webhook WhatsApp:', e.message);

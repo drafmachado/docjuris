@@ -6,8 +6,6 @@ import GenerateModal from '../components/GenerateModal.jsx';
 import api from '../utils/api.js';
 import toast from 'react-hot-toast';
 import { Search, FileText, FolderOpen, FilePlus, Smartphone, X } from 'lucide-react';
-import toast from 'react-hot-toast';
-import api from '../utils/api.js';
 
 const initials = nome => (nome || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
 const avatarColors = ['#1a3a5c', '#185fa5', '#8a6d1f', '#3b6d11', '#6b3a8a', '#a3582d'];

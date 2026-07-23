@@ -449,10 +449,13 @@ router.get('/triagem-sugestoes', async (req, res) => {
       }
     } catch(e) { console.error('Contatos WhatsApp:', e.message); }
 
-    // Cruzamento
+    // Cruzamento — clientes (piso 0,6) e telefones do WhatsApp (piso 0,4: contatos
+    // costumam estar salvos só com o primeiro nome, então mostramos como confiança baixa)
     const sugestoes = processos.map(p => {
       const nome = nomeDoCartao(p);
-      let melhorCliente = null, melhorContato = null;
+      let melhorCliente = null;
+      let candidatosWhats = [];
+
       if (nome) {
         for (const cl of clientes) {
           const s = similaridade(nome, cl.nome);
@@ -460,14 +463,26 @@ router.get('/triagem-sugestoes', async (req, res) => {
         }
         for (const ct of contatos) {
           const s = similaridade(nome, ct.nome);
-          if (s >= 0.6 && (!melhorContato || s > melhorContato.score)) melhorContato = { ...ct, score: s };
+          if (s >= 0.4) candidatosWhats.push({ ...ct, score: s });
         }
+        // Melhores 3, sem números repetidos
+        const vistos = new Set();
+        candidatosWhats = candidatosWhats
+          .sort((a, b) => b.score - a.score)
+          .filter(ct => { if (vistos.has(ct.numero)) return false; vistos.add(ct.numero); return true; })
+          .slice(0, 3);
       }
+
       return {
         processo_id: p.id, numero_cnj: p.numero_cnj, tribunal: p.tribunal,
         nome_extraido: nome,
-        cliente_sugerido: melhorCliente ? { id: melhorCliente.id, nome: melhorCliente.nome, telefone: melhorCliente.telefone, score: Math.round(melhorCliente.score * 100) } : null,
-        whatsapp_sugerido: melhorContato ? { nome: melhorContato.nome, numero: melhorContato.numero, score: Math.round(melhorContato.score * 100) } : null,
+        cliente_sugerido: melhorCliente ? {
+          id: melhorCliente.id, nome: melhorCliente.nome, telefone: melhorCliente.telefone,
+          score: Math.round(melhorCliente.score * 100),
+        } : null,
+        whatsapp_sugestoes: candidatosWhats.map(ct => ({
+          nome: ct.nome, numero: ct.numero, score: Math.round(ct.score * 100),
+        })),
       };
     });
 

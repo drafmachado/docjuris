@@ -67,7 +67,21 @@ router.post('/rodar', async (req, res) => {
         messages: [{ role: 'user', content: 'oi' }],
       }),
     });
-    if (!r.ok) throw new Error(`API respondeu ${r.status}: ${(await r.text()).slice(0, 120)}`);
+    if (!r.ok) {
+      const corpo = await r.text();
+      if (r.status === 400 && /credit|balance/i.test(corpo)) {
+        const { provedoresClassificacao } = await import('../services/ia-texto.js');
+        const p = provedoresClassificacao();
+        const reserva = p.groq ? 'Groq' : (p.gemini ? 'Gemini' : null);
+        throw new Error(
+          'CRÉDITO DA ANTHROPIC ESGOTADO — Petição IA parada. Recarregue em console.anthropic.com → Billing.' +
+          (reserva
+            ? ` CRM diário e triagem de WhatsApp seguem funcionando pelo ${reserva} (gratuito).`
+            : ' Sem provedor reserva configurado: o CRM diário também para. Configure GROQ_API_KEY (gratuito) no Railway.')
+        );
+      }
+      throw new Error(`API respondeu ${r.status}: ${corpo.slice(0, 120)}`);
+    }
     return 'Chave válida, API respondendo';
   });
 

@@ -295,6 +295,21 @@ router.post('/rodar', async (req, res) => {
     return `Há ${Math.round(horas)}h · ${r.conversas || 0} conversa(s) lida(s) · ${r.leads_novos || 0} lead(s) novo(s) · ${r.convertidos || 0} convertido(s)`;
   });
 
+  // ─── 15. Transcrição de áudios (Whisper) ───
+  resultados.transcricao = await tempo(async () => {
+    const { transcricaoDisponivel, estatisticasTranscricao } = await import('../services/transcricao.js');
+    const st = estatisticasTranscricao();
+    if (!transcricaoDisponivel()) {
+      throw new Error('OPENAI_API_KEY não configurada — áudios do WhatsApp NÃO são transcritos (leads por áudio ficam sem conteúdo). Configure no Railway.');
+    }
+    const r = await fetch('https://api.openai.com/v1/models', {
+      headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
+    });
+    if (r.status === 401) throw new Error('Chave da OpenAI inválida (401)');
+    if (!r.ok) throw new Error(`OpenAI respondeu ${r.status}`);
+    return `Ativa · ${st.total} áudio(s) transcrito(s), ${st.minutos} min, custo estimado US$ ${st.custo_estimado_usd}`;
+  });
+
   const total = Object.keys(resultados).length;
   const ok = Object.values(resultados).filter(r => r.ok).length;
 
@@ -316,6 +331,7 @@ router.post('/backup-agora', async (req, res) => {
 });
 
 export default router;
+
 
 
 

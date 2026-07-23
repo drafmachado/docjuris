@@ -168,6 +168,10 @@ export async function rodarCrmDiario() {
   const mapaLeads = new Map(leads.filter(l => !['contratado', 'perdido'].includes(l.etapa)).map(l => [sufixo(l.telefone), l]));
   const leadsFechados = new Set(leads.filter(l => ['contratado', 'perdido'].includes(l.etapa)).map(l => sufixo(l.telefone)));
 
+  // Contatos marcados como "não é cliente" — nunca viram lead nem são monitorados
+  let ignorados = new Set();
+  try { ignorados = new Set(getDB().prepare('SELECT sufixo FROM contatos_ignorados').all().map(x => x.sufixo)); } catch {}
+
   const insAtividade = db.prepare(`INSERT INTO leads_atividades (lead_id, tipo, descricao) VALUES (?, 'whatsapp', ?)`);
 
   const linhas = await instancias();
@@ -189,6 +193,7 @@ export async function rodarCrmDiario() {
       resumo.conversas++;
       statusCrmDiario.processadas++;
       const suf = sufixo(conv.numero);
+      if (ignorados.has(suf)) continue; // marcado como "não é cliente"
       const transcricao = transcrever(conv);
       if (conv.mensagens.filter(m => !m.fromMe).length === 0) continue;
 
@@ -350,5 +355,6 @@ Responda APENAS JSON: {"potencial_cliente":true|false,"nome":"nome real da pesso
 
   return resumo;
 }
+
 
 

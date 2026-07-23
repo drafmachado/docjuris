@@ -301,6 +301,12 @@ router.post('/crm-diario/rodar', async (req, res) => {
   res.json({ ok: true, iniciado: true });
 });
 
+// GET /api/whatsapp-admin/crm-diario/status — progresso ao vivo
+router.get('/crm-diario/status', async (req, res) => {
+  const { statusCrmDiario } = await import('../services/crm-diario.js');
+  res.json(statusCrmDiario);
+});
+
 // GET /api/whatsapp-admin/crm-diario/ultimo
 router.get('/crm-diario/ultimo', (req, res) => {
   const db = getDB();
@@ -333,5 +339,6 @@ router.get('/analise-status', (req, res) => {
 });
 
 export default router;
+
 
 

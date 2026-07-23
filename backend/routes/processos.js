@@ -385,13 +385,19 @@ const IRRELEVANTES = new Set(['DE','DA','DO','DAS','DOS','E','X','VS','CONTRA','
 function tokensNome(s) {
   return normalizarNome(s).split(' ').filter(t => t.length >= 3 && !IRRELEVANTES.has(t));
 }
-// Pontuação de similaridade entre dois nomes (0 a 1)
+// Pontuação de similaridade entre dois nomes (0 a 1).
+// Match por um único nome (ex.: "Sabrina" x "Sabrina Meta") é frágil — recebe teto de 0,5,
+// para não ser pré-selecionado automaticamente e exigir conferência humana.
 function similaridade(a, b) {
   const ta = tokensNome(a), tb = tokensNome(b);
   if (!ta.length || !tb.length) return 0;
   const setB = new Set(tb);
   const comuns = ta.filter(t => setB.has(t)).length;
-  return comuns / Math.min(ta.length, tb.length);
+  if (!comuns) return 0;
+  const base = comuns / Math.min(ta.length, tb.length);
+  if (comuns === 1 && Math.min(ta.length, tb.length) === 1) return Math.min(base, 0.5);
+  if (comuns === 1) return Math.min(base, 0.6);
+  return base;
 }
 // Nome provável do cartão: do título do Trello nas observações ou do próprio campo
 function nomeDoCartao(proc) {
@@ -827,6 +833,7 @@ async function importarLoteAsync(jobId, numeros, userId) {
 }
 
 export default router;
+
 
 
 

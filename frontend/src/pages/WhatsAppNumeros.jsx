@@ -19,6 +19,27 @@ export default function WhatsAppNumeros() {
   const analisePoll = useRef(null);
   const [ultimoCrm, setUltimoCrm] = useState(null);
   const [rodandoCrm, setRodandoCrm] = useState(false);
+  const [statusCrm, setStatusCrm] = useState(null);
+  const crmPoll = useRef(null);
+
+  function acompanharCrm() {
+    clearInterval(crmPoll.current);
+    const buscar = async () => {
+      try {
+        const s = await api.get('/whatsapp-admin/crm-diario/status');
+        setStatusCrm(s.data);
+        if (!s.data.rodando) {
+          clearInterval(crmPoll.current);
+          setRodandoCrm(false);
+          if (s.data.concluido_em) {
+            api.get('/whatsapp-admin/crm-diario/ultimo').then(x => setUltimoCrm(x.data)).catch(() => {});
+          }
+        } else setRodandoCrm(true);
+      } catch { clearInterval(crmPoll.current); }
+    };
+    buscar();
+    crmPoll.current = setInterval(buscar, 3000);
+  }
 
   const [ultimasAnalises, setUltimasAnalises] = useState([]);
 
@@ -49,7 +70,8 @@ export default function WhatsAppNumeros() {
   useEffect(() => {
     api.get('/whatsapp-admin/crm-diario/ultimo').then(r => setUltimoCrm(r.data)).catch(() => {});
     checarStatusAnalise();
-    return () => clearInterval(analisePoll.current);
+    acompanharCrm();
+    return () => { clearInterval(analisePoll.current); clearInterval(crmPoll.current); };
   }, []);
 
   async function rodarCrmAgora() {
@@ -57,10 +79,9 @@ export default function WhatsAppNumeros() {
     try {
       const r = await api.post('/whatsapp-admin/crm-diario/rodar');
       if (r.data.ja_rodando) toast('Análise já em andamento', { icon: '⏳' });
-      else toast.success('Análise diária iniciada — leva alguns minutos. Confira o Funil de Leads depois.', { duration: 8000 });
-      setTimeout(() => api.get('/whatsapp-admin/crm-diario/ultimo').then(x => setUltimoCrm(x.data)).catch(() => {}), 120000);
-    } catch(e) { toast.error(e.response?.data?.error || 'Erro'); }
-    finally { setTimeout(() => setRodandoCrm(false), 5000); }
+      else toast.success('Análise iniciada — acompanhe o progresso abaixo', { duration: 6000 });
+      setTimeout(acompanharCrm, 1500);
+    } catch(e) { toast.error(e.response?.data?.error || 'Erro'); setRodandoCrm(false); }
   }
 
   async function analisarConversas(instancia) {
@@ -165,6 +186,40 @@ export default function WhatsAppNumeros() {
             </div>
           )}
         </div>
+        {statusCrm?.rodando && (
+          <div style={{ width: '100%', background: '#f8f7f3', borderRadius: 10, padding: '11px 14px', marginTop: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 7, flexWrap: 'wrap', gap: 6 }}>
+              <span style={{ fontWeight: 800, color: '#0f2035' }}>
+                🔄 {statusCrm.fase || 'processando'}
+                {statusCrm.linhas_total > 1 && ` — linha ${statusCrm.linha_atual}/${statusCrm.linhas_total}`}
+              </span>
+              <span>{statusCrm.processadas}/{statusCrm.total || '?'} conversa(s)</span>
+            </div>
+            <div style={{ background: '#e5e7eb', borderRadius: 10, height: 8, overflow: 'hidden' }}>
+              <div style={{ background: '#0f2035', height: '100%', borderRadius: 10, transition: 'width .5s',
+                width: statusCrm.total ? `${Math.min(100, (statusCrm.processadas / statusCrm.total) * 100)}%` : '8%' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11.5, color: '#374151', marginTop: 8 }}>
+              <span>🎯 Leads novos: <b>{statusCrm.leads_novos}</b></span>
+              <span>📈 Etapas atualizadas: <b>{statusCrm.leads_atualizados}</b></span>
+              <span>✅ Convertidos: <b>{statusCrm.convertidos}</b></span>
+              <span>🆕 Serviços novos: <b>{statusCrm.servicos_novos}</b></span>
+            </div>
+            {statusCrm.ultimos?.length > 0 && (
+              <div style={{ marginTop: 8, maxHeight: 110, overflowY: 'auto', fontSize: 11.5, color: '#374151' }}>
+                {statusCrm.ultimos.slice(0, 8).map((u, i) => (
+                  <div key={i} style={{ padding: '2px 0' }}>
+                    {u.tipo === 'lead' ? '🎯' : u.tipo === 'convertido' ? '✅' : '🆕'} <b>{u.nome}</b> — {u.resumo}
+                  </div>
+                ))}
+              </div>
+            )}
+            <p style={{ fontSize: 11, color: '#6b6b68', margin: '8px 0 0' }}>
+              Pode fechar a página — continua no servidor e o resumo chega por email.
+            </p>
+          </div>
+        )}
+
         <button onClick={rodarCrmAgora} disabled={rodandoCrm}
           style={{ padding: '10px 18px', background: rodandoCrm ? '#e5e7eb' : '#0f2035',
             color: rodandoCrm ? '#6b7280' : '#fff', border: 'none', borderRadius: 9, fontSize: 13,
@@ -306,5 +361,6 @@ export default function WhatsAppNumeros() {
     </div>
   );
 }
+
 
 

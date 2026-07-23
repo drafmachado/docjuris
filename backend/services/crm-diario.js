@@ -120,23 +120,10 @@ async function conversasRecentes(inst, desdeMs) {
   return out;
 }
 
+// Classificação com fallback automático (Anthropic → Groq → Gemini)
 async function perguntarIA(prompt, maxTokens = 320) {
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6', max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-  if (!r.ok) throw new Error(`IA ${r.status}`);
-  const d = await r.json();
-  const txt = (d.content || []).map(b => b.text || '').join('');
-  return JSON.parse(txt.replace(/```json|```/g, '').trim());
+  const { classificarJSON } = await import('./ia-texto.js');
+  return classificarJSON(prompt, maxTokens);
 }
 
 // Nome gerado pelo sistema (não é um nome real informado por você)
@@ -180,7 +167,8 @@ const transcrever = c => c.mensagens
 
 // ─── Rotina principal ────────────────────────────────────────────────────────
 export async function rodarCrmDiario() {
-  if (!process.env.ANTHROPIC_API_KEY || !process.env.EVOLUTION_API_KEY) {
+  const temIA = process.env.ANTHROPIC_API_KEY || process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY;
+  if (!temIA || !process.env.EVOLUTION_API_KEY) {
     console.log('⏭️  CRM diário pulado (credenciais ausentes)');
     return { pulado: true };
   }
@@ -449,6 +437,7 @@ nome/email: extraia SOMENTE se a pessoa informou explicitamente (inclusive em á
 
   return resumo;
 }
+
 
 
 

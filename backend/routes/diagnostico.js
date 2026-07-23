@@ -123,24 +123,36 @@ router.post('/rodar', async (req, res) => {
     const estado = data?.instance?.state || data?.state || 'desconhecido';
     if (estado !== 'open') throw new Error(`Instância "${inst}" está: ${estado} (esperado: open)`);
 
-    // Descobrir QUAL número de WhatsApp é o dono desta conexão
-    let numeroInfo = '';
+    // Estado de TODAS as linhas do escritório (os 3 números)
     try {
-      const ri = await fetch(`${url}/instance/fetchInstances?instanceName=${inst}`, { headers: { 'apikey': key } });
+      const ri = await fetch(`${url}/instance/fetchInstances`, { headers: { 'apikey': key } });
       if (ri.ok) {
-        const insts = await ri.json();
-        const info = Array.isArray(insts) ? (insts[0]?.instance || insts[0]) : (insts?.instance || insts);
-        const owner = info?.owner || info?.ownerJid || '';
-        const nome = info?.profileName || info?.profilePictureUrl && '' || '';
-        const digitos = String(owner).replace(/@.*$/, '').replace(/\D/g, '');
-        if (digitos.length >= 12) {
-          const fmt = `+${digitos.slice(0,2)} (${digitos.slice(2,4)}) ${digitos.slice(4,9)}-${digitos.slice(9)}`;
-          numeroInfo = ` · NÚMERO CONECTADO: ${fmt}${info?.profileName ? ` — perfil "${info.profileName}"` : ''}`;
-        }
-      }
-    } catch {}
+        const lista = await ri.json();
+        const todas = (Array.isArray(lista) ? lista : [lista]).map(x => {
+          const i = x?.instance || x || {};
+          const owner = String(i.owner || i.ownerJid || '').split('@')[0].replace(/\D/g, '');
+          const fmt = owner.length >= 12
+            ? `(${owner.slice(2,4)}) ${owner.slice(4,9)}-${owner.slice(9)}`
+            : (i.instanceName || i.name || '?');
+          return {
+            nome: i.instanceName || i.name || '?',
+            ok: ['open', 'connected'].includes(String(i.connectionStatus || i.status || i.state || '').toLowerCase()),
+            label: fmt,
+          };
+        }).filter(x => x.nome !== '?');
 
-    return `Instância "${inst}" conectada${numeroInfo}`;
+        const caidas = todas.filter(x => !x.ok);
+        const descricao = todas.map(x => `${x.ok ? '🟢' : '🔴'} ${x.label}`).join(' · ');
+        if (caidas.length) {
+          throw new Error(`${caidas.length} de ${todas.length} linha(s) DESCONECTADA(S) — leads desses números não são captados. ${descricao}`);
+        }
+        return `${todas.length} linha(s) conectada(s): ${descricao}`;
+      }
+    } catch(e) {
+      if (String(e.message).includes('DESCONECTADA')) throw e;
+    }
+
+    return `Instância "${inst}" conectada`;
   });
 
   // ─── 7. DataJud ───

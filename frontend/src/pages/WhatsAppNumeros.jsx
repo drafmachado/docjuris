@@ -20,8 +20,36 @@ export default function WhatsAppNumeros() {
   const [ultimoCrm, setUltimoCrm] = useState(null);
   const [rodandoCrm, setRodandoCrm] = useState(false);
 
+  const [ultimasAnalises, setUltimasAnalises] = useState([]);
+
+  // Retoma o acompanhamento: se houver análise rodando (mesmo iniciada antes),
+  // volta a exibir o progresso; senão, mostra o resultado da última execução por linha.
+  function checarStatusAnalise() {
+    api.get('/whatsapp-admin/analise-status').then(r => {
+      if (r.data.em_andamento) {
+        setAnalise(r.data.job);
+        clearInterval(analisePoll.current);
+        analisePoll.current = setInterval(async () => {
+          try {
+            const s = await api.get(`/whatsapp-admin/analisar-conversas/status/${r.data.jobId}`);
+            setAnalise(s.data);
+            if (s.data.status !== 'processing') {
+              clearInterval(analisePoll.current);
+              checarStatusAnalise();
+              if (s.data.status === 'done') toast.success(`Análise concluída: ${s.data.clientes_criados} cliente(s), ${s.data.leads_criados} lead(s)`, { duration: 8000 });
+            }
+          } catch { clearInterval(analisePoll.current); }
+        }, 3000);
+      } else {
+        setUltimasAnalises(r.data.ultimas || []);
+      }
+    }).catch(() => {});
+  }
+
   useEffect(() => {
     api.get('/whatsapp-admin/crm-diario/ultimo').then(r => setUltimoCrm(r.data)).catch(() => {});
+    checarStatusAnalise();
+    return () => clearInterval(analisePoll.current);
   }, []);
 
   async function rodarCrmAgora() {
@@ -57,6 +85,7 @@ export default function WhatsAppNumeros() {
             clearInterval(analisePoll.current);
             if (s.data.status === 'done') {
               toast.success(`Análise concluída: ${s.data.clientes_criados} cliente(s) e ${s.data.leads_criados} lead(s) criados`, { duration: 8000 });
+              checarStatusAnalise();
             } else toast.error('Análise falhou: ' + (s.data.erroGeral || ''));
           }
         } catch { clearInterval(analisePoll.current); }
@@ -163,6 +192,17 @@ export default function WhatsAppNumeros() {
               {conectada(inst.estado) ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
               {conectada(inst.estado) ? 'Conectada — leads ativos' : `Desconectada (${inst.estado})`}
             </div>
+            {(() => {
+              const ult = ultimasAnalises.find(u => u.instancia === inst.nome);
+              if (!ult || analise) return null;
+              const r = ult.resumo || {};
+              return (
+                <div style={{ background: '#f4f8f0', borderRadius: 8, padding: '7px 10px', marginBottom: 8, fontSize: 11.5, color: '#2d5410' }}>
+                  ✅ Última análise: {ult.concluido_em ? new Date(String(ult.concluido_em).replace(' ', 'T') + 'Z').toLocaleString('pt-BR') : 'em andamento'}<br/>
+                  <b>{r.clientes_criados || 0}</b> cliente(s) · <b>{r.leads_criados || 0}</b> lead(s) · {r.processados || 0} conversa(s)
+                </div>
+              );
+            })()}
             {conectada(inst.estado) && (
               <button onClick={() => analisarConversas(inst.nome)}
                 disabled={analise?.status === 'processing'}
@@ -197,6 +237,10 @@ export default function WhatsAppNumeros() {
             <div style={{ background: '#0f2035', height: '100%', borderRadius: 10,
               width: `${analise.total ? (analise.processados / analise.total) * 100 : 0}%`, transition: 'width .5s' }} />
           </div>
+          <p style={{ fontSize: 11.5, color: '#6b6b68', margin: '0 0 8px' }}>
+            Pode fechar esta página — a análise continua no servidor. Ao voltar aqui você vê o andamento,
+            e um email confirma a conclusão.
+          </p>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: '#374151', marginBottom: 8 }}>
             <span>👤 Clientes: <b>{analise.clientes_criados || 0}</b></span>
             <span>🎯 Leads: <b>{analise.leads_criados || 0}</b></span>
@@ -262,4 +306,5 @@ export default function WhatsAppNumeros() {
     </div>
   );
 }
+
 

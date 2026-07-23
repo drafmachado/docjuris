@@ -5,7 +5,7 @@ import api from '../utils/api.js';
 import toast from 'react-hot-toast';
 import {
   Plus, Search, X, ChevronLeft, ChevronRight, Phone, Mail, Clock, TrendingUp,
-  Target, CheckCircle2, DollarSign, MessageSquare, UserPlus, Trash2, Filter,
+  Target, CheckCircle2, DollarSign, MessageSquare, UserPlus, Trash2, Filter, UserX, RotateCcw,
 } from 'lucide-react';
 
 const ETAPAS = [
@@ -49,9 +49,38 @@ export default function Leads() {
   const [novaAtividade, setNovaAtividade] = useState('');
   const [alturaQuadro, setAlturaQuadro] = useState('60vh');
   const quadroRef = useRef(null);
+  const [modalIgnorados, setModalIgnorados] = useState(false);
+  const [ignorados, setIgnorados] = useState([]);
+
+  const loadIgnorados = () => api.get('/leads/ignorados/lista').then(r => setIgnorados(r.data || [])).catch(() => {});
+
+  async function marcarNaoCliente(lead, e) {
+    e?.stopPropagation();
+    if (!window.confirm(
+      `Marcar "${lead.nome}" como NÃO é cliente?\n\n` +
+      `• O lead sai do funil\n` +
+      `• O contato deixa de ser monitorado pela automação do WhatsApp\n` +
+      `• Você pode reverter em "Ignorados" no topo da tela`
+    )) return;
+    try {
+      await api.post(`/leads/${lead.id}/ignorar`);
+      setLeads(p => p.filter(x => x.id !== lead.id));
+      setLeadAberto(null);
+      loadIgnorados();
+      toast.success('Contato removido do funil e silenciado na automação');
+    } catch(e2) { toast.error(e2.response?.data?.error || 'Erro'); }
+  }
+
+  async function voltarAMonitorar(ig) {
+    try {
+      await api.delete(`/leads/ignorados/${ig.id}`);
+      loadIgnorados();
+      toast.success(`${ig.nome || ig.telefone} volta a ser monitorado`);
+    } catch { toast.error('Erro'); }
+  }
 
   const load = () => api.get('/leads').then(r => setLeads(r.data || [])).catch(() => {});
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); loadIgnorados(); }, []);
 
   useEffect(() => {
     const medir = () => {
@@ -173,6 +202,9 @@ export default function Leads() {
           <option value="">Todas as áreas</option>
           {Object.entries(AREAS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
+        <Btn variant="outline" onClick={() => { setModalIgnorados(true); loadIgnorados(); }} style={{ marginRight: 8 }}>
+          <UserX size={14} /> Ignorados{ignorados.length ? ` (${ignorados.length})` : ''}
+        </Btn>
         <Btn onClick={() => setModalNovo(true)}><Plus size={14} /> Novo Lead</Btn>
       </Topbar>
 
@@ -242,6 +274,10 @@ export default function Leads() {
                           <Clock size={10} /> {dias === 0 ? 'hoje' : `${dias}d parado`}
                         </span>
                         <div style={{ display: 'flex', gap: 3 }} onClick={e => e.stopPropagation()}>
+                          <button onClick={(e) => marcarNaoCliente(l, e)} title='Não é cliente — remover do funil e parar de monitorar'
+                            style={{ background: '#fee2e2', border: 'none', borderRadius: 6, padding: '3px 7px', cursor: 'pointer', display: 'flex' }}>
+                            <UserX size={11} color="#c9372c" />
+                          </button>
                           {l.telefone && (
                             <a href={zap(l.telefone)} target="_blank" rel="noreferrer" title="Abrir no WhatsApp"
                               style={{ background: '#dcfce7', borderRadius: 6, padding: '3px 7px', display: 'flex' }}>
@@ -313,6 +349,11 @@ export default function Leads() {
                       <MessageSquare size={13} /> WhatsApp
                     </a>
                   )}
+                  <button onClick={(e) => marcarNaoCliente(detalhe, e)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fee2e2', color: '#c9372c',
+                      border: 'none', borderRadius: 9, padding: '8px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+                    <UserX size={13} /> Não é cliente
+                  </button>
                   {detalhe.etapa !== 'contratado' && (
                     <button onClick={converter} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0f2035',
                       color: '#fff', border: 'none', borderRadius: 9, padding: '8px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
@@ -374,6 +415,30 @@ export default function Leads() {
           </div>
         </div>
       )}
+
+      {/* Contatos ignorados */}
+      <Modal open={modalIgnorados} onClose={() => setModalIgnorados(false)} title="Contatos ignorados"
+        footer={<Btn onClick={() => setModalIgnorados(false)}>Fechar</Btn>}>
+        <p style={{ fontSize: 12.5, color: '#6b6b68', margin: '0 0 12px' }}>
+          Estes contatos não viram lead e não são monitorados pela automação do WhatsApp.
+          Clique em <b>voltar a monitorar</b> para reverter.
+        </p>
+        {ignorados.length === 0 && <p style={{ fontSize: 13, color: '#9a9a97' }}>Nenhum contato ignorado.</p>}
+        {ignorados.map(ig => (
+          <div key={ig.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px',
+            background: '#fafaf6', borderRadius: 9, marginBottom: 6 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f2035' }}>{ig.nome || 'Sem nome'}</div>
+              <div style={{ fontSize: 11.5, color: '#6b6b68' }}>{ig.telefone} · {ig.motivo}</div>
+            </div>
+            <button onClick={() => voltarAMonitorar(ig)}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#e8f0fe', color: '#0c66e4',
+                border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>
+              <RotateCcw size={12} /> voltar a monitorar
+            </button>
+          </div>
+        ))}
+      </Modal>
 
       {/* Novo lead */}
       <Modal open={modalNovo} onClose={() => setModalNovo(false)} title="Novo Lead"

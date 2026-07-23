@@ -56,10 +56,12 @@ export default function KanbanProcessos() {
       // Pré-seleciona as sugestões com boa confiança
       const pre = {};
       for (const s of r.data.processos) {
+        const top = (s.whatsapp_sugestoes || [])[0];
         if (s.cliente_sugerido && s.cliente_sugerido.score >= 75) {
-          pre[s.processo_id] = { client_id: s.cliente_sugerido.id, telefone: s.whatsapp_sugerido?.numero || null };
-        } else if (s.whatsapp_sugerido && s.whatsapp_sugerido.score >= 75) {
-          pre[s.processo_id] = { criar_nome: s.whatsapp_sugerido.nome || s.nome_extraido, telefone: s.whatsapp_sugerido.numero };
+          // Telefone só entra junto se o match do contato também for forte
+          pre[s.processo_id] = { client_id: s.cliente_sugerido.id, telefone: (top && top.score >= 75) ? top.numero : null };
+        } else if (top && top.score >= 75) {
+          pre[s.processo_id] = { criar_nome: top.nome || s.nome_extraido, telefone: top.numero };
         }
       }
       setSelecao(pre);
@@ -425,7 +427,8 @@ export default function KanbanProcessos() {
                   <div style={{ background: '#fdf6e3', borderRadius: 9, padding: '9px 14px', marginBottom: 14,
                     fontSize: 12, color: '#854f0b', lineHeight: 1.5 }}>
                     Sugestões de <b>alta confiança</b> já vêm marcadas. As de <b>confiança baixa</b> (nome único, ex.: só "Sabrina")
-                    ficam desmarcadas de propósito — confira antes de aceitar.
+                    ficam desmarcadas de propósito — confira antes de aceitar. Escolha o destino do processo e, se quiser,
+                    clique num <b>telefone do WhatsApp</b> para completar o cadastro.
                   </div>
 
                   {triagem.processos.map(s => {
@@ -464,28 +467,44 @@ export default function KanbanProcessos() {
 
                         {s.cliente_sugerido && (
                           <Opcao ativo={!!sel?.client_id} cor="#185fa5"
-                            onSelect={() => setSelecao(p => ({ ...p, [s.processo_id]: { client_id: s.cliente_sugerido.id, telefone: s.whatsapp_sugerido?.numero || null } }))}>
+                            onSelect={() => setSelecao(p => ({ ...p, [s.processo_id]: { client_id: s.cliente_sugerido.id, telefone: sel?.telefone || null } }))}>
                             Vincular ao cliente <b>{s.cliente_sugerido.nome}</b>
                             <Score v={s.cliente_sugerido.score} />
-                            {!s.cliente_sugerido.telefone && s.whatsapp_sugerido &&
-                              <span style={{ color: '#3b6d11', marginLeft: 6 }}>+ telefone {s.whatsapp_sugerido.numero}</span>}
-                          </Opcao>
-                        )}
-
-                        {s.whatsapp_sugerido && (
-                          <Opcao ativo={!!(sel?.criar_nome && sel?.telefone)} cor="#3b6d11"
-                            onSelect={() => setSelecao(p => ({ ...p, [s.processo_id]: { criar_nome: s.whatsapp_sugerido.nome || s.nome_extraido, telefone: s.whatsapp_sugerido.numero } }))}>
-                            Criar cliente <b>{s.whatsapp_sugerido.nome}</b>
-                            <span style={{ color: '#3b6d11', fontWeight: 600 }}> · {s.whatsapp_sugerido.numero}</span>
-                            <Score v={s.whatsapp_sugerido.score} />
+                            {s.cliente_sugerido.telefone
+                              ? <span style={{ color: '#9a9a97', marginLeft: 6 }}>· já tem telefone</span>
+                              : <span style={{ color: '#b45309', marginLeft: 6 }}>· sem telefone cadastrado</span>}
                           </Opcao>
                         )}
 
                         {s.nome_extraido && (
-                          <Opcao ativo={!!(sel?.criar_nome && !sel?.telefone)}
-                            onSelect={() => setSelecao(p => ({ ...p, [s.processo_id]: { criar_nome: s.nome_extraido } }))}>
-                            Criar cliente <b>{s.nome_extraido}</b> <span style={{ color: '#9a9a97' }}>(sem telefone)</span>
+                          <Opcao ativo={!!sel?.criar_nome}
+                            onSelect={() => setSelecao(p => ({ ...p, [s.processo_id]: { criar_nome: s.nome_extraido, telefone: sel?.telefone || null } }))}>
+                            Criar cliente novo <b>{s.nome_extraido}</b>
                           </Opcao>
+                        )}
+
+                        {/* Telefones candidatos do WhatsApp — aplicáveis às duas opções acima */}
+                        {(s.whatsapp_sugestoes || []).length > 0 && sel && (
+                          <div style={{ marginTop: 6, paddingTop: 8, borderTop: '1px dashed #e5e3d8' }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: '#6b6b68', marginBottom: 5, letterSpacing: '0.04em' }}>
+                              📱 TELEFONE DO WHATSAPP (opcional — só preenche se estiver vazio)
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                              {s.whatsapp_sugestoes.map((w, i) => {
+                                const ativo = sel?.telefone === w.numero;
+                                return (
+                                  <span key={i} onClick={() => setSelecao(p => ({ ...p, [s.processo_id]: { ...sel, telefone: ativo ? null : w.numero } }))}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+                                      background: ativo ? '#eaf3de' : '#fff', border: `1.5px solid ${ativo ? '#3b6d11' : '#e5e3d8'}`,
+                                      borderRadius: 20, padding: '4px 12px', fontSize: 12 }}>
+                                    {ativo ? '✓ ' : ''}<b style={{ color: '#0f2035' }}>{w.nome}</b>
+                                    <span style={{ color: '#3b6d11' }}>{w.numero}</span>
+                                    <span style={{ fontSize: 10, color: w.score >= 75 ? '#3b6d11' : '#b45309' }}>{w.score}%</span>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
                         )}
 
                         <Opcao ativo={!sel} cor="#9a9a97"

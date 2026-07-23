@@ -18,16 +18,32 @@ function evoUrl() {
 const evoHeaders = () => ({ 'apikey': process.env.EVOLUTION_API_KEY, 'Content-Type': 'application/json' });
 const sufixo = t => String(t || '').replace(/\D/g, '').slice(-8);
 
+// Todas as conexões do escritório (os 3 números). Só as conectadas são lidas;
+// as caídas são avisadas, porque uma linha offline = leads perdidos naquele número.
 async function instancias() {
   try {
     const r = await fetch(`${evoUrl()}/instance/fetchInstances`, { headers: evoHeaders() });
     if (!r.ok) throw new Error(r.status);
     const lista = await r.json();
-    const nomes = (Array.isArray(lista) ? lista : [lista])
-      .map(x => (x?.instance || x)?.instanceName || (x?.instance || x)?.name).filter(Boolean);
-    return nomes.length ? nomes : [process.env.EVOLUTION_INSTANCE || 'docjuris'];
+    const todas = (Array.isArray(lista) ? lista : [lista]).map(x => {
+      const i = x?.instance || x || {};
+      const owner = String(i.owner || i.ownerJid || '').split('@')[0].replace(/\D/g, '');
+      return {
+        nome: i.instanceName || i.name,
+        estado: String(i.connectionStatus || i.status || i.state || '').toLowerCase(),
+        numero: owner || null,
+      };
+    }).filter(x => x.nome);
+
+    const conectadas = todas.filter(x => ['open', 'connected'].includes(x.estado));
+    const caidas = todas.filter(x => !['open', 'connected'].includes(x.estado));
+    if (caidas.length) {
+      console.warn(`⚠️ CRM diário: ${caidas.length} conexão(ões) DESCONECTADA(S) — sem leitura: ${caidas.map(c => c.nome).join(', ')}`);
+    }
+    console.log(`📱 CRM diário lendo ${conectadas.length} linha(s): ${conectadas.map(c => c.nome + (c.numero ? ` (${c.numero})` : '')).join(', ')}`);
+    return { conectadas: conectadas.map(c => c.nome), caidas: caidas.map(c => c.nome) };
   } catch {
-    return [process.env.EVOLUTION_INSTANCE || 'docjuris'];
+    return { conectadas: [process.env.EVOLUTION_INSTANCE || 'docjuris'], caidas: [] };
   }
 }
 
@@ -124,7 +140,11 @@ export async function rodarCrmDiario() {
 
   const insAtividade = db.prepare(`INSERT INTO leads_atividades (lead_id, tipo, descricao) VALUES (?, 'whatsapp', ?)`);
 
-  for (const inst of await instancias()) {
+  const linhas = await instancias();
+  resumo.linhas_lidas = linhas.conectadas.length;
+  resumo.linhas_caidas = linhas.caidas;
+
+  for (const inst of linhas.conectadas) {
     const conversas = await conversasRecentes(inst, desde);
     console.log(`  ${inst}: ${conversas.length} conversa(s) com movimento`);
 
@@ -273,6 +293,8 @@ Responda APENAS JSON: {"potencial_cliente":true|false,"nome":"nome real da pesso
               <li><b>${resumo.convertidos}</b> convertido(s) em cliente ✅</li>
               <li><b>${resumo.servicos_novos}</b> cliente(s) pedindo serviço novo</li>
             </ul>
+            <p style="font-size:12.5px">Linhas lidas: <b>${resumo.linhas_lidas || 0}</b></p>
+            ${(resumo.linhas_caidas || []).length ? `<p style="background:#fdf2f2;border-left:4px solid #dc2626;padding:8px 12px;color:#7f1d1d"><b>⚠️ Atenção:</b> ${resumo.linhas_caidas.length} conexão(ões) de WhatsApp desconectada(s) (${resumo.linhas_caidas.join(', ')}) — mensagens desses números NÃO foram lidas. Reconecte na tela WhatsApp do Veredo.</p>` : ''}
             <p style="font-size:12px;color:#6b7280">Acesse o Funil de Leads no Veredo para os detalhes.</p>
           </div></div>`,
       });

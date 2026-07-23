@@ -198,12 +198,22 @@ async function analisarConversasAsync(jobId, instancia, userId) {
       const registros = Array.isArray(brutoMsgs) ? brutoMsgs
         : (brutoMsgs.messages?.records || brutoMsgs.records || brutoMsgs.messages || []);
 
-      const linhas = registros.map(m => {
-        const texto = m.message?.conversation || m.message?.extendedTextMessage?.text
+      const { transcreverAudio, transcricaoDisponivel } = await import('../services/transcricao.js');
+      const linhas = [];
+      let audios = 0;
+      for (const m of registros) {
+        const ehAudio = !!(m.message?.audioMessage || m.message?.pttMessage);
+        let texto = m.message?.conversation || m.message?.extendedTextMessage?.text
           || m.message?.imageMessage?.caption || '';
-        if (!texto) return null;
-        return `[${m.key?.fromMe ? 'ELA' : 'CONTATO'}] ${texto.slice(0, 200)}`;
-      }).filter(Boolean);
+        // Áudios são transcritos (até 4 por conversa na varredura retroativa)
+        if (ehAudio && transcricaoDisponivel() && audios < 4) {
+          const t = await transcreverAudio(instancia, m);
+          audios++;
+          if (t) texto = `🎙️ (áudio) ${t}`;
+        }
+        if (!texto) continue;
+        linhas.push(`[${m.key?.fromMe ? 'ELA' : 'CONTATO'}] ${String(texto).slice(0, 400)}`);
+      }
 
       if (linhas.length < 2) { job.irrelevantes++; job.processados++; continue; }
 
@@ -339,6 +349,7 @@ router.get('/analise-status', (req, res) => {
 });
 
 export default router;
+
 
 
 

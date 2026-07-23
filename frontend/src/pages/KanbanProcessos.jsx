@@ -58,7 +58,7 @@ export default function KanbanProcessos() {
       for (const s of r.data.processos) {
         if (s.cliente_sugerido && s.cliente_sugerido.score >= 75) {
           pre[s.processo_id] = { client_id: s.cliente_sugerido.id, telefone: s.whatsapp_sugerido?.numero || null };
-        } else if (s.nome_extraido && s.whatsapp_sugerido && s.whatsapp_sugerido.score >= 75) {
+        } else if (s.whatsapp_sugerido && s.whatsapp_sugerido.score >= 75) {
           pre[s.processo_id] = { criar_nome: s.whatsapp_sugerido.nome || s.nome_extraido, telefone: s.whatsapp_sugerido.numero };
         }
       }
@@ -395,69 +395,128 @@ export default function KanbanProcessos() {
         />
       )}
 
-      {/* ─── Modal: triagem de clientes ─── */}
-      <Modal open={modalTriagem} onClose={() => setModalTriagem(false)} title="Vincular processos aos clientes"
-        footer={<><Btn variant="outline" onClick={() => setModalTriagem(false)}>Cancelar</Btn>
-          <Btn onClick={aplicarTriagem} disabled={aplicandoTriagem || !triagem}>
-            {aplicandoTriagem ? 'Aplicando...' : `Aplicar (${Object.values(selecao).filter(Boolean).length})`}</Btn></>}>
-        {!triagem && <p style={{ color: '#6b6b68', fontSize: 13 }}>Cruzando processos da triagem com clientes cadastrados e contatos do WhatsApp...</p>}
-        {triagem && (
-          <>
-            <p style={{ fontSize: 12.5, color: '#6b6b68', margin: '0 0 12px' }}>
-              <b>{triagem.processos.length}</b> processo(s) sem cliente definido · <b>{triagem.contatos_whatsapp}</b> contatos do WhatsApp consultados.
-              Sugestões com boa confiança já vêm marcadas — revise e desmarque o que não fizer sentido.
-            </p>
-            <div style={{ maxHeight: '55vh', overflowY: 'auto' }}>
-              {triagem.processos.map(s => {
-                const sel = selecao[s.processo_id];
-                return (
-                  <div key={s.processo_id} style={{ background: sel ? '#f0f7ea' : '#fafaf6', borderRadius: 9,
-                    padding: '9px 12px', marginBottom: 7, border: `1px solid ${sel ? '#c5ddb0' : '#eceade'}` }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#0f2035' }}>{s.numero_cnj}</div>
-                    <div style={{ fontSize: 11.5, color: '#6b6b68', marginBottom: 6 }}>
-                      Nome no cartão: <b>{s.nome_extraido || '— não identificado —'}</b>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {s.cliente_sugerido && (
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer' }}>
-                          <input type="radio" name={`s${s.processo_id}`}
-                            checked={!!sel?.client_id}
-                            onChange={() => setSelecao(p => ({ ...p, [s.processo_id]: { client_id: s.cliente_sugerido.id, telefone: s.whatsapp_sugerido?.numero || null } }))} />
-                          👤 Vincular a <b>{s.cliente_sugerido.nome}</b>
-                          <span style={{ color: '#9a9a97' }}>({s.cliente_sugerido.score}% match{s.cliente_sugerido.telefone ? '' : ', sem telefone'})</span>
-                        </label>
-                      )}
-                      {s.whatsapp_sugerido && (
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer' }}>
-                          <input type="radio" name={`s${s.processo_id}`}
-                            checked={!!sel?.criar_nome}
-                            onChange={() => setSelecao(p => ({ ...p, [s.processo_id]: { criar_nome: s.whatsapp_sugerido.nome || s.nome_extraido, telefone: s.whatsapp_sugerido.numero } }))} />
-                          ➕ Criar cliente <b>{s.whatsapp_sugerido.nome}</b>
-                          <span style={{ color: '#3b6d11' }}>📱 {s.whatsapp_sugerido.numero}</span>
-                          <span style={{ color: '#9a9a97' }}>({s.whatsapp_sugerido.score}%)</span>
-                        </label>
-                      )}
-                      {s.nome_extraido && (
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer' }}>
-                          <input type="radio" name={`s${s.processo_id}`}
-                            checked={!!(sel?.criar_nome && !sel?.telefone)}
-                            onChange={() => setSelecao(p => ({ ...p, [s.processo_id]: { criar_nome: s.nome_extraido } }))} />
-                          ➕ Criar cliente <b>{s.nome_extraido}</b> <span style={{ color: '#9a9a97' }}>(sem telefone)</span>
-                        </label>
-                      )}
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer', color: '#9a9a97' }}>
-                        <input type="radio" name={`s${s.processo_id}`} checked={!sel}
-                          onChange={() => setSelecao(p => ({ ...p, [s.processo_id]: null }))} />
-                        Deixar na triagem
-                      </label>
-                    </div>
+      {/* ─── Painel: vincular processos aos clientes ─── */}
+      {modalTriagem && (
+        <div onClick={() => setModalTriagem(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,32,53,0.6)',
+          zIndex: 250, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '3vh 1rem', overflowY: 'auto' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fbfbf9', borderRadius: 16, width: '100%',
+            maxWidth: 940, boxShadow: '0 10px 40px rgba(0,0,0,0.25)', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '94vh' }}>
+
+            <div style={{ background: '#0f2035', padding: '16px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: 16.5, fontWeight: 800, color: '#fff' }}>Vincular processos aos clientes</div>
+                {triagem && (
+                  <div style={{ fontSize: 12, color: '#d8d5c8', marginTop: 2 }}>
+                    {triagem.processos.length} processo(s) sem cliente · {triagem.contatos_whatsapp} contatos do WhatsApp consultados
                   </div>
-                );
-              })}
+                )}
+              </div>
+              <button onClick={() => setModalTriagem(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff' }}>
+                <X size={19} />
+              </button>
             </div>
-          </>
-        )}
-      </Modal>
+
+            <div style={{ padding: '14px 22px', overflowY: 'auto', flex: 1 }}>
+              {!triagem && <p style={{ color: '#6b6b68', fontSize: 13, padding: '2rem 0', textAlign: 'center' }}>
+                Cruzando processos com clientes cadastrados e contatos do WhatsApp...</p>}
+
+              {triagem && (
+                <>
+                  <div style={{ background: '#fdf6e3', borderRadius: 9, padding: '9px 14px', marginBottom: 14,
+                    fontSize: 12, color: '#854f0b', lineHeight: 1.5 }}>
+                    Sugestões de <b>alta confiança</b> já vêm marcadas. As de <b>confiança baixa</b> (nome único, ex.: só "Sabrina")
+                    ficam desmarcadas de propósito — confira antes de aceitar.
+                  </div>
+
+                  {triagem.processos.map(s => {
+                    const sel = selecao[s.processo_id];
+                    const Opcao = ({ ativo, onSelect, children, cor = '#0f2035' }) => (
+                      <div onClick={onSelect} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px',
+                        borderRadius: 9, cursor: 'pointer', background: ativo ? '#fff' : 'transparent',
+                        border: `1.5px solid ${ativo ? cor : 'transparent'}`, marginBottom: 4 }}>
+                        <span style={{ width: 15, height: 15, borderRadius: '50%', flexShrink: 0,
+                          border: `2px solid ${ativo ? cor : '#c9c6b8'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {ativo && <span style={{ width: 7, height: 7, borderRadius: '50%', background: cor }} />}
+                        </span>
+                        <span style={{ fontSize: 13, color: '#374151', flex: 1, lineHeight: 1.4 }}>{children}</span>
+                      </div>
+                    );
+                    const Score = ({ v }) => (
+                      <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 20, padding: '1px 9px', marginLeft: 6,
+                        background: v >= 75 ? '#eaf3de' : '#fdf0d5', color: v >= 75 ? '#3b6d11' : '#854f0b' }}>
+                        {v >= 75 ? 'alta' : 'baixa'} · {v}%
+                      </span>
+                    );
+
+                    return (
+                      <div key={s.processo_id} style={{ background: sel ? '#f4f8f0' : '#fff', borderRadius: 12,
+                        padding: '12px 16px', marginBottom: 10, border: `1px solid ${sel ? '#c5ddb0' : '#eceade'}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 800, color: '#0f2035' }}>
+                              {s.nome_extraido || <i style={{ color: '#9a9a97', fontWeight: 400 }}>nome não identificado</i>}
+                            </div>
+                            <div style={{ fontSize: 11.5, color: '#6b6b68', marginTop: 1 }}>
+                              {s.numero_cnj} {s.tribunal ? `· ${s.tribunal}` : ''}
+                            </div>
+                          </div>
+                        </div>
+
+                        {s.cliente_sugerido && (
+                          <Opcao ativo={!!sel?.client_id} cor="#185fa5"
+                            onSelect={() => setSelecao(p => ({ ...p, [s.processo_id]: { client_id: s.cliente_sugerido.id, telefone: s.whatsapp_sugerido?.numero || null } }))}>
+                            Vincular ao cliente <b>{s.cliente_sugerido.nome}</b>
+                            <Score v={s.cliente_sugerido.score} />
+                            {!s.cliente_sugerido.telefone && s.whatsapp_sugerido &&
+                              <span style={{ color: '#3b6d11', marginLeft: 6 }}>+ telefone {s.whatsapp_sugerido.numero}</span>}
+                          </Opcao>
+                        )}
+
+                        {s.whatsapp_sugerido && (
+                          <Opcao ativo={!!(sel?.criar_nome && sel?.telefone)} cor="#3b6d11"
+                            onSelect={() => setSelecao(p => ({ ...p, [s.processo_id]: { criar_nome: s.whatsapp_sugerido.nome || s.nome_extraido, telefone: s.whatsapp_sugerido.numero } }))}>
+                            Criar cliente <b>{s.whatsapp_sugerido.nome}</b>
+                            <span style={{ color: '#3b6d11', fontWeight: 600 }}> · {s.whatsapp_sugerido.numero}</span>
+                            <Score v={s.whatsapp_sugerido.score} />
+                          </Opcao>
+                        )}
+
+                        {s.nome_extraido && (
+                          <Opcao ativo={!!(sel?.criar_nome && !sel?.telefone)}
+                            onSelect={() => setSelecao(p => ({ ...p, [s.processo_id]: { criar_nome: s.nome_extraido } }))}>
+                            Criar cliente <b>{s.nome_extraido}</b> <span style={{ color: '#9a9a97' }}>(sem telefone)</span>
+                          </Opcao>
+                        )}
+
+                        <Opcao ativo={!sel} cor="#9a9a97"
+                          onSelect={() => setSelecao(p => ({ ...p, [s.processo_id]: null }))}>
+                          <span style={{ color: '#9a9a97' }}>Deixar na triagem por enquanto</span>
+                        </Opcao>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+
+            <div style={{ padding: '12px 22px', borderTop: '1px solid #eceade', background: '#fff',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12.5, color: '#6b6b68' }}>
+                <b style={{ color: '#0f2035' }}>{Object.values(selecao).filter(Boolean).length}</b> processo(s) marcado(s)
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setModalTriagem(false)}
+                  style={{ padding: '9px 18px', background: '#fff', color: '#0f2035', border: '1.5px solid #d0cfc7',
+                    borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Cancelar</button>
+                <button onClick={aplicarTriagem} disabled={aplicandoTriagem || !triagem}
+                  style={{ padding: '9px 20px', background: '#0f2035', color: '#fff', border: 'none',
+                    borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  {aplicandoTriagem ? 'Aplicando...' : 'Aplicar vinculações'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── Modal: novo cartão ─── */}
       <Modal open={!!modalNovo} onClose={() => setModalNovo(null)} title="Novo cartão"
@@ -527,6 +586,7 @@ export default function KanbanProcessos() {
     </div>
   );
 }
+
 
 
 

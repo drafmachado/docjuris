@@ -305,6 +305,18 @@ export function initDB() {
   try { db.exec(`ALTER TABLE processos ADD COLUMN etapa_id INTEGER`); } catch {}
   try { db.exec(`ALTER TABLE processos ADD COLUMN trello_labels TEXT`); } catch {}
   db.exec(`
+    CREATE TABLE IF NOT EXISTS contatos_ignorados (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      telefone TEXT NOT NULL,
+      sufixo TEXT NOT NULL,
+      nome TEXT,
+      motivo TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_ignorados_sufixo ON contatos_ignorados(sufixo);
+  `);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS audio_transcricoes (
       chave TEXT PRIMARY KEY,
       texto TEXT,
@@ -448,6 +460,7 @@ export function initDB() {
 
   console.log('🗄️  Banco de dados inicializado');
 }
+
 
 
 

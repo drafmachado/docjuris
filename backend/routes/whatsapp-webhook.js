@@ -52,6 +52,11 @@ router.post('/webhook/:token', (req, res) => {
       recentes.set(numero, Date.now());
 
       const suf = sufixo(numero);
+      // Contato marcado como "não é cliente" — ignorar completamente
+      try {
+        const bloqueado = db.prepare('SELECT id FROM contatos_ignorados WHERE sufixo = ?').get(suf);
+        if (bloqueado) continue;
+      } catch {}
       const nomePush = (msg.pushName || '').trim();
       const texto = (msg.message?.conversation
         || msg.message?.extendedTextMessage?.text
@@ -96,3 +101,4 @@ router.post('/webhook/:token', (req, res) => {
 });
 
 export default router;
+

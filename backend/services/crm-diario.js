@@ -139,6 +139,42 @@ async function perguntarIA(prompt, maxTokens = 320) {
   return JSON.parse(txt.replace(/```json|```/g, '').trim());
 }
 
+// Nome gerado pelo sistema (não é um nome real informado por você)
+function nomeAutomatico(n) {
+  const s = String(n || '').trim();
+  if (!s) return true;
+  if (/^whatsapp/i.test(s)) return true;
+  if (/^desconhecido$/i.test(s)) return true;
+  if (/^\+?\d[\d\s()-]{6,}$/.test(s)) return true;   // parece telefone/ID
+  if (s.replace(/\D/g, '').length >= 8) return true;    // sequência numérica longa
+  return false;
+}
+
+// Preenche identificação do lead a partir da conversa.
+// REGRA: só completa o que está vazio ou foi gerado automaticamente — nunca sobrescreve dado seu.
+function completarDadosLead(db, lead, dados, insAtividade) {
+  const campos = [];
+  if (dados.nome_real && dados.nome_real.length > 2 && nomeAutomatico(lead.nome)) {
+    db.prepare('UPDATE leads SET nome = ? WHERE id = ?').run(String(dados.nome_real).slice(0, 120), lead.id);
+    campos.push(`nome: ${dados.nome_real}`);
+  }
+  if (dados.email && /\S+@\S+\.\S+/.test(dados.email) && !String(lead.email || '').trim()) {
+    db.prepare('UPDATE leads SET email = ? WHERE id = ?').run(String(dados.email).trim().slice(0, 160), lead.id);
+    campos.push(`email: ${dados.email}`);
+  }
+  if (dados.telefone_alternativo && !String(lead.telefone || '').trim()) {
+    const tel = String(dados.telefone_alternativo).replace(/\D/g, '');
+    if (tel.length >= 10) {
+      db.prepare('UPDATE leads SET telefone = ? WHERE id = ?').run(tel, lead.id);
+      campos.push(`telefone: ${tel}`);
+    }
+  }
+  if (campos.length && insAtividade) {
+    insAtividade.run(lead.id, `📇 Dados identificados na conversa — ${campos.join(' · ')}`);
+  }
+  return campos.length;
+}
+
 const transcrever = c => c.mensagens
   .map(m => `[${m.fromMe ? 'ADVOGADA' : 'CONTATO'}] ${m.texto}`).join('\n').slice(0, 2500);
 
@@ -213,14 +249,18 @@ ${transcricao}
 
 Responda APENAS JSON:
 {"juridico":true|false,"etapa":"contato|consulta|proposta|contratado|perdido","mudou":true|false,
- "valor_proposto":number|null,"valor_acordado":number|null,"nome_real":"nome da pessoa se identificável, senão null",
+ "valor_proposto":number|null,"valor_acordado":number|null,
+ "nome_real":"nome completo da pessoa se dito na conversa, senão null",
+ "email":"email da pessoa se citado na conversa, senão null",
+ "telefone_alternativo":"outro telefone citado, senão null",
  "resumo":"1 frase sobre o andamento"}
 
 Regras:
 - "juridico": false se a conversa for pessoal/social/administrativa, SEM qualquer assunto jurídico ou de contratação. Nesse caso este contato não deveria estar no funil.
 - "contratado" só se aceitou contratar/assinou/pagou de forma CLARA. "perdido" só se recusou ou desistiu explicitamente.
 - valor_proposto: honorários propostos pela advogada (só o número, ex: 3000). valor_acordado: valor efetivamente aceito. null se não houver.
-- Na dúvida sobre a etapa, mudou=false.`, 420);
+- nome_real/email/telefone_alternativo: extraia SOMENTE se a pessoa informou explicitamente na conversa (inclusive em áudios transcritos). Nunca invente.
+- Na dúvida sobre a etapa, mudou=false.`, 460);
 
           // Conversa sem qualquer natureza jurídica → sai do funil (foi falso positivo)
           if (a.juridico === false && String(lead.origem || '') !== 'manual') {
@@ -237,10 +277,8 @@ Regras:
             db.prepare(`UPDATE leads SET valor_estimado = ?, updated_at = datetime('now') WHERE id = ?`).run(valorDetectado, lead.id);
             insAtividade.run(lead.id, `💰 Valor identificado na conversa: R$ ${Number(valorDetectado).toLocaleString('pt-BR')}${a.valor_acordado ? ' (acordado)' : ' (proposto)'}`);
           }
-          // Nome real dito na conversa substitui número/apelido
-          if (a.nome_real && /^\d+$/.test(String(lead.nome).replace(/\D/g, '')) === false && String(lead.nome).length < 4) {
-            db.prepare('UPDATE leads SET nome = ? WHERE id = ?').run(a.nome_real.slice(0, 120), lead.id);
-          }
+          // Nome, email e telefone ditos na conversa completam o cadastro do lead
+          completarDadosLead(db, lead, a, insAtividade);
 
           if (a.mudou && a.etapa && a.etapa !== lead.etapa) {
             db.prepare(`UPDATE leads SET etapa = ?, updated_at = datetime('now') WHERE id = ?`).run(a.etapa, lead.id);
@@ -283,7 +321,7 @@ Conversa recente no WhatsApp:
 ${transcricao}
 
 O cliente está pedindo um SERVIÇO JURÍDICO NOVO (caso diferente do que já é atendido), ou apenas tratando do caso em andamento / assunto administrativo?
-Responda APENAS JSON: {"servico_novo":true|false,"area":"saude|civel|consumidor|inventario|familia|trabalhista|outro","valor_proposto":number|null,"valor_acordado":number|null,"resumo":"1 frase: qual a nova demanda"}
+Responda APENAS JSON: {"servico_novo":true|false,"area":"saude|civel|consumidor|inventario|familia|trabalhista|outro","valor_proposto":number|null,"valor_acordado":number|null,"email":"email se citado, senão null","resumo":"1 frase: qual a nova demanda"}
 Seja conservador: só true se ficar claro que é um caso/assunto jurídico NOVO. valor_*: honorários citados, só o número; null se não houver.`, 380);
 
           if (a.servico_novo) {
@@ -292,10 +330,11 @@ Seja conservador: só true se ficar claro que é um caso/assunto jurídico NOVO.
               SELECT id FROM leads WHERE telefone = ? AND etapa NOT IN ('contratado','perdido')
             `).get(cliente.telefone);
             if (!jaAberto) {
+              const emailNovo = (a.email && /\S+@\S+\.\S+/.test(a.email)) ? String(a.email).trim().slice(0, 160) : null;
               const r = db.prepare(`
-                INSERT INTO leads (nome, telefone, area, origem, etapa, valor_estimado, observacoes)
-                VALUES (?, ?, ?, 'cliente-existente', 'contato', ?, ?)
-              `).run(`${cliente.nome} (novo serviço)`, cliente.telefone, a.area || 'outro',
+                INSERT INTO leads (nome, telefone, email, area, origem, etapa, valor_estimado, observacoes)
+                VALUES (?, ?, ?, ?, 'cliente-existente', 'contato', ?, ?)
+              `).run(`${cliente.nome} (novo serviço)`, cliente.telefone, emailNovo, a.area || 'outro',
                      a.valor_acordado || a.valor_proposto || null,
                      `Demanda nova detectada no WhatsApp em ${new Date().toLocaleDateString('pt-BR')}: ${a.resumo || ''}`);
               insAtividade.run(r.lastInsertRowid, `Lead aberto pela análise diária — cliente existente pediu serviço novo: ${a.resumo || ''}`);
@@ -320,7 +359,9 @@ Conversa (🎙️ indica áudio transcrito):
 ${transcricao}
 
 Este contato é um POTENCIAL CLIENTE? Responda APENAS JSON:
-{"potencial_cliente":true|false,"nome":"nome real da pessoa se identificável, senão null",
+{"potencial_cliente":true|false,
+ "nome":"nome completo da pessoa se dito na conversa, senão null",
+ "email":"email se citado na conversa, senão null",
  "area":"saude|civel|consumidor|inventario|familia|trabalhista|previdenciario|outro",
  "valor_proposto":number|null,"valor_acordado":number|null,
  "resumo":"1 frase: o que a pessoa procura"}
@@ -330,7 +371,8 @@ REGRA RÍGIDA para potencial_cliente = true: a conversa precisa ter um ASSUNTO J
 processo, documento, prazo). Marque FALSE para: conversa social ou pessoal, cumprimentos, correntes,
 mensagens religiosas, vendas/fornecedores, cobranças, grupos, spam, ou quando não houver conteúdo
 suficiente para saber (ex.: só "oi" ou "bom dia"). Na dúvida, FALSE.
-valor_proposto/valor_acordado: honorários citados na conversa, só o número (ex: 3000); null se não houver.`, 420);
+valor_proposto/valor_acordado: honorários citados na conversa, só o número (ex: 3000); null se não houver.
+nome/email: extraia SOMENTE se a pessoa informou explicitamente (inclusive em áudios transcritos). Nunca invente.`, 460);
 
         if (a.potencial_cliente) {
           // Nome: prioriza o dito na conversa; descarta apelidos numéricos/JID
@@ -340,13 +382,15 @@ valor_proposto/valor_acordado: honorários citados na conversa, só o número (e
             : `WhatsApp (${conv.numero.slice(2, 4)}) ${conv.numero.slice(4)}`);
           const valorDetectado = a.valor_acordado || a.valor_proposto || null;
 
+          const emailDetectado = (a.email && /\S+@\S+\.\S+/.test(a.email)) ? String(a.email).trim().slice(0, 160) : null;
           const r = db.prepare(`
-            INSERT INTO leads (nome, telefone, area, origem, etapa, valor_estimado, observacoes)
-            VALUES (?, ?, ?, 'whatsapp', 'contato', ?, ?)
-          `).run(nomeUtil.slice(0, 120), conv.numero, a.area || 'outro', valorDetectado,
+            INSERT INTO leads (nome, telefone, email, area, origem, etapa, valor_estimado, observacoes)
+            VALUES (?, ?, ?, ?, 'whatsapp', 'contato', ?, ?)
+          `).run(nomeUtil.slice(0, 120), conv.numero, emailDetectado, a.area || 'outro', valorDetectado,
                  `Lead criado pela análise diária do WhatsApp em ${new Date().toLocaleDateString('pt-BR')}.\n${a.resumo || ''}${valorDetectado ? `\n💰 Valor citado: R$ ${Number(valorDetectado).toLocaleString('pt-BR')}` : ''}`);
           insAtividade.run(r.lastInsertRowid, `Primeiro contato analisado: ${a.resumo || ''}`);
           if (valorDetectado) insAtividade.run(r.lastInsertRowid, `💰 Valor identificado na conversa: R$ ${Number(valorDetectado).toLocaleString('pt-BR')}`);
+          if (emailDetectado) insAtividade.run(r.lastInsertRowid, `📇 Email identificado na conversa: ${emailDetectado}`);
           mapaLeads.set(suf, { id: r.lastInsertRowid, nome: a.nome, telefone: conv.numero, etapa: 'contato' });
           resumo.leads_novos++;
           statusCrmDiario.leads_novos++;

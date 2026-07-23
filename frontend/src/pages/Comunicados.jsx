@@ -135,6 +135,36 @@ export default function Comunicados() {
             fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5,
           }}
         />
+
+        <input type="file" accept="image/*" ref={fileRef} onChange={escolherImagem} style={{ display: 'none' }} />
+
+        {imagem ? (
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', background: '#f8f7f3',
+            borderRadius: 10, padding: '10px 12px', marginTop: 12 }}>
+            <img src={imagem.url} alt="prévia" style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0f2035' }}>{imagem.filename}</div>
+              <div style={{ fontSize: 11.5, color: '#6b6b68' }}>A mensagem vai como legenda da imagem</div>
+            </div>
+            <button onClick={() => { setImagem(null); if (fileRef.current) fileRef.current.value = ''; }}
+              style={{ background: '#fee2e2', border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', display: 'flex' }}>
+              <X size={13} color="#c9372c" />
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => fileRef.current?.click()}
+            style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 12, background: '#f0f4ff',
+              color: '#0d2340', border: '1.5px dashed #c7d2fe', borderRadius: 9, padding: '9px 14px',
+              fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+            <ImageIcon size={14} /> Anexar imagem / post (opcional)
+          </button>
+        )}
+
+        <div style={{ fontSize: 11.5, color: '#854f0b', background: '#fdf6e3', borderRadius: 8,
+          padding: '7px 11px', marginTop: 10 }}>
+          Dica: escreva <b>{'{nome}'}</b> na mensagem para personalizar com o primeiro nome de cada destinatário.
+        </div>
+
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
           <span style={{ fontSize: 11, color: chars > 1000 ? '#e53e3e' : '#6b6b68' }}>
             {chars} caracteres {chars > 1000 && '— mensagem longa pode ser truncada'}
@@ -148,17 +178,17 @@ export default function Comunicados() {
             </button>
             <button
               onClick={enviar}
-              disabled={enviando || !mensagem.trim()}
+              disabled={enviando || (!mensagem.trim() && !imagem)}
               style={{
                 padding: '8px 20px', borderRadius: 8, border: 'none',
-                background: enviando || !mensagem.trim() ? '#ccc' : '#25d366',
+                background: enviando || (!mensagem.trim() && !imagem) ? '#ccc' : '#25d366',
                 color: '#fff', fontWeight: 700, fontSize: 13,
-                cursor: enviando || !mensagem.trim() ? 'not-allowed' : 'pointer',
+                cursor: enviando || (!mensagem.trim() && !imagem) ? 'not-allowed' : 'pointer',
                 display: 'flex', alignItems: 'center', gap: 6,
               }}
             >
               <Send size={14} />
-              {enviando ? 'Enviando...' : 'Enviar para todos'}
+              {enviando ? 'Enviando...' : `Enviar${totalDest?.total ? ` (${totalDest.total})` : ''}`}
             </button>
           </div>
         </div>
@@ -210,4 +240,5 @@ export default function Comunicados() {
     </div>
   );
 }
+
 

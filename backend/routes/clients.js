@@ -38,6 +38,124 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/clients/:id — detalhes
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BUSCAR TELEFONES NOS CONTATOS DO WHATSAPP (todas as linhas conectadas)
+// ═══════════════════════════════════════════════════════════════════════════
+function normNome(s) {
+  return String(s || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase().replace(/[^A-Z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+const STOP_NOMES = new Set(['DE','DA','DO','DAS','DOS','E','JR','FILHO','NETO','DR','DRA','SR','SRA']);
+function tokensDe(s) { return normNome(s).split(' ').filter(t => t.length >= 3 && !STOP_NOMES.has(t)); }
+
+// Similaridade entre nomes (0 a 1). Nome único casando recebe teto — exige conferência.
+function simNomes(a, b) {
+  const ta = tokensDe(a), tb = tokensDe(b);
+  if (!ta.length || !tb.length) return 0;
+  const setB = new Set(tb);
+  const comuns = ta.filter(t => setB.has(t)).length;
+  if (!comuns) return 0;
+  const base = comuns / Math.min(ta.length, tb.length);
+  if (comuns === 1 && Math.min(ta.length, tb.length) === 1) return Math.min(base, 0.5);
+  if (comuns === 1) return Math.min(base, 0.6);
+  return base;
+}
+
+async function contatosDeTodasAsLinhas() {
+  let url = process.env.EVOLUTION_API_URL || '';
+  if (url && !/^https?:\/\//.test(url)) url = 'https://' + url;
+  const headers = { 'apikey': process.env.EVOLUTION_API_KEY, 'Content-Type': 'application/json' };
+  const contatos = [];
+  if (!url || !process.env.EVOLUTION_API_KEY) return contatos;
+
+  let nomes = [];
+  try {
+    const ri = await fetch(`${url}/instance/fetchInstances`, { headers });
+    if (ri.ok) {
+      const lista = await ri.json();
+      nomes = (Array.isArray(lista) ? lista : [lista])
+        .map(x => {
+          const i = x?.instance || x || {};
+          const ativo = ['open', 'connected'].includes(String(i.connectionStatus || i.status || i.state || '').toLowerCase());
+          return ativo ? (i.instanceName || i.name) : null;
+        }).filter(Boolean);
+    }
+  } catch {}
+  if (!nomes.length) nomes = [process.env.EVOLUTION_INSTANCE || 'docjuris'];
+
+  for (const inst of nomes) {
+    try {
+      const rc = await fetch(`${url}/chat/findContacts/${inst}`, { method: 'POST', headers, body: JSON.stringify({}) });
+      if (!rc.ok) continue;
+      const bruto = await rc.json();
+      const arr = Array.isArray(bruto) ? bruto : (bruto.contacts || bruto.records || []);
+      for (const ct of arr) {
+        const jid = ct.remoteJid || ct.id || '';
+        if (!jid || jid.endsWith('@g.us') || jid.includes('broadcast') || jid.includes('status')) continue;
+        const numero = jid.split('@')[0].replace(/\D/g, '');
+        const nome = ct.pushName || ct.name || ct.notify || '';
+        if (numero.length >= 10 && nome) contatos.push({ nome, numero, linha: inst });
+      }
+    } catch {}
+  }
+  return contatos;
+}
+
+// GET /api/clients/telefones/sugestoes?modo=faltantes|todos
+router.get('/telefones/sugestoes', async (req, res) => {
+  const db = getDB();
+  try {
+    const modo = req.query.modo === 'todos' ? 'todos' : 'faltantes';
+    const clientes = db.prepare(`
+      SELECT id, nome, telefone FROM clients
+      WHERE nome NOT LIKE '%TRIAGEM%'
+      ORDER BY nome
+    `).all().filter(c => modo === 'todos' || !String(c.telefone || '').trim());
+
+    const contatos = await contatosDeTodasAsLinhas();
+    const vistos = new Set();
+    const sugestoes = clientes.map(cl => {
+      const candidatos = [];
+      for (const ct of contatos) {
+        const s = simNomes(cl.nome, ct.nome);
+        if (s >= 0.4) candidatos.push({ ...ct, score: Math.round(s * 100) });
+      }
+      const unicos = [];
+      const numsVistos = new Set();
+      for (const ct of candidatos.sort((a, b) => b.score - a.score)) {
+        if (numsVistos.has(ct.numero)) continue;
+        numsVistos.add(ct.numero);
+        unicos.push(ct);
+        if (unicos.length >= 3) break;
+      }
+      return { client_id: cl.id, nome: cl.nome, telefone_atual: cl.telefone || null, candidatos: unicos };
+    }).filter(s => s.candidatos.length > 0);
+
+    res.json({ total_clientes: clientes.length, contatos_consultados: contatos.length, sugestoes });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/clients/telefones/aplicar { itens: [{ client_id, telefone }] }
+router.post('/telefones/aplicar', (req, res) => {
+  const db = getDB();
+  const itens = Array.isArray(req.body.itens) ? req.body.itens : [];
+  let atualizados = 0;
+  const tx = db.transaction(() => {
+    for (const it of itens) {
+      const tel = String(it.telefone || '').replace(/\D/g, '');
+      if (!it.client_id || tel.length < 10) continue;
+      db.prepare(`UPDATE clients SET telefone = ?, updated_at = datetime('now') WHERE id = ?`).run(tel, it.client_id);
+      atualizados++;
+    }
+  });
+  tx();
+  res.json({ ok: true, atualizados });
+});
+
 router.get('/:id', (req, res) => {
   const db = getDB();
   const clientId = sanitizeId(req.params.id);
@@ -169,4 +287,5 @@ router.delete('/:clientId/files/:fileId', (req, res) => {
 });
 
 export default router;
+
 

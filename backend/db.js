@@ -305,6 +305,15 @@ export function initDB() {
   try { db.exec(`ALTER TABLE processos ADD COLUMN etapa_id INTEGER`); } catch {}
   try { db.exec(`ALTER TABLE processos ADD COLUMN trello_labels TEXT`); } catch {}
   db.exec(`
+    CREATE TABLE IF NOT EXISTS audio_transcricoes (
+      chave TEXT PRIMARY KEY,
+      texto TEXT,
+      segundos INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS analise_whatsapp_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       instancia TEXT NOT NULL,
@@ -439,6 +448,7 @@ export function initDB() {
 
   console.log('🗄️  Banco de dados inicializado');
 }
+
 
 
 

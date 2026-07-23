@@ -6,6 +6,7 @@
 //   4. Cliente existente → IA avalia se pede SERVIÇO NOVO → abre lead adicional
 // Tudo é registrado como atividade do lead; nada é apagado.
 import { getDB } from '../db.js';
+import { transcreverAudio, transcricaoDisponivel } from './transcricao.js';
 
 // Estado observável da execução (a tela acompanha por polling)
 export const statusCrmDiario = {
@@ -80,13 +81,27 @@ async function conversasRecentes(inst, desdeMs) {
       const bm = await rm.json();
       const regs = Array.isArray(bm) ? bm : (bm.messages?.records || bm.records || bm.messages || []);
 
-      const msgs = regs.map(m => {
+      const msgs = [];
+      let audiosTranscritos = 0;
+      for (const m of regs) {
         const ts = Number(m.messageTimestamp || m.timestamp || 0) * (String(m.messageTimestamp).length > 11 ? 1 : 1000);
-        const texto = m.message?.conversation || m.message?.extendedTextMessage?.text
-          || m.message?.imageMessage?.caption || (m.message?.audioMessage ? '[áudio]' : '')
-          || (m.message?.documentMessage ? '[documento]' : '');
-        return { fromMe: !!m.key?.fromMe, texto: String(texto).slice(0, 300), ts, nome: m.pushName || '' };
-      }).filter(m => m.texto);
+        const ehAudio = !!(m.message?.audioMessage || m.message?.pttMessage);
+        let texto = m.message?.conversation || m.message?.extendedTextMessage?.text
+          || m.message?.imageMessage?.caption || (m.message?.documentMessage ? '[documento]' : '');
+
+        // Áudio: transcreve (até 6 por conversa) — negociações costumam vir faladas
+        if (ehAudio) {
+          if (transcricaoDisponivel() && audiosTranscritos < 6 && ts >= desdeMs - 6 * 3600 * 1000) {
+            const t = await transcreverAudio(inst, m);
+            audiosTranscritos++;
+            texto = t ? `🎙️ (áudio) ${t}` : '[áudio não transcrito]';
+          } else {
+            texto = '[áudio]';
+          }
+        }
+        if (!texto) continue;
+        msgs.push({ fromMe: !!m.key?.fromMe, texto: String(texto).slice(0, 600), ts, nome: m.pushName || '' });
+      }
 
       const recebidasNaJanela = msgs.some(m => !m.fromMe && m.ts >= desdeMs);
       if (!recebidasNaJanela) continue;
@@ -335,4 +350,5 @@ Responda APENAS JSON: {"potencial_cliente":true|false,"nome":"nome real da pesso
 
   return resumo;
 }
+
 

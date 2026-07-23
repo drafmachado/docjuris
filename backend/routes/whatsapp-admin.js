@@ -130,10 +130,14 @@ router.post('/analisar-conversas', async (req, res) => {
   if (!instancia) return res.status(400).json({ error: 'Informe a instância' });
 
   const jobId = 'wa_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const db0 = getDB();
+  const logIns = db0.prepare(`INSERT INTO analise_whatsapp_log (instancia, iniciado_em, status) VALUES (?, datetime('now'), 'processing')`).run(instancia);
+
   analiseJobs.set(jobId, {
     status: 'processing', fase: 'buscando conversas', total: 0, processados: 0,
     clientes_criados: 0, leads_criados: 0, ja_conhecidos: 0, irrelevantes: 0,
     erros: [], detalhes: [], createdAt: Date.now(),
+    instancia, logId: logIns.lastInsertRowid, jobId,
   });
 
   analisarConversasAsync(jobId, instancia, req.user.id).catch(e => {
@@ -244,6 +248,45 @@ async function analisarConversasAsync(jobId, instancia, userId) {
 
   job.status = 'done';
   job.fase = 'concluído';
+
+  // Grava o resultado (sobrevive a recarregar a página) e avisa por email
+  try {
+    db.prepare(`UPDATE analise_whatsapp_log SET status='done', concluido_em=datetime('now'), resumo=? WHERE id=?`)
+      .run(JSON.stringify({
+        total: job.total, processados: job.processados,
+        clientes_criados: job.clientes_criados, leads_criados: job.leads_criados,
+        ja_conhecidos: job.ja_conhecidos, irrelevantes: job.irrelevantes,
+        detalhes: (job.detalhes || []).slice(0, 60),
+      }), job.logId);
+  } catch(e) { console.error('Log análise:', e.message); }
+
+  try {
+    if (process.env.RESEND_API_KEY) {
+      const { Resend } = await import('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      const linhas = (job.detalhes || []).slice(0, 40)
+        .map(d => `<li>${d.tipo === 'cliente' ? '👤 Cliente' : '🎯 Lead'}: <b>${d.nome}</b> — ${d.resumo || ''}</li>`).join('');
+      await resend.emails.send({
+        from: 'Veredo <docjuris@advmachado.adv.br>',
+        to: process.env.ALERT_EMAIL || 'dra.andreia@advmachado.adv.br',
+        subject: `✅ Análise de conversas concluída (${instancia}) — ${job.clientes_criados} cliente(s), ${job.leads_criados} lead(s)`,
+        html: `<div style="font-family:Arial,sans-serif;max-width:620px">
+          <div style="background:#0f2035;padding:18px;border-radius:8px 8px 0 0">
+            <h2 style="color:#fff;margin:0">✅ Análise de conversas concluída</h2>
+            <p style="color:#c5a859;margin:4px 0 0">Linha: ${instancia}</p></div>
+          <div style="padding:18px;background:#f9fafb;border:1px solid #e5e7eb">
+            <p>${job.processados} conversa(s) analisada(s) de ${job.total}.</p>
+            <ul>
+              <li><b>${job.clientes_criados}</b> cliente(s) criado(s) — completar cadastro</li>
+              <li><b>${job.leads_criados}</b> lead(s) no funil</li>
+              <li><b>${job.ja_conhecidos}</b> já cadastrado(s) (ignorados)</li>
+              <li><b>${job.irrelevantes}</b> irrelevante(s)</li>
+            </ul>
+            ${linhas ? `<p style="font-weight:700;margin-top:14px">Criados:</p><ul style="font-size:13px">${linhas}</ul>` : ''}
+          </div></div>`,
+      });
+    }
+  } catch(e) { console.error('Email análise:', e.message); }
 }
 
 // POST /api/whatsapp-admin/crm-diario/rodar — dispara a análise diária manualmente
@@ -267,5 +310,28 @@ router.get('/crm-diario/ultimo', (req, res) => {
   } catch { res.json(null); }
 });
 
+// GET /api/whatsapp-admin/analise-status — retoma acompanhamento ao abrir a tela
+router.get('/analise-status', (req, res) => {
+  const db = getDB();
+  // Job em memória ainda rodando?
+  for (const [jobId, j] of analiseJobs) {
+    if (j.status === 'processing') {
+      return res.json({ em_andamento: true, jobId, instancia: j.instancia, job: j });
+    }
+  }
+  // Últimas execuções por linha
+  let ultimas = [];
+  try {
+    ultimas = db.prepare(`
+      SELECT instancia, iniciado_em, concluido_em, status, resumo
+      FROM analise_whatsapp_log
+      WHERE id IN (SELECT MAX(id) FROM analise_whatsapp_log GROUP BY instancia)
+      ORDER BY concluido_em DESC
+    `).all().map(x => ({ ...x, resumo: JSON.parse(x.resumo || '{}') }));
+  } catch {}
+  res.json({ em_andamento: false, ultimas });
+});
+
 export default router;
+
 

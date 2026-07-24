@@ -27,6 +27,37 @@ function evoUrl() {
 const evoHeaders = () => ({ 'apikey': process.env.EVOLUTION_API_KEY, 'Content-Type': 'application/json' });
 const sufixo = t => String(t || '').replace(/\D/g, '').slice(-8);
 
+// ─── Validação de telefone real ──────────────────────────────────────────────
+// O WhatsApp passou a usar "@lid" (identificador interno, ex.: 87273785815171@lid)
+// quando o contato tem privacidade ativada. Esses números NÃO são telefones e não
+// podem ir para o cadastro — salvá-los inviabiliza o contato futuro com o cliente.
+// Telefone brasileiro válido: 55 + DDD (11–99) + 8 ou 9 dígitos = 12 ou 13 dígitos.
+export function telefoneValido(n) {
+  const d = String(n || '').replace(/\D/g, '');
+  if (d.length === 12 || d.length === 13) {
+    if (!d.startsWith('55')) return false;
+    const ddd = Number(d.slice(2, 4));
+    if (ddd < 11 || ddd > 99) return false;
+    if (d.length === 13 && d[4] !== '9') return false; // celular: 9 na frente
+    return true;
+  }
+  // Sem DDI: 10 ou 11 dígitos com DDD válido
+  if (d.length === 10 || d.length === 11) {
+    const ddd = Number(d.slice(0, 2));
+    if (ddd < 11 || ddd > 99) return false;
+    if (d.length === 11 && d[2] !== '9') return false;
+    return true;
+  }
+  return false;
+}
+
+// Normaliza para o formato 55DDDNNNNNNNNN; devolve null se não for telefone real
+export function normalizarTelefone(n) {
+  const d = String(n || '').replace(/\D/g, '');
+  if (!telefoneValido(d)) return null;
+  return d.startsWith('55') ? d : '55' + d;
+}
+
 // Todas as conexões do escritório (os 3 números). Só as conectadas são lidas;
 // as caídas são avisadas, porque uma linha offline = leads perdidos naquele número.
 async function instancias() {
@@ -106,8 +137,34 @@ async function conversasRecentes(inst, desdeMs) {
       const recebidasNaJanela = msgs.some(m => !m.fromMe && m.ts >= desdeMs);
       if (!recebidasNaJanela) continue;
 
+      // Descobre o TELEFONE REAL do contato. Com @lid, o número verdadeiro pode
+      // vir em campos alternativos das mensagens (senderPn/participantPn/remoteJidAlt).
+      const ehLid = String(jid).includes('@lid');
+      let numeroReal = ehLid ? null : normalizarTelefone(jid.split('@')[0]);
+
+      if (!numeroReal) {
+        const candidatos = [];
+        for (const m of regs.slice(0, 25)) {
+          for (const v of [m.key?.senderPn, m.key?.participantPn, m.key?.remoteJidAlt,
+                           m.key?.participantAlt, m.senderPn, m.participant]) {
+            if (v && !String(v).includes('@lid')) candidatos.push(String(v).split('@')[0]);
+          }
+        }
+        for (const cand of candidatos) {
+          const t = normalizarTelefone(cand);
+          if (t) { numeroReal = t; break; }
+        }
+      }
+      if (!numeroReal) {
+        const alt = ch.phoneNumber || ch.jid || ch.id_alt || ch.remoteJidAlt;
+        if (alt) numeroReal = normalizarTelefone(String(alt).split('@')[0]);
+      }
+
       out.push({
-        jid, numero: jid.split('@')[0].replace(/\D/g, ''),
+        jid,
+        numero: numeroReal,                                    // null quando não há telefone real
+        id_whatsapp: jid.split('@')[0].replace(/\D/g, ''),     // identificador para casar conversas
+        lid: ehLid,
         nome: ch.pushName || ch.name || msgs.find(m => !m.fromMe && m.nome)?.nome || '',
         mensagens: msgs.sort((a, b) => a.ts - b.ts).slice(-15),
       });
@@ -149,9 +206,10 @@ function completarDadosLead(db, lead, dados, insAtividade) {
     db.prepare('UPDATE leads SET email = ? WHERE id = ?').run(String(dados.email).trim().slice(0, 160), lead.id);
     campos.push(`email: ${dados.email}`);
   }
+  // Telefone dito na conversa: só grava se for um número brasileiro válido
   if (dados.telefone_alternativo && !String(lead.telefone || '').trim()) {
-    const tel = String(dados.telefone_alternativo).replace(/\D/g, '');
-    if (tel.length >= 10) {
+    const tel = normalizarTelefone(dados.telefone_alternativo);
+    if (tel) {
       db.prepare('UPDATE leads SET telefone = ? WHERE id = ?').run(tel, lead.id);
       campos.push(`telefone: ${tel}`);
     }
@@ -216,7 +274,7 @@ export async function rodarCrmDiario() {
     for (const conv of conversas) {
       resumo.conversas++;
       statusCrmDiario.processadas++;
-      const suf = sufixo(conv.numero);
+      const suf = sufixo(conv.numero || conv.id_whatsapp);
       if (ignorados.has(suf)) continue; // marcado como "não é cliente"
       const transcricao = transcrever(conv);
       if (conv.mensagens.filter(m => !m.fromMe).length === 0) continue;
@@ -278,10 +336,11 @@ Regras:
             if (a.etapa === 'contratado') {
               const jaCliente = mapaClientes.get(suf);
               if (!jaCliente) {
+                const telCliente = normalizarTelefone(lead.telefone);
                 const r = db.prepare(`
                   INSERT INTO clients (nome, telefone, observacoes, advogadas, created_by)
                   VALUES (?, ?, ?, 'ambas', NULL)
-                `).run(lead.nome, lead.telefone,
+                `).run(lead.nome, telCliente,
                        `Convertido automaticamente do funil (negociação fechada no WhatsApp).\nResumo: ${a.resumo || ''}\n⚠️ COMPLETAR CADASTRO (CPF, endereço, email)`);
                 mapaClientes.set(suf, { id: r.lastInsertRowid, nome: lead.nome, telefone: lead.telefone });
                 insAtividade.run(lead.id, `✅ Convertido em cliente automaticamente (ID ${r.lastInsertRowid}) — completar cadastro`);
@@ -371,11 +430,13 @@ nome/email: extraia SOMENTE se a pessoa informou explicitamente (inclusive em á
           const valorDetectado = a.valor_acordado || a.valor_proposto || null;
 
           const emailDetectado = (a.email && /\S+@\S+\.\S+/.test(a.email)) ? String(a.email).trim().slice(0, 160) : null;
+          const telLead = conv.numero || null;  // null quando o WhatsApp só expôs @lid
+          const avisoTel = telLead ? '' : '\n⚠️ TELEFONE PENDENTE — o contato usa privacidade no WhatsApp (@lid). Abra a conversa e confirme o número real.';
           const r = db.prepare(`
             INSERT INTO leads (nome, telefone, email, area, origem, etapa, valor_estimado, observacoes)
             VALUES (?, ?, ?, ?, 'whatsapp', 'contato', ?, ?)
-          `).run(nomeUtil.slice(0, 120), conv.numero, emailDetectado, a.area || 'outro', valorDetectado,
-                 `Lead criado pela análise diária do WhatsApp em ${new Date().toLocaleDateString('pt-BR')}.\n${a.resumo || ''}${valorDetectado ? `\n💰 Valor citado: R$ ${Number(valorDetectado).toLocaleString('pt-BR')}` : ''}`);
+          `).run(nomeUtil.slice(0, 120), telLead, emailDetectado, a.area || 'outro', valorDetectado,
+                 `Lead criado pela análise diária do WhatsApp em ${new Date().toLocaleDateString('pt-BR')}.\n${a.resumo || ''}${valorDetectado ? `\n💰 Valor citado: R$ ${Number(valorDetectado).toLocaleString('pt-BR')}` : ''}${avisoTel}`);
           insAtividade.run(r.lastInsertRowid, `Primeiro contato analisado: ${a.resumo || ''}`);
           if (valorDetectado) insAtividade.run(r.lastInsertRowid, `💰 Valor identificado na conversa: R$ ${Number(valorDetectado).toLocaleString('pt-BR')}`);
           if (emailDetectado) insAtividade.run(r.lastInsertRowid, `📇 Email identificado na conversa: ${emailDetectado}`);
@@ -437,6 +498,7 @@ nome/email: extraia SOMENTE se a pessoa informou explicitamente (inclusive em á
 
   return resumo;
 }
+
 
 
 

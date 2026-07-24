@@ -61,6 +61,11 @@ export default function CardModal({ processoId, etapaNome, corLabel, corTextoLab
   async function excluirItem(id) {
     try { await api.delete(`/processos/${processoId}/checklist/${id}`); load(); } catch {}
   }
+  // Checklist avançado (estilo Trello Premium): responsável e prazo por item
+  async function salvarCampoItem(item, campo, valor) {
+    setCard(c => ({ ...c, checklist: c.checklist.map(i => i.id === item.id ? { ...i, [campo]: valor || null } : i) }));
+    try { await api.put(`/processos/${processoId}/checklist/${item.id}`, { [campo]: valor }); } catch { load(); }
+  }
 
   if (!processoId) return null;
 
@@ -161,17 +166,39 @@ export default function CardModal({ processoId, etapaNome, corLabel, corTextoLab
                     width: `${(feitos / totalCheck) * 100}%`, transition: 'width .3s' }} />
                 </div>
               )}
-              {card.checklist.map(item => (
-                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
-                  <input type="checkbox" checked={!!item.concluido} onChange={() => toggleItem(item)}
-                    style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#3b6d11' }} />
-                  <span style={{ flex: 1, fontSize: 13, color: item.concluido ? '#9a9a97' : '#374151',
-                    textDecoration: item.concluido ? 'line-through' : 'none' }}>{item.texto}</span>
-                  <button onClick={() => excluirItem(item.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
-                    <Trash2 size={12} color="#c9c6b8" />
-                  </button>
-                </div>
-              ))}
+              {card.checklist.map(item => {
+                const hojeISO = new Date().toISOString().slice(0, 10);
+                const vencido = item.data_limite && !item.concluido && item.data_limite < hojeISO;
+                return (
+                  <div key={item.id} style={{ padding: '5px 0', borderBottom: '1px dashed #f0eee4' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input type="checkbox" checked={!!item.concluido} onChange={() => toggleItem(item)}
+                        style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#3b6d11' }} />
+                      <span style={{ flex: 1, fontSize: 13, color: item.concluido ? '#9a9a97' : '#374151',
+                        textDecoration: item.concluido ? 'line-through' : 'none' }}>{item.texto}</span>
+                      <button onClick={() => excluirItem(item.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
+                        <Trash2 size={12} color="#c9c6b8" />
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, marginLeft: 23, marginTop: 3, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <select value={item.responsavel || ''} onChange={e => salvarCampoItem(item, 'responsavel', e.target.value)}
+                        style={{ width: 'auto', padding: '2px 6px', fontSize: 10.5, borderRadius: 6,
+                          border: '1px solid #e5e3d8', color: item.responsavel ? '#0f2035' : '#9a9a97',
+                          background: item.responsavel ? '#eef2f7' : '#fff', fontWeight: 600 }}>
+                        <option value="">responsável</option>
+                        <option value="Andreia">Dra. Andreia</option>
+                        <option value="Thaísa">Dra. Thaísa</option>
+                      </select>
+                      <input type="date" value={item.data_limite || ''} onChange={e => salvarCampoItem(item, 'data_limite', e.target.value)}
+                        style={{ width: 'auto', padding: '1px 6px', fontSize: 10.5, borderRadius: 6,
+                          border: `1px solid ${vencido ? '#c9372c' : '#e5e3d8'}`,
+                          color: vencido ? '#c9372c' : (item.data_limite ? '#0f2035' : '#9a9a97'),
+                          background: vencido ? '#fee2e2' : '#fff', fontWeight: vencido ? 700 : 500 }} />
+                      {vencido && <span style={{ fontSize: 10, fontWeight: 800, color: '#c9372c' }}>VENCIDO</span>}
+                    </div>
+                  </div>
+                );
+              })}
               <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                 <input value={novoItem} onChange={e => setNovoItem(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && addItem()} placeholder="Adicionar item..."
@@ -250,3 +277,4 @@ export default function CardModal({ processoId, etapaNome, corLabel, corTextoLab
     </div>
   );
 }
+

@@ -53,6 +53,47 @@ router.delete('/ignorados/:id', authMiddleware, (req, res) => {
   res.json({ ok: true });
 });
 
+
+// ─── Auditoria de telefones inválidos (@lid do WhatsApp) ────────────────────
+// GET /api/leads/telefones/invalidos — lista leads e clientes com número que não é telefone
+router.get('/telefones/invalidos', authMiddleware, async (req, res) => {
+  const db = getDB();
+  const { telefoneValido } = await import('../services/crm-diario.js');
+  const leads = db.prepare(`SELECT id, nome, telefone, etapa FROM leads WHERE telefone IS NOT NULL AND telefone != ''`).all()
+    .filter(l => !telefoneValido(l.telefone));
+  const clientes = db.prepare(`SELECT id, nome, telefone FROM clients WHERE telefone IS NOT NULL AND telefone != ''`).all()
+    .filter(c => !telefoneValido(c.telefone));
+  res.json({ leads, clientes, total: leads.length + clientes.length });
+});
+
+// POST /api/leads/telefones/limpar — apaga os números inválidos (deixa o campo vazio)
+router.post('/telefones/limpar', authMiddleware, async (req, res) => {
+  const db = getDB();
+  const { telefoneValido } = await import('../services/crm-diario.js');
+  let leadsLimpos = 0, clientesLimpos = 0;
+
+  const tx = db.transaction(() => {
+    for (const l of db.prepare(`SELECT id, telefone, observacoes FROM leads WHERE telefone IS NOT NULL AND telefone != ''`).all()) {
+      if (telefoneValido(l.telefone)) continue;
+      db.prepare(`UPDATE leads SET telefone = NULL, observacoes = ? WHERE id = ?`)
+        .run(`${l.observacoes || ''}\n⚠️ TELEFONE PENDENTE — o número anterior (${l.telefone}) era um identificador interno do WhatsApp, não um telefone. Confirme o número real na conversa.`.trim(), l.id);
+      try {
+        db.prepare(`INSERT INTO leads_atividades (lead_id, tipo, descricao) VALUES (?, 'sistema', ?)`)
+          .run(l.id, `Telefone inválido removido (${l.telefone}) — era um @lid do WhatsApp, não um número real`);
+      } catch {}
+      leadsLimpos++;
+    }
+    for (const cl of db.prepare(`SELECT id, telefone, observacoes FROM clients WHERE telefone IS NOT NULL AND telefone != ''`).all()) {
+      if (telefoneValido(cl.telefone)) continue;
+      db.prepare(`UPDATE clients SET telefone = NULL, observacoes = ? WHERE id = ?`)
+        .run(`${cl.observacoes || ''}\n⚠️ TELEFONE PENDENTE — o número anterior (${cl.telefone}) não era um telefone válido.`.trim(), cl.id);
+      clientesLimpos++;
+    }
+  });
+  tx();
+  res.json({ ok: true, leads: leadsLimpos, clientes: clientesLimpos });
+});
+
 // GET /api/leads/:id — detalhe + atividades
 router.get('/:id', authMiddleware, (req, res) => {
   const db = getDB();
@@ -179,4 +220,5 @@ router.delete('/:id', authMiddleware, (req, res) => {
 });
 
 export default router;
+
 

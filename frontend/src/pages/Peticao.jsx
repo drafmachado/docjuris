@@ -13,7 +13,8 @@ const TIPOS = [
   { id: 'recurso_apelacao', label: '⬆️ Recurso de Apelação' },
   { id: 'embargos',         label: '🔍 Embargos de Declaração' },
   { id: 'manifestacao',     label: '💬 Manifestação / Impugnação' },
-  { id: 'agravo',           label: '📑 Agravo Regimental' },
+  { id: 'agravo_instrumento', label: '⚖️ Agravo de Instrumento' },
+  { id: 'agravo',           label: '📑 Agravo Interno (Regimental)' },
 ];
 
 const AREAS = [
@@ -332,7 +333,7 @@ export default function Peticao() {
           if (jobData.peticaoId) setPeticaoId(jobData.peticaoId);
           const TIPOS_LABEL = { liminar:'Tutela de Urgência', peticao_inicial:'Petição Inicial',
             contestacao:'Contestação', recurso_apelacao:'Apelação', embargos:'Embargos',
-            manifestacao:'Manifestação', recurso_inominado:'Recurso Inominado', agravo:'Agravo' };
+            manifestacao:'Manifestação', recurso_inominado:'Recurso Inominado', agravo_instrumento:'Agravo de Instrumento', agravo:'Agravo Interno' };
           setTitulo(`${TIPOS_LABEL[form.tipo_peca]||form.tipo_peca} — ${new Date().toLocaleDateString('pt-BR')}`);
           toast.success('Peça gerada com sucesso!');
           api.get('/peticao/historico').then(r2 => setHistorico(r2.data || [])).catch(()=>{});
@@ -355,7 +356,7 @@ export default function Peticao() {
 
       const TIPOS_LABEL = { liminar:'Tutela de Urgência', peticao_inicial:'Petição Inicial',
         contestacao:'Contestação', recurso_apelacao:'Apelação', embargos:'Embargos',
-        manifestacao:'Manifestação', recurso_inominado:'Recurso Inominado', agravo:'Agravo' };
+        manifestacao:'Manifestação', recurso_inominado:'Recurso Inominado', agravo_instrumento:'Agravo de Instrumento', agravo:'Agravo Interno' };
       setTitulo(`${TIPOS_LABEL[form.tipo_peca]||form.tipo_peca} — ${new Date().toLocaleDateString('pt-BR')}`);
       toast.success(form.client_id ? 'Peça gerada e salva na pasta do cliente!' : 'Peça gerada com sucesso!');
       api.get('/peticao/historico').then(r2 => setHistorico(r2.data || [])).catch(()=>{});
@@ -855,6 +856,7 @@ export default function Peticao() {
 
 const lbl = { fontSize:11, fontWeight:600, color:'#6b6b68', display:'block', marginBottom:4 };
 const inp = { width:'100%', boxSizing:'border-box', padding:'9px 12px', border:'1px solid #d0cfc7', borderRadius:8, fontSize:13, background:'#fff' };
+
 
 
 

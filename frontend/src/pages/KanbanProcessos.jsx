@@ -5,7 +5,7 @@ import { Topbar, Btn, Modal, FormField, FormGrid } from '../components/UI.jsx';
 import api from '../utils/api.js';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Settings2, UploadCloud, Plus, Trash2, CalendarClock, ArrowUp, ArrowDown, Search, Tag, X, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings2, UploadCloud, Plus, Trash2, CalendarClock, ArrowUp, ArrowDown, Search, Tag, X, Users , ChevronsLeft } from 'lucide-react';
 import SearchableSelect from '../components/SearchableSelect.jsx';
 import CardModal from './CardModal.jsx';
 
@@ -222,14 +222,45 @@ export default function KanbanProcessos() {
     reader.readAsText(file);
   }
 
+  const [colapsadas, setColapsadas] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('veredo_colunas_colapsadas') || '[]')); }
+    catch { return new Set(); }
+  });
+  function alternarColapso(id) {
+    setColapsadas(prev => {
+      const s = new Set(prev);
+      s.has(id) ? s.delete(id) : s.add(id);
+      localStorage.setItem('veredo_colunas_colapsadas', JSON.stringify([...s]));
+      return s;
+    });
+  }
+
+  const [filtroEtiqueta, setFiltroEtiqueta] = useState('');
+  const [soSemCliente, setSoSemCliente] = useState(false);
+  const [soPrazoVencido, setSoPrazoVencido] = useState(false);
+
+  const hojeISO = new Date().toISOString().slice(0, 10);
+  const preFiltrados = processos.filter(p => {
+    if (soSemCliente && p.cliente_nome) return false;
+    if (soPrazoVencido && !(p.proximo_prazo && p.proximo_prazo < hojeISO)) return false;
+    if (filtroEtiqueta) {
+      try {
+        const labels = JSON.parse(p.trello_labels || '[]');
+        if (!labels.some(lb => (lb.name || lb.color) === filtroEtiqueta)) return false;
+      } catch { return false; }
+    }
+    return true;
+  });
+
   const filtrados = busca.trim()
-    ? processos.filter(p => {
+    ? preFiltrados.filter(p => {
         const t = busca.toLowerCase();
         return (p.numero_cnj || '').toLowerCase().includes(t)
             || (p.cliente_nome || '').toLowerCase().includes(t)
+            || (p.nome_extraido || '').toLowerCase().includes(t)
             || (p.trello_labels || '').toLowerCase().includes(t);
       })
-    : processos;
+    : preFiltrados;
   const semEtapa = filtrados.filter(p => !p.etapa_id || !etapas.some(e => e.id === p.etapa_id));
 
   const Card = ({ p, colIdx }) => (
@@ -254,8 +285,19 @@ export default function KanbanProcessos() {
         } catch { return null; }
       })()}
       <div style={{ fontWeight: 700, fontSize: 12, color: '#0f2035' }}>{p.numero_cnj}</div>
-      <div style={{ fontSize: 11.5, color: '#6b6b68', margin: '2px 0 6px' }}>
-        {p.cliente_nome?.split(' ').slice(0, 3).join(' ') || 'sem cliente'} · {p.tribunal}
+      <div style={{ fontSize: 11.5, margin: '2px 0 6px', display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+        {p.cliente_nome ? (
+          <span style={{ color: '#374151', fontWeight: 600 }}>{p.cliente_nome.split(' ').slice(0, 3).join(' ')}</span>
+        ) : p.nome_extraido ? (
+          <span title="Nome do cartão do Trello — processo ainda sem cliente vinculado (use Vincular clientes)"
+            style={{ color: '#92600a', fontWeight: 600 }}>
+            {String(p.nome_extraido).split(' ').slice(0, 3).join(' ')}
+            <span style={{ background: '#fdf0d5', borderRadius: 4, padding: '0 5px', fontSize: 9, fontWeight: 800, marginLeft: 5 }}>vincular</span>
+          </span>
+        ) : (
+          <span style={{ color: '#9a9a97' }}>sem cliente</span>
+        )}
+        <span style={{ color: '#9a9a97' }}>· {p.tribunal}</span>
       </div>
       {p.ultima_mov && (
         <div style={{ fontSize: 10.5, color: '#9a9a97', marginBottom: 6, overflow: 'hidden',
@@ -304,6 +346,39 @@ export default function KanbanProcessos() {
         <Btn variant="outline" onClick={() => setGerenciar(true)}><Settings2 size={14} /> Etapas</Btn>
       </Topbar>
 
+      {/* Filtros do quadro (recursos dos planos pagos do Trello) */}
+      {processos.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+          <select value={filtroEtiqueta} onChange={e => setFiltroEtiqueta(e.target.value)}
+            style={{ width: 'auto', minWidth: 150, padding: '7px 10px', fontSize: 12.5, borderRadius: 20,
+              border: `1.5px solid ${filtroEtiqueta ? '#0f2035' : '#d0cfc7'}`, background: '#fff', fontWeight: 600 }}>
+            <option value="">Todas as etiquetas</option>
+            {catalogoEtiquetas.map((lb, i) => (
+              <option key={i} value={lb.name || lb.color}>{lb.name || lb.color}</option>
+            ))}
+          </select>
+          <button onClick={() => setSoSemCliente(v => !v)}
+            style={{ padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              border: `1.5px solid ${soSemCliente ? '#92600a' : '#d0cfc7'}`,
+              background: soSemCliente ? '#fdf0d5' : '#fff', color: soSemCliente ? '#92600a' : '#6b6b68' }}>
+            {soSemCliente ? '✓ ' : ''}Sem cliente ({processos.filter(p => !p.cliente_nome).length})
+          </button>
+          <button onClick={() => setSoPrazoVencido(v => !v)}
+            style={{ padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              border: `1.5px solid ${soPrazoVencido ? '#c9372c' : '#d0cfc7'}`,
+              background: soPrazoVencido ? '#fee2e2' : '#fff', color: soPrazoVencido ? '#c9372c' : '#6b6b68' }}>
+            {soPrazoVencido ? '✓ ' : ''}Prazo vencido ({processos.filter(p => p.proximo_prazo && p.proximo_prazo < hojeISO).length})
+          </button>
+          {(filtroEtiqueta || soSemCliente || soPrazoVencido) && (
+            <button onClick={() => { setFiltroEtiqueta(''); setSoSemCliente(false); setSoPrazoVencido(false); }}
+              style={{ padding: '7px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                border: 'none', background: 'transparent', color: '#c9372c' }}>
+              Limpar filtros
+            </button>
+          )}
+        </div>
+      )}
+
       {etapas.length === 0 && (
         <div style={{ background: '#fff', borderRadius: 12, padding: '2.5rem', textAlign: 'center', color: '#6b6b68' }}>
           <p style={{ fontSize: 15, fontWeight: 700, color: '#0f2035', marginBottom: 6 }}>Seu quadro está vazio</p>
@@ -328,13 +403,35 @@ export default function KanbanProcessos() {
         )}
         {etapas.map((et, i) => {
           const itens = filtrados.filter(p => p.etapa_id === et.id);
+          const fechada = colapsadas.has(et.id);
+
+          // Coluna colapsada: barra fina vertical (como no Trello Premium)
+          if (fechada) {
+            return (
+              <div key={et.id} onClick={() => alternarColapso(et.id)} title={`Expandir "${et.nome}"`}
+                style={{ width: 42, minWidth: 42, background: '#e8e6dc', borderRadius: 12, padding: '10px 0',
+                  flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                  cursor: 'pointer', maxHeight: '100%' }}>
+                <span style={{ background: '#fff', borderRadius: 20, padding: '1px 8px', fontSize: 11, fontWeight: 800, color: '#0d2340' }}>{itens.length}</span>
+                <span style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontWeight: 700,
+                  fontSize: 12, color: '#0d2340', letterSpacing: '0.03em', whiteSpace: 'nowrap',
+                  overflow: 'hidden', textOverflow: 'ellipsis', maxHeight: 'calc(100% - 40px)' }}>{et.nome}</span>
+              </div>
+            );
+          }
+
           return (
             <div key={et.id} style={{ minWidth: 250, maxWidth: 270, background: '#f0efe8', borderRadius: 12, padding: '10px 8px',
               flexShrink: 0, display: 'flex', flexDirection: 'column', maxHeight: '100%' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 6px', marginBottom: 8, flexShrink: 0 }}>
-                <span style={{ fontWeight: 700, fontSize: 12.5, color: '#0d2340' }}>{et.nome}</span>
+                <span onClick={() => alternarColapso(et.id)} title="Clique para recolher a coluna"
+                  style={{ fontWeight: 700, fontSize: 12.5, color: '#0d2340', cursor: 'pointer' }}>{et.nome}</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <span style={{ background: '#fff', borderRadius: 20, padding: '1px 8px', fontSize: 11, fontWeight: 700, color: '#6b6b68' }}>{itens.length}</span>
+                  <button onClick={() => alternarColapso(et.id)} title="Recolher coluna"
+                    style={{ background: '#fff', border: 'none', borderRadius: 6, padding: '2px 6px', cursor: 'pointer', display: 'flex' }}>
+                    <ChevronsLeft size={13} color="#6b6b68" />
+                  </button>
                   <button onClick={() => { setModalNovo(et.id); setNovoCard({ titulo: '', client_id: '' }); }}
                     title="Novo cartão nesta etapa"
                     style={{ background: '#fff', border: 'none', borderRadius: 6, padding: '2px 6px', cursor: 'pointer', display: 'flex' }}>
@@ -605,6 +702,7 @@ export default function KanbanProcessos() {
     </div>
   );
 }
+
 
 
 

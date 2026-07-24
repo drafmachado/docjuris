@@ -54,6 +54,22 @@ export default function Leads() {
 
   const loadIgnorados = () => api.get('/leads/ignorados/lista').then(r => setIgnorados(r.data || [])).catch(() => {});
 
+  // Auditoria de telefones que não são números reais (@lid do WhatsApp)
+  const [telInvalidos, setTelInvalidos] = useState(null);
+  const loadTelInvalidos = () => api.get('/leads/telefones/invalidos').then(r => setTelInvalidos(r.data)).catch(() => {});
+
+  async function limparTelefonesInvalidos() {
+    if (!window.confirm(
+      `Encontrados ${telInvalidos.total} registro(s) com número que NÃO é telefone (identificador interno do WhatsApp).\n\n` +
+      `O campo será esvaziado e marcado como TELEFONE PENDENTE, para você confirmar o número real na conversa.\n\nProsseguir?`
+    )) return;
+    try {
+      const r = await api.post('/leads/telefones/limpar');
+      toast.success(`${r.data.leads} lead(s) e ${r.data.clientes} cliente(s) corrigidos`);
+      loadTelInvalidos(); load();
+    } catch(e) { toast.error(e.response?.data?.error || 'Erro'); }
+  }
+
   async function marcarNaoCliente(lead, e) {
     e?.stopPropagation();
     if (!window.confirm(
@@ -80,7 +96,7 @@ export default function Leads() {
   }
 
   const load = () => api.get('/leads').then(r => setLeads(r.data || [])).catch(() => {});
-  useEffect(() => { load(); loadIgnorados(); }, []);
+  useEffect(() => { load(); loadIgnorados(); loadTelInvalidos(); }, []);
 
   useEffect(() => {
     const medir = () => {
@@ -207,6 +223,27 @@ export default function Leads() {
         </Btn>
         <Btn onClick={() => setModalNovo(true)}><Plus size={14} /> Novo Lead</Btn>
       </Topbar>
+
+      {telInvalidos?.total > 0 && (
+        <div style={{ background: '#fdf2f2', border: '1.5px solid #f5c2c0', borderRadius: 12,
+          padding: '12px 16px', marginBottom: 14, display: 'flex', justifyContent: 'space-between',
+          alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 12.5, color: '#7f1d1d', lineHeight: 1.5 }}>
+            <b>⚠️ {telInvalidos.total} telefone(s) inválido(s)</b> — são identificadores internos do WhatsApp (@lid),
+            não números reais. Contatos com privacidade ativada não expõem o telefone.
+            {telInvalidos.leads?.length > 0 && (
+              <span style={{ display: 'block', fontSize: 11.5, marginTop: 3, color: '#991b1b' }}>
+                Ex.: {telInvalidos.leads.slice(0, 3).map(l => `${l.nome} (${l.telefone})`).join(' · ')}
+              </span>
+            )}
+          </div>
+          <button onClick={limparTelefonesInvalidos}
+            style={{ padding: '9px 16px', background: '#c9372c', color: '#fff', border: 'none',
+              borderRadius: 9, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            Corrigir agora
+          </button>
+        </div>
+      )}
 
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(155px, 1fr))', gap: 12, marginBottom: 16 }}>
@@ -468,3 +505,4 @@ export default function Leads() {
     </div>
   );
 }
+

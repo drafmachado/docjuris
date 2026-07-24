@@ -304,7 +304,8 @@ DADOS DO PROCESSO:
     'embargos': 'Embargos de Declaração',
     'manifestacao': 'Manifestação/Impugnação',
     'recurso_inominado': 'Recurso Inominado (JEC)',
-    'agravo': 'Agravo Regimental',
+    'agravo_instrumento': 'Agravo de Instrumento',
+    'agravo': 'Agravo Interno (Regimental)',
   };
 
   const AREAS = {
@@ -367,6 +368,92 @@ VOCÊ É ESPECIALISTA EM JUIZADOS ESPECIAIS CÍVEIS (Lei 9.099/95). Domine e apl
 
   const conhecimentoEspecialista = ESPECIALISTA[area] || ESPECIALISTA['civel'];
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // ROTEIRO TÉCNICO POR TIPO DE PEÇA (CPC/2015)
+  // Requisitos formais que a peça DEVE observar. A IA recebe o roteiro do tipo
+  // escolhido e é proibida de omitir seções obrigatórias — se faltar informação
+  // para preenchê-las, usa [DADO PENDENTE].
+  // ═══════════════════════════════════════════════════════════════════════
+  const ESTRUTURA_TIPO = {
+    'agravo_instrumento': `ROTEIRO TÉCNICO OBRIGATÓRIO — AGRAVO DE INSTRUMENTO (CPC, arts. 1.015 a 1.020):
+1. ENDEREÇAMENTO: ao TRIBUNAL competente (ex.: "EXCELENTÍSSIMO SENHOR DESEMBARGADOR PRESIDENTE DO EGRÉGIO TRIBUNAL DE JUSTIÇA DO ESTADO DE ..."), NUNCA ao juízo de primeiro grau.
+2. CABIMENTO (art. 1.015): indique expressamente o inciso do art. 1.015 em que a decisão agravada se enquadra. Se a hipótese não constar do rol, fundamente na taxatividade mitigada (Tese do Tema 988 do STJ — urgência decorrente da inutilidade do julgamento diferido); nesse caso, USE WEB SEARCH para confirmar a tese e citar o julgado paradigma com dados completos, ou marque [JURISPRUDÊNCIA PENDENTE].
+3. REQUISITOS DO ART. 1.016: (I) nomes das partes; (II) exposição do fato e do direito; (III) razões do pedido de reforma ou invalidação da decisão agravada, com impugnação ESPECÍFICA de cada fundamento; (IV) nome e endereço completo dos advogados das partes — inclua os da parte agravada, e se não informados escreva [DADO PENDENTE: nome e endereço dos advogados da parte agravada].
+4. TEMPESTIVIDADE: seção própria demonstrando o prazo de 15 dias úteis (art. 1.003, §5º, c/c art. 219), indicando a data da intimação/publicação da decisão agravada — se não informada, [DADO PENDENTE: data da intimação da decisão agravada].
+5. PEÇAS (art. 1.017): em autos ELETRÔNICOS a juntada das peças obrigatórias é dispensada (art. 1.017, §5º); mesmo assim, LISTE os documentos que instruem o agravo (decisão agravada, certidão de intimação quando houver, procuração). Em autos físicos, liste as obrigatórias do inciso I.
+6. PREPARO (art. 1.007): mencione o recolhimento e a juntada da guia, ou o pedido/condição de gratuidade de justiça se aplicável aos fatos — na dúvida, [DADO PENDENTE: comprovante de preparo ou situação de gratuidade].
+7. EFEITO SUSPENSIVO OU TUTELA ANTECIPADA RECURSAL (art. 1.019, I): SE os fatos indicarem risco na eficácia imediata da decisão, inclua seção autônoma demonstrando probabilidade de provimento + risco de dano grave ou de difícil reparação, com pedido expresso ao Relator. Se os fatos não indicarem urgência, não invente.
+8. COMUNICAÇÃO AO JUÍZO DE ORIGEM (art. 1.018): informe que a parte poderá/irá requerer juntada de cópia nos autos de origem (facultativa em autos eletrônicos, §2º).
+9. PEDIDOS em alíneas: (a) conhecimento e provimento para reformar/anular a decisão; (b) efeito suspensivo/tutela recursal quando cabível; (c) intimação da parte agravada para resposta (art. 1.019, II); (d) demais requerimentos pertinentes.
+10. Ao final: valor da causa do processo de origem quando exigido pelo regimento — se desconhecido, [DADO PENDENTE].`,
+
+    'peticao_inicial': `ROTEIRO TÉCNICO OBRIGATÓRIO — PETIÇÃO INICIAL (CPC, arts. 319 e 320):
+1. Endereçamento ao juízo competente; fundamente a competência quando não for óbvia.
+2. Qualificação COMPLETA da parte autora (nome, nacionalidade, estado civil, profissão, CPF, endereço, e-mail quando disponível) e da ré — campos ausentes viram [DADO PENDENTE].
+3. Seção "DOS FATOS": narrativa cronológica objetiva, usando SOMENTE o que foi informado.
+4. Seção "DO DIREITO": teses separadas por subtítulos, cada uma com dispositivo legal exato e, quando houver, jurisprudência verificada.
+5. Tutela provisória (art. 300) SOMENTE se os fatos indicarem urgência/evidência: demonstre probabilidade do direito + perigo de dano + reversibilidade (art. 300, §3º).
+6. Seção "DOS PEDIDOS" em alíneas: pedidos certos e determinados (art. 322/324), citação da ré, condenação em custas e honorários, produção de provas, opção expressa sobre audiência de conciliação (art. 319, VII).
+7. Valor da causa (art. 319, V; critérios do art. 292) — sem elementos, [DADO PENDENTE: valor da causa].
+8. Protesto por provas e rol de documentos anexos (art. 320).`,
+
+    'contestacao': `ROTEIRO TÉCNICO OBRIGATÓRIO — CONTESTAÇÃO (CPC, arts. 335 a 342):
+1. Endereçamento ao juízo da causa, com número do processo.
+2. TEMPESTIVIDADE: prazo de 15 dias úteis (art. 335) com termo inicial aplicável — sem a data, [DADO PENDENTE: data da audiência/juntada que iniciou o prazo].
+3. PRELIMINARES (art. 337) ANTES do mérito, na ordem legal, apenas as que os fatos sustentarem (incompetência, inépcia, litispendência, coisa julgada, ilegitimidade, falta de interesse, convenção de arbitragem, conexão etc.).
+4. Prejudiciais de mérito (prescrição/decadência) em seção própria quando os fatos indicarem, com termo inicial e dispositivo legal.
+5. MÉRITO: princípio da eventualidade (art. 336 — toda a defesa de uma vez) e ônus da impugnação especificada (art. 341 — enfrentar CADA fato da inicial; o que não for impugnado presume-se verdadeiro). Organize ponto a ponto espelhando os fatos da inicial.
+6. Pedidos em alíneas: acolhimento das preliminares, improcedência, condenação da autora em custas/honorários, provas, e manifestação sobre conciliação.`,
+
+    'recurso_apelacao': `ROTEIRO TÉCNICO OBRIGATÓRIO — APELAÇÃO (CPC, arts. 1.009 a 1.012):
+1. PETIÇÃO DE INTERPOSIÇÃO dirigida ao juízo de primeiro grau (a quo) + RAZÕES RECURSAIS dirigidas ao Tribunal (duas partes claramente separadas).
+2. Requisitos do art. 1.010: nomes e qualificação das partes; exposição do fato e do direito; razões do pedido de reforma ou decretação de nulidade com impugnação ESPECÍFICA dos fundamentos da sentença (art. 932, III — recurso que não impugna especificamente não é conhecido); pedido de nova decisão.
+3. TEMPESTIVIDADE: 15 dias úteis (art. 1.003, §5º) — sem a data de publicação da sentença, [DADO PENDENTE].
+4. PREPARO (art. 1.007) ou gratuidade.
+5. Efeito suspensivo: regra é o duplo efeito (art. 1.012); se o caso cair nas exceções do §1º, avalie pedido de efeito suspensivo ao relator (§3º e §4º) com probabilidade + risco.
+6. Prequestionamento explícito dos dispositivos violados quando houver perspectiva de recursos superiores.
+7. Pedidos: conhecimento e provimento, reforma/anulação, inversão de sucumbência, majoração de honorários recursais (art. 85, §11) contra a parte adversa quando aplicável.`,
+
+    'embargos': `ROTEIRO TÉCNICO OBRIGATÓRIO — EMBARGOS DE DECLARAÇÃO (CPC, arts. 1.022 a 1.026):
+1. Endereçamento ao MESMO juízo/órgão prolator da decisão embargada.
+2. TEMPESTIVIDADE: 5 dias úteis (art. 1.023) — sem a data de publicação, [DADO PENDENTE].
+3. Indicação PRECISA do vício (art. 1.022): omissão (inclusive das hipóteses do parágrafo único — tese firmada em repetitivo/repercussão geral não enfrentada ou falta de fundamentação do art. 489, §1º), contradição, obscuridade ou erro material — cite o trecho exato da decisão onde o vício está.
+4. NÃO rediscuta o mérito como se fosse recurso de reconsideração; o pedido é de integração/correção.
+5. Quando o objetivo incluir prequestionamento, requeira expressamente manifestação sobre os dispositivos indicados (art. 1.025).
+6. Registre o efeito interruptivo do prazo para outros recursos (art. 1.026).
+7. Pedido de efeitos infringentes SOMENTE se a correção do vício alterar logicamente a conclusão — fundamente.`,
+
+    'liminar': `ROTEIRO TÉCNICO OBRIGATÓRIO — TUTELA DE URGÊNCIA (CPC, arts. 294 a 311):
+1. Identifique a modalidade: tutela antecipada (satisfativa) ou cautelar; antecedente ou incidental — e siga o regime correspondente (arts. 303/305 quando antecedente).
+2. Demonstre SEPARADAMENTE: probabilidade do direito (com prova documental citada) e perigo de dano ou risco ao resultado útil (art. 300), sempre com base nos fatos informados.
+3. Reversibilidade da medida (art. 300, §3º) — enfrente o ponto expressamente.
+4. Caução (art. 300, §1º) quando o caso indicar; pedido de dispensa fundamentado quando hipossuficiência.
+5. Pedido liminar inaudita altera parte com justificativa específica para a postergação do contraditório, quando os fatos exigirem.
+6. Multa/astreintes (art. 537) com valor e periodicidade — sem parâmetro informado, [DADO PENDENTE: valor da multa diária pretendida].
+7. Pedidos subsidiários e confirmação da tutela ao final.`,
+
+    'manifestacao': `ROTEIRO TÉCNICO OBRIGATÓRIO — MANIFESTAÇÃO/RÉPLICA/IMPUGNAÇÃO:
+1. Identifique o ato que enseja a manifestação (despacho, contestação, documentos, laudo) e o prazo respectivo — sem a data de intimação, [DADO PENDENTE].
+2. Em RÉPLICA (arts. 350-351): rebata preliminares e fatos impeditivos/modificativos/extintivos trazidos na contestação, ponto a ponto.
+3. Impugnação de documentos: especifique cada documento e o vício (autenticidade, veracidade, pertinência).
+4. Não inove em pedidos além do objeto da manifestação; reforce os requerimentos já formulados.
+5. Conclua com os requerimentos específicos do ato (prosseguimento, provas, desentranhamento etc.).`,
+
+    'recurso_inominado': `ROTEIRO TÉCNICO OBRIGATÓRIO — RECURSO INOMINADO (Lei 9.099/95, arts. 41 a 46):
+1. Endereçamento: interposição ao próprio Juizado; razões dirigidas à Turma Recursal.
+2. TEMPESTIVIDADE: 10 dias (art. 42) — sem a data de ciência da sentença, [DADO PENDENTE].
+3. PREPARO: recolhimento nas 48 horas seguintes à interposição, sob pena de deserção (art. 42, §1º), independentemente de intimação — mencione expressamente; ou gratuidade.
+4. Impugnação específica dos fundamentos da sentença; atenção à limitação probatória e à vedação de honorários em 1º grau (arts. 54-55 — sucumbência só na fase recursal, art. 55).
+5. Pedidos: conhecimento, provimento, reforma da sentença e inversão dos ônus na forma do art. 55.`,
+
+    'agravo': `ROTEIRO TÉCNICO OBRIGATÓRIO — AGRAVO INTERNO (CPC, art. 1.021):
+1. Endereçamento ao Relator, com pedido de submissão ao órgão colegiado competente.
+2. TEMPESTIVIDADE: 15 dias úteis (art. 1.003, §5º) — sem a data de publicação da decisão monocrática, [DADO PENDENTE].
+3. Impugnação ESPECÍFICA de todos os fundamentos da decisão agravada (art. 1.021, §1º) — enfrente um a um; agravo que apenas reitera a peça anterior tende à inadmissão.
+4. Requeira juízo de retratação e, subsidiariamente, o provimento pelo colegiado.
+5. Ciência do risco do §4º (multa de 1% a 5% em caso de manifesta inadmissibilidade ou improcedência em votação unânime) — a peça deve ser objetiva e fundamentada para afastá-lo.`,
+  };
+
   const nomePeca = TIPOS[tipo_peca] || tipo_peca;
   const nomeArea = AREAS[area] || area || 'Direito Civil';
 
@@ -411,6 +498,7 @@ ${ASSINATURAS_PECA[modoAdv]}
 
 ${conhecimentoEspecialista}
 
+${ESTRUTURA_TIPO[tipo_peca] ? ESTRUTURA_TIPO[tipo_peca] + '\n\nO roteiro acima é OBRIGATÓRIO: nenhuma seção pode ser omitida. Onde faltar informação para preenchê-la, use [DADO PENDENTE: ...]. Não crie seções com conteúdo inventado para "completar" o roteiro.\n' : ''}
 Você deve redigir peças processuais completas, tecnicamente precisas e estratégicas, seguindo rigorosamente as normas do Direito brasileiro.
 
 ═══════════════════════════════════════════════════════════
@@ -457,7 +545,7 @@ PEDIDOS ESPECÍFICOS:
 ${pedidos || 'Proceder conforme o tipo de peça e os fatos expostos'}
 
 INSTRUÇÕES DE EXECUÇÃO:
-1. Antes de redigir, use web search para buscar decisões reais sobre: "${nomeArea}" + tema central dos fatos acima.
+1. Antes de redigir, use web search para buscar decisões reais sobre: "${nomeArea}" + tema central dos fatos acima.${tipo_peca === 'agravo_instrumento' ? ' Busque também: "agravo de instrumento" + a matéria da decisão agravada + "efeito suspensivo" quando pedido, e confirme o enquadramento no art. 1.015 do CPC (ou Tema 988/STJ se fora do rol).' : ''}${tipo_peca === 'embargos' ? ' Busque também decisões sobre a hipótese específica de omissão/contradição alegada.' : ''}
 2. Busque especificamente em: STJ, ${tribunal || 'TJSP'}, JusBrasil, sites de tribunais (.jus.br).
 3. Para cada decisão encontrada: confirme número CNJ, relator, data e copie o link exato.
 4. Só então redija a peça usando EXCLUSIVAMENTE o que foi encontrado e verificado.
@@ -734,6 +822,7 @@ router.get('/:id/download/docx', authMiddleware, async (req, res) => {
 });
 
 export default router;
+
 
 
 

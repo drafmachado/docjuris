@@ -225,6 +225,7 @@ router.get('/quadro', (req, res) => {
   const db = getDB();
   const processos = db.prepare(`
     SELECT p.id, p.numero_cnj, p.tribunal, p.etapa_id, p.status, p.trello_labels,
+           p.client_id, p.observacoes,
            c.nome as cliente_nome,
            (SELECT a.descricao FROM andamentos a WHERE a.processo_id = p.id ORDER BY a.data DESC LIMIT 1) as ultima_mov,
            (SELECT MAX(a.data) FROM andamentos a WHERE a.processo_id = p.id) as ultima_mov_data,
@@ -233,7 +234,13 @@ router.get('/quadro', (req, res) => {
     LEFT JOIN clients c ON c.id = p.client_id
     WHERE p.status = 'ativo'
     ORDER BY c.nome
-  `).all();
+  `).all().map(p => {
+    // Cartões sem cliente vinculado: usa o nome do cartão do Trello para a Dra. Thaísa
+    // e a Dra. Andreia saberem de quem é o processo antes mesmo da vinculação.
+    const nome_extraido = p.client_id ? null : nomeDoCartao(p);
+    const { observacoes, ...resto } = p;
+    return { ...resto, nome_extraido };
+  });
   res.json(processos);
 });
 
@@ -544,7 +551,7 @@ router.get('/:id/card', (req, res) => {
   `).all(p.id);
 
   p.checklist = db.prepare(`
-    SELECT id, texto, concluido FROM processo_checklist
+    SELECT id, texto, concluido, responsavel, data_limite FROM processo_checklist
     WHERE processo_id = ? ORDER BY ordem, id
   `).all(p.id);
 
@@ -600,8 +607,14 @@ router.post('/:id/checklist', (req, res) => {
   res.json({ id: r.lastInsertRowid });
 });
 router.put('/:id/checklist/:itemId', (req, res) => {
-  getDB().prepare('UPDATE processo_checklist SET concluido = ? WHERE id = ? AND processo_id = ?')
-    .run(req.body.concluido ? 1 : 0, req.params.itemId, req.params.id);
+  const db = getDB();
+  const sets = [], vals = [];
+  if ('concluido' in req.body)    { sets.push('concluido = ?');    vals.push(req.body.concluido ? 1 : 0); }
+  if ('responsavel' in req.body)  { sets.push('responsavel = ?');  vals.push(String(req.body.responsavel || '').slice(0, 40) || null); }
+  if ('data_limite' in req.body)  { sets.push('data_limite = ?');  vals.push(String(req.body.data_limite || '').slice(0, 10) || null); }
+  if (!sets.length) return res.json({ ok: true });
+  vals.push(req.params.itemId, req.params.id);
+  db.prepare(`UPDATE processo_checklist SET ${sets.join(', ')} WHERE id = ? AND processo_id = ?`).run(...vals);
   res.json({ ok: true });
 });
 router.delete('/:id/checklist/:itemId', (req, res) => {
@@ -848,6 +861,7 @@ async function importarLoteAsync(jobId, numeros, userId) {
 }
 
 export default router;
+
 
 
 

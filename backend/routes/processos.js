@@ -175,6 +175,49 @@ router.put('/:id/posicao', (req, res) => {
   res.json({ ok: true });
 });
 
+
+// GET /api/processos/sem-etapa — processos ativos que ficaram sem coluna
+router.get('/sem-etapa/lista', (req, res) => {
+  const db = getDB();
+  const lista = db.prepare(`
+    SELECT p.id, p.numero_cnj, p.tribunal, c.nome as cliente_nome, p.observacoes
+    FROM processos p LEFT JOIN clients c ON c.id = p.client_id
+    WHERE p.status = 'ativo' AND (p.etapa_id IS NULL)
+    ORDER BY p.numero_cnj
+  `).all().map(p => {
+    const ehTriagem = !p.cliente_nome || /TRIAGEM/i.test(p.cliente_nome || '');
+    const nome = ehTriagem ? nomeDoCartao(p) : p.cliente_nome;
+    return { id: p.id, numero_cnj: p.numero_cnj, tribunal: p.tribunal, nome: nome || 'Sem identificação' };
+  });
+  res.json({ total: lista.length, processos: lista });
+});
+
+// POST /api/processos/sem-etapa/mover — joga todos os sem-etapa para uma coluna
+// { etapa_id }  ou  { arquivar: true } para marcar como concluído/inativo
+router.post('/sem-etapa/resolver', (req, res) => {
+  const db = getDB();
+  const { etapa_id, arquivar } = req.body;
+  const semEtapa = db.prepare(`SELECT id FROM processos WHERE status = 'ativo' AND etapa_id IS NULL`).all();
+
+  if (arquivar) {
+    const tx = db.transaction(() => {
+      for (const p of semEtapa) db.prepare(`UPDATE processos SET status = 'arquivado' WHERE id = ?`).run(p.id);
+    });
+    tx();
+    return res.json({ ok: true, arquivados: semEtapa.length });
+  }
+
+  if (!etapa_id) return res.status(400).json({ error: 'Informe a etapa de destino ou arquivar:true' });
+  const etapa = db.prepare('SELECT id FROM etapas_processo WHERE id = ?').get(etapa_id);
+  if (!etapa) return res.status(400).json({ error: 'Etapa inexistente' });
+
+  const tx = db.transaction(() => {
+    for (const p of semEtapa) db.prepare(`UPDATE processos SET etapa_id = ? WHERE id = ?`).run(etapa_id, p.id);
+  });
+  tx();
+  res.json({ ok: true, movidos: semEtapa.length, etapa_id });
+});
+
 // GET /api/processos/quadro — processos agrupáveis por etapa
 
 // GET /api/processos/etiquetas-quadro — catálogo de etiquetas em uso (para o editor)
@@ -1020,6 +1063,7 @@ async function importarLoteAsync(jobId, numeros, userId) {
 }
 
 export default router;
+
 
 
 

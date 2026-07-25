@@ -430,8 +430,20 @@ router.post('/importar-trello', (req, res) => {
     let procId, clientId;
 
     if (!m) {
-      // Cartão sem número (ex.: pré-distribuição) — preserva com o título do cartão
-      const jaExiste = db.prepare('SELECT id FROM processos WHERE numero_cnj = ?').get(card.name?.slice(0, 120));
+      // Cartão sem número (ex.: pré-distribuição) — preserva com o título do cartão.
+      // 1) título idêntico  2) mesmo primeiro nome entre os cartões sem CNJ (renomeações)
+      let jaExiste = db.prepare(`SELECT id FROM processos WHERE numero_cnj = ?`).get(card.name?.slice(0, 120));
+      if (!jaExiste && card.name) {
+        const primeiro = String(card.name).trim().split(/[\s\-–—/]+/)[0];
+        if (primeiro && primeiro.length >= 3) {
+          jaExiste = db.prepare(`
+            SELECT id FROM processos
+            WHERE status = 'ativo' AND tribunal = 'A DISTRIBUIR'
+              AND (numero_cnj LIKE ? OR observacoes LIKE ?)
+            LIMIT 1
+          `).get(`${primeiro}%`, `%📝 Trello — ${primeiro}%`);
+        }
+      }
       if (jaExiste) { resultado.vinculados++; procId = jaExiste.id; clientId = triagemId; upEtapa.run(etapaId, jaExiste.id); if (card.pos != null) upPos.run(Number(card.pos), jaExiste.id); }
       else {
         const r = insProcSemCnj.run(triagemId, (card.name || '(sem título)').slice(0, 120),
@@ -1008,6 +1020,7 @@ async function importarLoteAsync(jobId, numeros, userId) {
 }
 
 export default router;
+
 
 
 

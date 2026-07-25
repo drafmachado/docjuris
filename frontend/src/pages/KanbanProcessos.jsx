@@ -190,13 +190,21 @@ export default function KanbanProcessos() {
           name: cd.name, desc: (cd.desc || '').slice(0, 500), idList: cd.idList, pos: cd.pos,
         }));
         if (!cards.length) throw new Error('Arquivo não parece um export do Trello');
-        toast(`Reaplicando a ordem de ${cards.length} cartões...`, { icon: '↕️' });
+
+        // 1º grava os NOMES (título do cartão) em cada processo
+        toast(`Restaurando nomes e ordem de ${cards.length} cartões...`, { icon: '↕️' });
+        const rn = await api.post('/processos/reprocessar-nomes', { cards }, { timeout: 120000 });
+        // 2º reaplica a ordem e as colunas
         const r = await api.post('/processos/reaplicar-ordem-trello', { lists, cards }, { timeout: 120000 });
-        toast.success(`Ordem do Trello restaurada: ${r.data.atualizados} processo(s) reposicionado(s).` +
-          (r.data.nao_encontrados ? ` ${r.data.nao_encontrados} não localizado(s).` : ''), { duration: 8000 });
+
+        toast.success(
+          `Pronto! ${rn.data.gravados} nome(s) restaurado(s), ${r.data.atualizados} processo(s) reposicionado(s).` +
+          (r.data.nao_encontrados ? ` ${r.data.nao_encontrados} não localizado(s).` : ''),
+          { duration: 9000 }
+        );
         load();
       } catch(e) {
-        toast.error(e.response?.data?.error || e.message || 'Erro ao reaplicar ordem');
+        toast.error(e.response?.data?.error || e.message || 'Erro ao restaurar');
       } finally {
         setImportando(false);
         if (ordemRef.current) ordemRef.current.value = '';
@@ -395,8 +403,8 @@ export default function KanbanProcessos() {
         <input type="file" accept=".json,application/json" ref={fileRef} onChange={importarTrello} style={{ display: 'none' }} />
         <input type="file" accept=".json,application/json" ref={ordemRef} onChange={reaplicarOrdemTrello} style={{ display: 'none' }} />
         <Btn variant="outline" onClick={() => ordemRef.current?.click()} disabled={importando} style={{ marginRight: 8 }}
-          title="Restaura a ordem e as colunas exatamente como no Trello, sem reimportar (usa o mesmo arquivo JSON)">
-          ↕️ Reaplicar ordem do Trello
+          title="Restaura os NOMES dos clientes, a ordem e as colunas exatamente como no Trello, sem reimportar (usa o mesmo arquivo JSON exportado do Trello)">
+          🔄 Restaurar nomes e ordem do Trello
         </Btn>
         <Btn variant="outline" onClick={() => fileRef.current?.click()} disabled={importando} style={{ marginRight: 8 }}>
           <UploadCloud size={14} /> {importando ? 'Importando...' : 'Importar do Trello'}
@@ -761,6 +769,7 @@ export default function KanbanProcessos() {
     </div>
   );
 }
+
 
 
 

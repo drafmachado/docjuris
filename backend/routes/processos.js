@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { consultarProcesso } from '../services/datajud.js';
+import { consultarProcesso , analisarSituacao } from '../services/datajud.js';
 import { getDB } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 
@@ -216,6 +216,76 @@ router.post('/sem-etapa/resolver', (req, res) => {
   });
   tx();
   res.json({ ok: true, movidos: semEtapa.length, etapa_id });
+});
+
+
+// ─── Diagnóstico de situação dos processos sem etapa via DataJud ─────────────
+const jobsSituacao = new Map();
+
+// POST /api/processos/sem-etapa/diagnosticar — consulta o DataJud de cada sem-etapa
+router.post('/sem-etapa/diagnosticar', (req, res) => {
+  const db = getDB();
+  const pend = db.prepare(`
+    SELECT p.id, p.numero_cnj, p.tribunal, c.nome as cliente_nome, p.observacoes
+    FROM processos p LEFT JOIN clients c ON c.id = p.client_id
+    WHERE p.status = 'ativo' AND p.etapa_id IS NULL
+    ORDER BY p.numero_cnj
+  `).all();
+
+  const jobId = 'diagnostico-sem-etapa';
+  if (jobsSituacao.get(jobId)?.rodando) return res.json({ ok: true, ja_rodando: true });
+
+  const job = { rodando: true, total: pend.length, processados: 0,
+    concluidos: [], ativos: [], sem_dados: [], iniciado: Date.now() };
+  jobsSituacao.set(jobId, job);
+  res.json({ ok: true, iniciado: true, total: pend.length });
+
+  (async () => {
+    for (const p of pend) {
+      try {
+        const temCNJ = /\d{7}/.test(p.numero_cnj || '');
+        const ehTriagem = !p.cliente_nome || /TRIAGEM/i.test(p.cliente_nome || '');
+        const nome = ehTriagem ? nomeDoCartao(p) : p.cliente_nome;
+        if (!temCNJ) {
+          job.sem_dados.push({ id: p.id, numero_cnj: p.numero_cnj, nome: nome || 'Sem identificação', motivo: 'sem número CNJ' });
+        } else {
+          const consulta = await consultarProcesso(p.numero_cnj, p.tribunal);
+          const s = analisarSituacao(consulta);
+          const item = {
+            id: p.id, numero_cnj: p.numero_cnj, nome: nome || 'Sem identificação',
+            classe: s.classe, ultimo: s.ultimo_movimento,
+          };
+          if (s.situacao === 'concluido') job.concluidos.push(item);
+          else if (s.situacao === 'ativo') job.ativos.push(item);
+          else job.sem_dados.push({ ...item, motivo: s.motivo || 'não encontrado' });
+        }
+      } catch (e) {
+        job.sem_dados.push({ id: p.id, numero_cnj: p.numero_cnj, motivo: e.message });
+      }
+      job.processados++;
+      await new Promise(r => setTimeout(r, 800)); // respeita o limite da chave pública do CNJ
+    }
+    job.rodando = false;
+    job.concluido_em = Date.now();
+  })().catch(e => { job.rodando = false; job.erro = e.message; });
+});
+
+// GET /api/processos/sem-etapa/diagnosticar/status
+router.get('/sem-etapa/diagnosticar/status', (req, res) => {
+  const job = jobsSituacao.get('diagnostico-sem-etapa');
+  res.json(job || { rodando: false, total: 0, processados: 0, concluidos: [], ativos: [], sem_dados: [] });
+});
+
+// POST /api/processos/sem-etapa/arquivar-lista — arquiva SÓ os ids informados
+router.post('/sem-etapa/arquivar-lista', (req, res) => {
+  const db = getDB();
+  const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+  let n = 0;
+  const tx = db.transaction(() => {
+    for (const id of ids) { db.prepare(`UPDATE processos SET status = 'arquivado' WHERE id = ?`).run(id); n++; }
+  });
+  tx();
+  res.json({ ok: true, arquivados: n });
 });
 
 // GET /api/processos/quadro — processos agrupáveis por etapa

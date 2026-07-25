@@ -301,6 +301,28 @@ export default function KanbanProcessos() {
     : preFiltrados;
   const semEtapa = filtrados.filter(p => !p.etapa_id || !etapas.some(e => e.id === p.etapa_id));
 
+  async function moverSemEtapa(etapaId) {
+    const nomeEt = etapas.find(e => e.id === etapaId)?.nome || 'a etapa';
+    if (!window.confirm(`Mover os ${semEtapa.length} processo(s) sem etapa para "${nomeEt}"?`)) return;
+    try {
+      const r = await api.post('/processos/sem-etapa/resolver', { etapa_id: etapaId });
+      toast.success(`${r.data.movidos} processo(s) movido(s) para ${nomeEt}`);
+      load();
+    } catch(e) { toast.error(e.response?.data?.error || 'Erro'); }
+  }
+  async function arquivarSemEtapa() {
+    if (!window.confirm(
+      `Arquivar os ${semEtapa.length} processo(s) sem etapa?\n\n` +
+      `Eles somem do quadro mas NÃO são apagados — continuam no banco e podem ser reativados. ` +
+      `Use isto se forem processos antigos que não fazem mais parte do fluxo.`
+    )) return;
+    try {
+      const r = await api.post('/processos/sem-etapa/resolver', { arquivar: true });
+      toast.success(`${r.data.arquivados} processo(s) arquivado(s)`);
+      load();
+    } catch(e) { toast.error(e.response?.data?.error || 'Erro'); }
+  }
+
   const dragId = useRef(null);
 
   async function soltarCard(etapaId, alvoId) {
@@ -460,8 +482,26 @@ export default function KanbanProcessos() {
         {semEtapa.length > 0 && etapas.length > 0 && (
           <div style={{ minWidth: 250, maxWidth: 270, background: '#f3f1e8', borderRadius: 12, padding: '10px 8px',
             flexShrink: 0, display: 'flex', flexDirection: 'column', maxHeight: '100%' }}>
-            <div style={{ fontWeight: 700, fontSize: 12.5, color: '#854f0b', padding: '0 6px', marginBottom: 8, flexShrink: 0 }}>
-              📥 Sem etapa ({semEtapa.length})
+            <div style={{ padding: '0 6px', marginBottom: 8, flexShrink: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 12.5, color: '#854f0b', marginBottom: 6 }}>
+                📥 Sem etapa ({semEtapa.length})
+              </div>
+              <div style={{ fontSize: 10.5, color: '#8a7a55', marginBottom: 6, lineHeight: 1.4 }}>
+                Processos que não vieram do Trello atual (importações antigas, DataJud, cadastro manual).
+                Escolha o que fazer com todos:
+              </div>
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                <select value="" onChange={e => e.target.value && moverSemEtapa(Number(e.target.value))}
+                  style={{ flex: 1, minWidth: 0, padding: '5px 7px', fontSize: 11, borderRadius: 7, border: '1px solid #d0cfc7' }}>
+                  <option value="">Mover todos para...</option>
+                  {etapas.map(et => <option key={et.id} value={et.id}>{et.nome}</option>)}
+                </select>
+                <button onClick={arquivarSemEtapa} title="Arquivar todos (some do quadro, não apaga)"
+                  style={{ padding: '5px 9px', fontSize: 11, fontWeight: 700, borderRadius: 7, border: '1px solid #e5c2c0',
+                    background: '#fdf2f2', color: '#c9372c', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  Arquivar
+                </button>
+              </div>
             </div>
             <div className="coluna-scroll" style={{ overflowY: 'auto', flex: 1, paddingRight: 2 }}>
               {semEtapa.map(p => <Card key={p.id} p={p} colIdx={-1} />)}
@@ -769,6 +809,7 @@ export default function KanbanProcessos() {
     </div>
   );
 }
+
 
 
 

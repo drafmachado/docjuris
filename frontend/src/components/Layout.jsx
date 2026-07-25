@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
-import { LayoutDashboard, Users, FileText, FileStack, UserPlus, LogOut, Scale, Menu, X, Gavel, UserCheck, Calendar, Activity, ListTodo, KanbanSquare, MessageCircle } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, FileStack, UserPlus, LogOut, Scale, Menu, X, Gavel, UserCheck, Calendar, Activity, ListTodo, KanbanSquare, MessageCircle , ListChecks } from 'lucide-react';
 import styles from './Layout.module.css';
 
 export default function Layout() {
@@ -54,6 +54,9 @@ export default function Layout() {
 
           <NavLink to="/andamento" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
             <KanbanSquare size={16} /> Andamento
+          </NavLink>
+          <NavLink to="/conciliar" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+            <ListChecks size={16} /> Conciliar lista
           </NavLink>
           <NavLink to="/tarefas" onClick={close} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
             <ListTodo size={16} /> Tarefas
@@ -115,4 +118,5 @@ export default function Layout() {
     </div>
   );
 }
+
 

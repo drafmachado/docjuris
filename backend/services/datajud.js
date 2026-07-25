@@ -62,6 +62,26 @@ const TRIBUNAL_ENDPOINTS = {
 const DATAJUD_API_KEY = 'cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==';
 const BASE_URL = 'https://api-publica.datajud.cnj.jus.br';
 
+// Códigos CNJ (TPU) que indicam processo ENCERRADO na origem
+const CODIGOS_ENCERRAMENTO = new Set([22, 246, 848, 861, 466]);
+// 22=Baixa Definitiva · 246=Definitivo (arquivamento) · 848/861=trânsito em julgado · 466=Extinção
+const TERMOS_ENCERRAMENTO = /baixa definitiva|arquivamento definitivo|trânsito em julgado|transitou em julgado|extin(ç|c)ão do processo|arquivado definitivamente/i;
+
+export function analisarSituacao(consulta) {
+  if (!consulta || consulta.erro) return { situacao: 'desconhecida', motivo: consulta?.erro || 'sem dados' };
+  const movs = consulta.movimentos || [];
+  const encerrado = movs.some(m =>
+    (m.codigo && CODIGOS_ENCERRAMENTO.has(Number(m.codigo))) || TERMOS_ENCERRAMENTO.test(m.descricao || '')
+  );
+  const ultimo = movs[0] || null;
+  return {
+    situacao: encerrado ? 'concluido' : 'ativo',
+    ultimo_movimento: ultimo ? { data: ultimo.data, descricao: ultimo.descricao } : null,
+    classe: consulta.classe || null,
+    total_movimentos: consulta.totalMovimentos || 0,
+  };
+}
+
 export async function consultarProcesso(numeroCNJ, tribunal) {
   const endpoint = TRIBUNAL_ENDPOINTS[tribunal?.toUpperCase()];
   if (!endpoint) {
@@ -117,6 +137,7 @@ export async function consultarProcesso(numeroCNJ, tribunal) {
       .slice(0, 10)
       .map(m => ({
         data: m.dataHora,
+        codigo: m.codigo || null,
         descricao: m.nome || m.complementosTabelados?.[0]?.nome || 'Movimentação'
       }));
 
@@ -134,4 +155,5 @@ export async function consultarProcesso(numeroCNJ, tribunal) {
     return { erro: `Erro de conexão: ${err.message}` };
   }
 }
+
 

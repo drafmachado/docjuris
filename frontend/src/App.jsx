@@ -11,6 +11,7 @@ import Diagnostico from './pages/Diagnostico.jsx';
 import Portal from './pages/Portal.jsx';
 import Tarefas from './pages/Tarefas.jsx';
 import KanbanProcessos from './pages/KanbanProcessos.jsx';
+import Conciliar from './pages/Conciliar.jsx';
 import WhatsAppNumeros from './pages/WhatsAppNumeros.jsx';
 import Documents from './pages/Documents.jsx';
 import Templates from './pages/Templates.jsx';
@@ -46,6 +47,7 @@ function AppRoutes() {
         <Route path="diagnostico" element={<Diagnostico />} />
         <Route path="tarefas" element={<Tarefas />} />
         <Route path="andamento" element={<KanbanProcessos />} />
+        <Route path="conciliar" element={<Conciliar />} />
         <Route path="whatsapp" element={<WhatsAppNumeros />} />
         <Route path="clients/:id" element={<ClientDetail />} />
         <Route path="documents" element={<Documents />} />
@@ -110,5 +112,6 @@ export default function App() {
     </BrowserRouter>
   );
 }
+
 
 

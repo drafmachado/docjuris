@@ -32,6 +32,7 @@ export default function KanbanProcessos() {
   const [novaEtapa, setNovaEtapa] = useState('');
   const [importando, setImportando] = useState(false);
   const fileRef = useRef(null);
+  const ordemRef = useRef(null);
   const quadroRef = useRef(null);
   const [alturaQuadro, setAlturaQuadro] = useState('70vh');
   const [busca, setBusca] = useState('');
@@ -176,6 +177,34 @@ export default function KanbanProcessos() {
   }
 
   // ─── Importação do Trello: lê o JSON no navegador e envia só o essencial ───
+  function reaplicarOrdemTrello(ev) {
+    const file = ev.target.files?.[0];
+    if (!file) return;
+    setImportando(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const bruto = JSON.parse(reader.result);
+        const lists = (bruto.lists || []).filter(l => !l.closed).map(l => ({ id: l.id, nome: l.name }));
+        const cards = (bruto.cards || []).filter(cd => !cd.closed).map(cd => ({
+          name: cd.name, desc: (cd.desc || '').slice(0, 500), idList: cd.idList, pos: cd.pos,
+        }));
+        if (!cards.length) throw new Error('Arquivo não parece um export do Trello');
+        toast(`Reaplicando a ordem de ${cards.length} cartões...`, { icon: '↕️' });
+        const r = await api.post('/processos/reaplicar-ordem-trello', { lists, cards }, { timeout: 120000 });
+        toast.success(`Ordem do Trello restaurada: ${r.data.atualizados} processo(s) reposicionado(s).` +
+          (r.data.nao_encontrados ? ` ${r.data.nao_encontrados} não localizado(s).` : ''), { duration: 8000 });
+        load();
+      } catch(e) {
+        toast.error(e.response?.data?.error || e.message || 'Erro ao reaplicar ordem');
+      } finally {
+        setImportando(false);
+        if (ordemRef.current) ordemRef.current.value = '';
+      }
+    };
+    reader.readAsText(file);
+  }
+
   function importarTrello(ev) {
     const file = ev.target.files?.[0];
     if (!file) return;
@@ -196,6 +225,7 @@ export default function KanbanProcessos() {
         }
         const cards = (bruto.cards || []).filter(cd => !cd.closed).map(cd => ({
           name: cd.name, desc: (cd.desc || '').slice(0, 2000), idList: cd.idList, due: cd.due,
+          pos: cd.pos,
           labels: (cd.labels || []).map(lb => ({ name: lb.name || '', color: lb.color || '' })),
           comentarios: comentariosPorCard[cd.id] || [],
         }));
@@ -263,7 +293,32 @@ export default function KanbanProcessos() {
     : preFiltrados;
   const semEtapa = filtrados.filter(p => !p.etapa_id || !etapas.some(e => e.id === p.etapa_id));
 
+  const dragId = useRef(null);
+
+  async function soltarCard(etapaId, alvoId) {
+    const arrastadoId = dragId.current;
+    dragId.current = null;
+    if (!arrastadoId || arrastadoId === alvoId) return;
+    const naColuna = filtrados.filter(p => p.etapa_id === etapaId && p.id !== arrastadoId)
+      .sort((a, b) => (a.posicao ?? 1e18) - (b.posicao ?? 1e18));
+    const idxAlvo = naColuna.findIndex(p => p.id === alvoId);
+    let novaPos;
+    if (idxAlvo === -1) novaPos = (naColuna[naColuna.length - 1]?.posicao ?? 0) + 1000;
+    else {
+      const antes = naColuna[idxAlvo - 1]?.posicao ?? ((naColuna[idxAlvo].posicao ?? 1000) - 1000);
+      const depois = naColuna[idxAlvo].posicao ?? 1000;
+      novaPos = (antes + depois) / 2;
+    }
+    setProcessos(prev => prev.map(p => p.id === arrastadoId ? { ...p, posicao: novaPos, etapa_id: etapaId } : p));
+    try { await api.put(`/processos/${arrastadoId}/posicao`, { posicao: novaPos, etapa_id: etapaId }); }
+    catch { load(); }
+  }
+
   const Card = ({ p, colIdx }) => (
+    <div draggable onDragStart={(e) => { dragId.current = p.id; }}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => { e.preventDefault(); soltarCard(p.etapa_id, p.id); }}
+      style={{ cursor: 'grab' }}>
     <div onClick={() => setCardAberto({ id: p.id, etapaNome: etapas.find(e => e.id === p.etapa_id)?.nome })} style={{
       background: '#fff', borderRadius: 10, padding: '10px 12px', marginBottom: 8,
       boxShadow: '0 1px 4px rgba(0,0,0,0.05)', cursor: 'pointer',
@@ -287,15 +342,13 @@ export default function KanbanProcessos() {
       <div style={{ fontWeight: 700, fontSize: 12, color: '#0f2035' }}>{p.numero_cnj}</div>
       <div style={{ fontSize: 11.5, margin: '2px 0 6px', display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
         {p.cliente_nome ? (
-          <span style={{ color: '#374151', fontWeight: 600 }}>{p.cliente_nome.split(' ').slice(0, 3).join(' ')}</span>
-        ) : p.nome_extraido ? (
-          <span title="Nome do cartão do Trello — processo ainda sem cliente vinculado (use Vincular clientes)"
-            style={{ color: '#92600a', fontWeight: 600 }}>
-            {String(p.nome_extraido).split(' ').slice(0, 3).join(' ')}
+          <span style={{ color: '#374151', fontWeight: 700 }}>{p.cliente_nome.split(' ').slice(0, 3).join(' ')}</span>
+        ) : (
+          <span title="Nome do cartão do Trello — falta vincular a um cliente cadastrado"
+            style={{ color: '#92600a', fontWeight: 700 }}>
+            {String(p.nome_extraido || 'Sem identificação').split(' ').slice(0, 3).join(' ')}
             <span style={{ background: '#fdf0d5', borderRadius: 4, padding: '0 5px', fontSize: 9, fontWeight: 800, marginLeft: 5 }}>vincular</span>
           </span>
-        ) : (
-          <span style={{ color: '#9a9a97' }}>sem cliente</span>
         )}
         <span style={{ color: '#9a9a97' }}>· {p.tribunal}</span>
       </div>
@@ -326,6 +379,7 @@ export default function KanbanProcessos() {
         </button>
       </div>
     </div>
+    </div>
   );
 
   return (
@@ -339,6 +393,11 @@ export default function KanbanProcessos() {
             style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', color: '#9a9a97', cursor: 'pointer' }} />}
         </div>
         <input type="file" accept=".json,application/json" ref={fileRef} onChange={importarTrello} style={{ display: 'none' }} />
+        <input type="file" accept=".json,application/json" ref={ordemRef} onChange={reaplicarOrdemTrello} style={{ display: 'none' }} />
+        <Btn variant="outline" onClick={() => ordemRef.current?.click()} disabled={importando} style={{ marginRight: 8 }}
+          title="Restaura a ordem e as colunas exatamente como no Trello, sem reimportar (usa o mesmo arquivo JSON)">
+          ↕️ Reaplicar ordem do Trello
+        </Btn>
         <Btn variant="outline" onClick={() => fileRef.current?.click()} disabled={importando} style={{ marginRight: 8 }}>
           <UploadCloud size={14} /> {importando ? 'Importando...' : 'Importar do Trello'}
         </Btn>
@@ -702,6 +761,7 @@ export default function KanbanProcessos() {
     </div>
   );
 }
+
 
 
 

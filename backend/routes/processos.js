@@ -288,6 +288,129 @@ router.post('/sem-etapa/arquivar-lista', (req, res) => {
   res.json({ ok: true, arquivados: n });
 });
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONCILIAÇÃO DE LISTA (ex.: processos da Dra. Thaísa)
+// Recebe [{cnj, nome?}], cruza com a base atual, consulta DataJud e separa em:
+//   já_no_veredo | concluído (arquivar) | novo (importar)
+// ═══════════════════════════════════════════════════════════════════════════
+const jobsConciliacao = new Map();
+
+// POST /api/processos/conciliar-lista — inicia o job
+router.post('/conciliar-lista', (req, res) => {
+  const db = getDB();
+  const itens = Array.isArray(req.body.itens) ? req.body.itens : [];
+  if (!itens.length) return res.status(400).json({ error: 'Envie a lista de processos' });
+
+  const jobId = 'conciliar-' + Date.now();
+  const job = {
+    rodando: true, total: itens.length, processados: 0,
+    ja_no_veredo: [], concluidos: [], ativos_novos: [], sem_dados: [],
+    iniciado: Date.now(),
+  };
+  jobsConciliacao.set(jobId, job);
+  // limpa jobs antigos
+  for (const [k, j] of jobsConciliacao) if (Date.now() - j.iniciado > 3600000) jobsConciliacao.delete(k);
+
+  res.json({ ok: true, jobId, total: itens.length });
+
+  (async () => {
+    for (const it of itens) {
+      const cnj = String(it.cnj || '').trim();
+      const nome = String(it.nome || '').trim();
+      const dig = cnj.replace(/\D/g, '');
+      if (dig.length < 15) { job.sem_dados.push({ cnj, nome, motivo: 'número inválido' }); job.processados++; continue; }
+
+      try {
+        // 1. Já existe no Veredo? (compara dígitos)
+        const existe = db.prepare(`
+          SELECT p.id, p.status, p.etapa_id, c.nome as cliente_nome, e.nome as etapa_nome
+          FROM processos p
+          LEFT JOIN clients c ON c.id = p.client_id
+          LEFT JOIN etapas_processo e ON e.id = p.etapa_id
+          WHERE REPLACE(REPLACE(REPLACE(p.numero_cnj,'.',''),'-',''),' ','') = ?
+        `).get(dig);
+
+        if (existe) {
+          job.ja_no_veredo.push({
+            cnj, nome: nome || existe.cliente_nome, id: existe.id,
+            etapa: existe.etapa_nome || (existe.status !== 'ativo' ? existe.status : 'sem etapa'),
+          });
+          job.processados++;
+          continue;
+        }
+
+        // 2. Não existe — consulta situação no DataJud
+        const trib = inferirTribunal(dig) || 'TJRJ';
+        const consulta = await consultarProcesso(cnj, trib);
+        const s = analisarSituacao(consulta);
+
+        if (s.situacao === 'concluido') {
+          job.concluidos.push({ cnj, nome, classe: s.classe, ultimo: s.ultimo_movimento, tribunal: trib });
+        } else if (s.situacao === 'ativo') {
+          job.ativos_novos.push({ cnj, nome, classe: s.classe, ultimo: s.ultimo_movimento, tribunal: trib });
+        } else {
+          // sem dados no DataJud — ainda assim é novo; entra para importar como ativo
+          job.ativos_novos.push({ cnj, nome, classe: null, ultimo: null, tribunal: trib, sem_datajud: true });
+        }
+      } catch (e) {
+        job.sem_dados.push({ cnj, nome, motivo: e.message });
+      }
+      job.processados++;
+      await new Promise(r => setTimeout(r, 800)); // limite da chave pública do CNJ
+    }
+    job.rodando = false;
+    job.concluido_em = Date.now();
+  })().catch(e => { job.rodando = false; job.erro = e.message; });
+});
+
+// GET /api/processos/conciliar-lista/status/:jobId
+router.get('/conciliar-lista/status/:jobId', (req, res) => {
+  res.json(jobsConciliacao.get(req.params.jobId) || { rodando: false, erro: 'job não encontrado' });
+});
+
+// POST /api/processos/conciliar-lista/aplicar
+// { importar: [{cnj, nome, tribunal}], arquivar_concluidos: [{cnj, nome, tribunal}] }
+router.post('/conciliar-lista/aplicar', (req, res) => {
+  const db = getDB();
+  const importar = Array.isArray(req.body.importar) ? req.body.importar : [];
+  const arquivar = Array.isArray(req.body.arquivar_concluidos) ? req.body.arquivar_concluidos : [];
+  const triagemId = getClienteTriagem(db, req.user.id);
+  let criados = 0, arquivados = 0;
+
+  const insProc = db.prepare(`
+    INSERT INTO processos (client_id, numero_cnj, tribunal, observacoes, status, etapa_id, created_by)
+    VALUES (?, ?, ?, ?, ?, NULL, ?)
+  `);
+
+  const tx = db.transaction(() => {
+    // Importar ativos como novos processos (status ativo, sem etapa — entram na coluna "Sem etapa")
+    for (const it of importar) {
+      const dig = String(it.cnj || '').replace(/\D/g, '');
+      if (dig.length < 15) continue;
+      const ja = db.prepare(`SELECT id FROM processos WHERE REPLACE(REPLACE(REPLACE(numero_cnj,'.',''),'-',''),' ','') = ?`).get(dig);
+      if (ja) continue;
+      const fmt = `${dig.slice(0,7)}-${dig.slice(7,9)}.${dig.slice(9,13)}.${dig.slice(13,14)}.${dig.slice(14,16)}.${dig.slice(16,20)}`;
+      const obs = (it.nome ? `📝 Trello — ${it.nome}\n` : '') + `Importado da lista da Dra. Thaísa em ${new Date().toLocaleDateString('pt-BR')}.`;
+      insProc.run(triagemId, fmt, it.tribunal || inferirTribunal(dig) || 'TJRJ', obs, 'ativo', req.user.id);
+      criados++;
+    }
+    // Arquivar concluídos: importa já como arquivado (registro histórico, fora do quadro)
+    for (const it of arquivar) {
+      const dig = String(it.cnj || '').replace(/\D/g, '');
+      if (dig.length < 15) continue;
+      const ja = db.prepare(`SELECT id FROM processos WHERE REPLACE(REPLACE(REPLACE(numero_cnj,'.',''),'-',''),' ','') = ?`).get(dig);
+      if (ja) { db.prepare(`UPDATE processos SET status = 'arquivado' WHERE id = ?`).run(ja.id); arquivados++; continue; }
+      const fmt = `${dig.slice(0,7)}-${dig.slice(7,9)}.${dig.slice(9,13)}.${dig.slice(13,14)}.${dig.slice(14,16)}.${dig.slice(16,20)}`;
+      const obs = (it.nome ? `📝 Trello — ${it.nome}\n` : '') + `Processo concluído (lista da Dra. Thaísa). Arquivado na importação.`;
+      insProc.run(triagemId, fmt, it.tribunal || inferirTribunal(dig) || 'TJRJ', obs, 'arquivado', req.user.id);
+      arquivados++;
+    }
+  });
+  tx();
+  res.json({ ok: true, criados, arquivados });
+});
+
 // GET /api/processos/quadro — processos agrupáveis por etapa
 
 // GET /api/processos/etiquetas-quadro — catálogo de etiquetas em uso (para o editor)
@@ -1133,6 +1256,7 @@ async function importarLoteAsync(jobId, numeros, userId) {
 }
 
 export default router;
+
 
 
 

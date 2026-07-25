@@ -301,6 +301,37 @@ export default function KanbanProcessos() {
     : preFiltrados;
   const semEtapa = filtrados.filter(p => !p.etapa_id || !etapas.some(e => e.id === p.etapa_id));
 
+  const [diagSit, setDiagSit] = useState(null);
+  const [diagRodando, setDiagRodando] = useState(false);
+  const diagPoll = useRef(null);
+
+  async function diagnosticarSituacao() {
+    setDiagRodando(true);
+    try {
+      await api.post('/processos/sem-etapa/diagnosticar');
+      toast('Consultando o DataJud de cada processo — leva ~1min a cada 40', { icon: '🔎', duration: 6000 });
+      clearInterval(diagPoll.current);
+      diagPoll.current = setInterval(async () => {
+        try {
+          const s = await api.get('/processos/sem-etapa/diagnosticar/status');
+          setDiagSit(s.data);
+          if (!s.data.rodando) { clearInterval(diagPoll.current); setDiagRodando(false); }
+        } catch { clearInterval(diagPoll.current); setDiagRodando(false); }
+      }, 3000);
+    } catch(e) { toast.error(e.response?.data?.error || 'Erro'); setDiagRodando(false); }
+  }
+
+  async function arquivarConcluidos() {
+    const ids = (diagSit?.concluidos || []).map(x => x.id);
+    if (!ids.length) return;
+    if (!window.confirm(`Arquivar os ${ids.length} processo(s) identificados como CONCLUÍDOS no DataJud?\n\nNão são apagados — podem ser reativados.`)) return;
+    try {
+      const r = await api.post('/processos/sem-etapa/arquivar-lista', { ids });
+      toast.success(`${r.data.arquivados} concluído(s) arquivado(s)`);
+      setDiagSit(null); load();
+    } catch(e) { toast.error('Erro'); }
+  }
+
   async function moverSemEtapa(etapaId) {
     const nomeEt = etapas.find(e => e.id === etapaId)?.nome || 'a etapa';
     if (!window.confirm(`Mover os ${semEtapa.length} processo(s) sem etapa para "${nomeEt}"?`)) return;
@@ -502,6 +533,35 @@ export default function KanbanProcessos() {
                   Arquivar
                 </button>
               </div>
+              <button onClick={diagnosticarSituacao} disabled={diagRodando}
+                style={{ width: '100%', marginTop: 6, padding: '6px', fontSize: 11, fontWeight: 700, borderRadius: 7,
+                  border: '1px solid #b8c9e0', background: diagRodando ? '#eef2f7' : '#e8f0fe', color: '#0c66e4', cursor: 'pointer' }}>
+                {diagRodando ? `Consultando... ${diagSit?.processados || 0}/${diagSit?.total || 0}` : '🔎 Consultar situação (DataJud)'}
+              </button>
+
+              {diagSit && !diagRodando && (
+                <div style={{ marginTop: 8, fontSize: 11, background: '#fff', borderRadius: 8, padding: '8px 10px', border: '1px solid #e5e3d8' }}>
+                  <div style={{ color: '#1f845a', fontWeight: 700 }}>✅ Concluídos: {diagSit.concluidos?.length || 0}</div>
+                  <div style={{ color: '#0c66e4', fontWeight: 700, margin: '2px 0' }}>⚖️ Ativos: {diagSit.ativos?.length || 0}</div>
+                  <div style={{ color: '#9a7a2a', fontWeight: 700 }}>❔ Sem dados: {diagSit.sem_dados?.length || 0}</div>
+                  {(diagSit.concluidos?.length > 0) && (
+                    <button onClick={arquivarConcluidos}
+                      style={{ width: '100%', marginTop: 7, padding: '6px', fontSize: 11, fontWeight: 700, borderRadius: 7,
+                        border: 'none', background: '#1f845a', color: '#fff', cursor: 'pointer' }}>
+                      Arquivar os {diagSit.concluidos.length} concluído(s)
+                    </button>
+                  )}
+                  {diagSit.ativos?.length > 0 && (
+                    <div style={{ marginTop: 7, paddingTop: 6, borderTop: '1px dashed #eee', color: '#6b6b68', fontSize: 10.5, lineHeight: 1.5 }}>
+                      <b>Ativos (mover para uma coluna):</b>
+                      {diagSit.ativos.slice(0, 8).map(a => (
+                        <div key={a.id}>• {a.nome} — {a.ultimo?.descricao || 'sem movimento'}</div>
+                      ))}
+                      {diagSit.ativos.length > 8 && <div>+{diagSit.ativos.length - 8} outro(s)</div>}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="coluna-scroll" style={{ overflowY: 'auto', flex: 1, paddingRight: 2 }}>
               {semEtapa.map(p => <Card key={p.id} p={p} colIdx={-1} />)}

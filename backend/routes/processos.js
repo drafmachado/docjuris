@@ -162,6 +162,19 @@ router.delete('/etapas/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// PUT /api/processos/:id/posicao — grava a posição do card (arrastar-e-soltar)
+router.put('/:id/posicao', (req, res) => {
+  const db = getDB();
+  const { posicao, etapa_id } = req.body;
+  if (etapa_id !== undefined) {
+    db.prepare('UPDATE processos SET posicao = ?, etapa_id = ? WHERE id = ?')
+      .run(Number(posicao) || 0, etapa_id, req.params.id);
+  } else {
+    db.prepare('UPDATE processos SET posicao = ? WHERE id = ?').run(Number(posicao) || 0, req.params.id);
+  }
+  res.json({ ok: true });
+});
+
 // GET /api/processos/quadro — processos agrupáveis por etapa
 
 // GET /api/processos/etiquetas-quadro — catálogo de etiquetas em uso (para o editor)
@@ -233,13 +246,19 @@ router.get('/quadro', (req, res) => {
     FROM processos p
     LEFT JOIN clients c ON c.id = p.client_id
     WHERE p.status = 'ativo'
-    ORDER BY c.nome
+    ORDER BY (p.posicao IS NULL), p.posicao, c.nome
   `).all().map(p => {
     // Cartões sem cliente vinculado: usa o nome do cartão do Trello para a Dra. Thaísa
     // e a Dra. Andreia saberem de quem é o processo antes mesmo da vinculação.
-    const nome_extraido = p.client_id ? null : nomeDoCartao(p);
+    // Garante um rótulo SEMPRE: cliente vinculado > nome do cartão > nº do processo
+    const ehTriagem = !p.cliente_nome || /TRIAGEM/i.test(p.cliente_nome || '');
+    let nome_extraido = null;
+    if (ehTriagem) {
+      nome_extraido = nomeDoCartao(p) || (p.numero_cnj && !/^\d/.test(p.numero_cnj) ? p.numero_cnj : null) || 'Sem identificação';
+    }
+    const cliente_real = ehTriagem ? null : p.cliente_nome;
     const { observacoes, ...resto } = p;
-    return { ...resto, nome_extraido };
+    return { ...resto, cliente_nome: cliente_real, nome_extraido };
   });
   res.json(processos);
 });
@@ -249,6 +268,57 @@ router.put('/:id/etapa', (req, res) => {
   const db = getDB();
   db.prepare('UPDATE processos SET etapa_id = ? WHERE id = ?').run(req.body.etapa_id ?? null, req.params.id);
   res.json({ ok: true });
+});
+
+
+// POST /api/processos/reaplicar-ordem-trello — atualiza SÓ a ordem (posicao) e a coluna
+// dos processos já importados, casando pelo título/CNJ do cartão. Não cria nada.
+// Serve para restaurar a organização do Trello sem reimportar.
+router.post('/reaplicar-ordem-trello', (req, res) => {
+  const db = getDB();
+  const { lists, cards } = req.body;
+  if (!Array.isArray(lists) || !Array.isArray(cards)) {
+    return res.status(400).json({ error: 'Envie o JSON exportado do Trello' });
+  }
+  // Mapa lista Trello → etapa Veredo (por nome)
+  const mapaLista = {};
+  for (const l of lists) {
+    const nome = (l.nome || l.name || '').trim();
+    if (!nome) continue;
+    const et = db.prepare('SELECT id FROM etapas_processo WHERE nome = ?').get(nome);
+    if (et) mapaLista[l.id] = et.id;
+  }
+  const regexCNJ = /\d{7}[-.]?\d{2}[.]?\d{4}[.]?\d[.]?\d{2}[.]?\d{4}/;
+  let atualizados = 0, naoEncontrados = 0;
+
+  const tx = db.transaction(() => {
+    for (const card of cards) {
+      const etapaId = mapaLista[card.idList] || null;
+      const pos = card.pos != null ? Number(card.pos) : null;
+      const texto = `${card.name || ''} ${card.desc || ''}`;
+      const m = texto.match(regexCNJ);
+
+      let proc = null;
+      if (m) {
+        const dig = m[0].replace(/\D/g, '');
+        proc = db.prepare(`SELECT id FROM processos WHERE REPLACE(REPLACE(REPLACE(numero_cnj,'.',''),'-',''),' ','') = ?`).get(dig);
+      }
+      if (!proc && card.name) {
+        // Sem CNJ: casa pelo título guardado no numero_cnj (cartões "A DISTRIBUIR") ou nas observações
+        const titulo = card.name.slice(0, 120);
+        proc = db.prepare(`SELECT id FROM processos WHERE numero_cnj = ?`).get(titulo)
+            || db.prepare(`SELECT id FROM processos WHERE observacoes LIKE ?`).get(`%📝 Trello — ${titulo}%`);
+      }
+      if (!proc) { naoEncontrados++; continue; }
+
+      if (etapaId != null && pos != null) db.prepare('UPDATE processos SET etapa_id = ?, posicao = ? WHERE id = ?').run(etapaId, pos, proc.id);
+      else if (pos != null)               db.prepare('UPDATE processos SET posicao = ? WHERE id = ?').run(pos, proc.id);
+      else if (etapaId != null)           db.prepare('UPDATE processos SET etapa_id = ? WHERE id = ?').run(etapaId, proc.id);
+      atualizados++;
+    }
+  });
+  tx();
+  res.json({ ok: true, atualizados, nao_encontrados: naoEncontrados });
 });
 
 // POST /api/processos/importar-trello — recebe { lists: [{id, nome}], cards: [{name, desc, idList, due}] }
@@ -282,8 +352,8 @@ router.post('/importar-trello', (req, res) => {
   const regexCNJ = /\d{7}[-.]?\d{2}[.]?\d{4}[.]?\d[.]?\d{2}[.]?\d{4}/;
   const upEtapa = db.prepare('UPDATE processos SET etapa_id = ? WHERE id = ?');
   const insProc = db.prepare(`
-    INSERT INTO processos (client_id, numero_cnj, tribunal, observacoes, status, etapa_id, created_by)
-    VALUES (?, ?, ?, ?, 'ativo', ?, ?)
+    INSERT INTO processos (client_id, numero_cnj, tribunal, observacoes, status, etapa_id, posicao, created_by)
+    VALUES (?, ?, ?, ?, 'ativo', ?, ?, ?)
   `);
   const insPrazo = db.prepare(`
     INSERT INTO prazos (processo_id, client_id, titulo, tipo, data_limite, observacoes, created_by)
@@ -291,6 +361,7 @@ router.post('/importar-trello', (req, res) => {
   `);
 
   const upLabels = db.prepare('UPDATE processos SET trello_labels = ? WHERE id = ?');
+  const upPos = db.prepare('UPDATE processos SET posicao = ? WHERE id = ?');
   const upObs = db.prepare(`
     UPDATE processos SET observacoes = CASE
       WHEN observacoes IS NULL OR observacoes = '' THEN ?
@@ -298,8 +369,8 @@ router.post('/importar-trello', (req, res) => {
     END WHERE id = ?
   `);
   const insProcSemCnj = db.prepare(`
-    INSERT INTO processos (client_id, numero_cnj, tribunal, observacoes, status, etapa_id, trello_labels, created_by)
-    VALUES (?, ?, 'A DISTRIBUIR', ?, 'ativo', ?, ?, ?)
+    INSERT INTO processos (client_id, numero_cnj, tribunal, observacoes, status, etapa_id, trello_labels, posicao, created_by)
+    VALUES (?, ?, 'A DISTRIBUIR', ?, 'ativo', ?, ?, ?, ?)
   `);
 
   for (const card of cards) {
@@ -319,10 +390,11 @@ router.post('/importar-trello', (req, res) => {
     if (!m) {
       // Cartão sem número (ex.: pré-distribuição) — preserva com o título do cartão
       const jaExiste = db.prepare('SELECT id FROM processos WHERE numero_cnj = ?').get(card.name?.slice(0, 120));
-      if (jaExiste) { resultado.vinculados++; procId = jaExiste.id; clientId = triagemId; upEtapa.run(etapaId, jaExiste.id); }
+      if (jaExiste) { resultado.vinculados++; procId = jaExiste.id; clientId = triagemId; upEtapa.run(etapaId, jaExiste.id); if (card.pos != null) upPos.run(Number(card.pos), jaExiste.id); }
       else {
         const r = insProcSemCnj.run(triagemId, (card.name || '(sem título)').slice(0, 120),
-          blocoNotas || 'Importado do Trello (sem número de processo)', etapaId, labelsJson, req.user.id);
+          blocoNotas || 'Importado do Trello (sem número de processo)', etapaId, labelsJson,
+          card.pos != null ? Number(card.pos) : null, req.user.id);
         procId = r.lastInsertRowid; clientId = triagemId;
         resultado.sem_cnj.push(card.name || '(sem título)');
         resultado.criados_triagem++;
@@ -351,10 +423,11 @@ router.post('/importar-trello', (req, res) => {
       const fmt = `${digitos.slice(0,7)}-${digitos.slice(7,9)}.${digitos.slice(9,13)}.${digitos.slice(13,14)}.${digitos.slice(14,16)}.${digitos.slice(16,20)}`;
       const tribunal = inferirTribunal(digitos) || 'N/D';
       const obs = [blocoNotas || null, 'Importado do Trello'].filter(Boolean).join('\n').slice(0, 3000);
-      const r = insProc.run(triagemId, fmt, tribunal, obs, etapaId, req.user.id);
+      const r = insProc.run(triagemId, fmt, tribunal, obs, etapaId, card.pos != null ? Number(card.pos) : null, req.user.id);
       procId = r.lastInsertRowid; clientId = triagemId;
       resultado.criados_triagem++;
     }
+    if (existente && card.pos != null) upPos.run(Number(card.pos), existente.id);
     if (labelsJson !== '[]') upLabels.run(labelsJson, procId);
 
     // Data de entrega do cartão → prazo
@@ -407,12 +480,33 @@ function similaridade(a, b) {
   return base;
 }
 // Nome provável do cartão: do título do Trello nas observações ou do próprio campo
+// Nome legível do cartão. Remove número de processo, prefixos e sufixos de assunto
+// (ex.: "Camila - revisional" → "Camila"). SEMPRE devolve algo, nunca null.
+function limparNomeCartao(bruto) {
+  let s = String(bruto || '').trim();
+  // remove CNJ e números longos
+  s = s.replace(/\d{7}[-.]?\d{2}[.]?\d{4}[.]?\d[.]?\d{2}[.]?\d{4}/g, ' ');
+  s = s.replace(/\bproc(?:esso)?\.?\s*n?[º°]?\s*[\d.\-/]+/gi, ' ');
+  // separa o nome do assunto: "Nome - assunto" | "Nome — assunto" | "Nome / assunto"
+  const sep = s.split(/\s+[-–—/]\s+/);
+  if (sep.length > 1 && sep[0].trim().length >= 3) s = sep[0];
+  s = s.replace(/[|•·]+/g, ' ').replace(/\s+/g, ' ').trim();
+  s = s.replace(/^[\s\-–—/:.]+/, '').replace(/[\s\-–—/:.]+$/, '').trim(); // pontuação órfã nas pontas
+  return s;
+}
 function nomeDoCartao(proc) {
+  // 1. Título original do cartão do Trello, guardado nas anotações
   const m = String(proc.observacoes || '').match(/📝 Trello — ([^:\n]{3,120})/);
-  if (m) return m[1];
-  if (!/\d{7}/.test(proc.numero_cnj || '')) return proc.numero_cnj; // cartão sem CNJ
-  const m2 = String(proc.observacoes || '').match(/^(?:Importado do Trello \| )?([A-ZÀ-Ú][^|\n]{3,80})/);
-  return m2 ? m2[1] : null;
+  if (m) { const n = limparNomeCartao(m[1]); if (n) return n; }
+  // 2. Cartão sem CNJ: o número_cnj guarda o próprio título
+  if (!/\d{7}/.test(proc.numero_cnj || '')) {
+    const n = limparNomeCartao(proc.numero_cnj);
+    if (n) return n;
+  }
+  // 3. Primeira linha aproveitável das anotações
+  const m2 = String(proc.observacoes || '').match(/^(?:Importado do Trello[^\n]*\n)?([A-ZÀ-Ú][^|\n]{3,80})/);
+  if (m2) { const n = limparNomeCartao(m2[1]); if (n) return n; }
+  return null;
 }
 
 // GET /api/processos/triagem-sugestoes
@@ -861,6 +955,7 @@ async function importarLoteAsync(jobId, numeros, userId) {
 }
 
 export default router;
+
 
 
 

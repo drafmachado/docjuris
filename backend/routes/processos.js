@@ -271,6 +271,48 @@ router.put('/:id/etapa', (req, res) => {
 });
 
 
+
+// POST /api/processos/reprocessar-nomes — recebe o export do Trello e grava, em cada
+// processo já existente, o TÍTULO do cartão como marcador "📝 Trello — ...", para o nome
+// aparecer no quadro. Casa por CNJ e por título. Não cria nem apaga processos.
+router.post('/reprocessar-nomes', (req, res) => {
+  const db = getDB();
+  const { cards } = req.body;
+  if (!Array.isArray(cards)) return res.status(400).json({ error: 'Envie o JSON do Trello' });
+
+  const regexCNJ = /\d{7}[-.]?\d{2}[.]?\d{4}[.]?\d[.]?\d{2}[.]?\d{4}/;
+  let gravados = 0, semTitulo = 0;
+
+  const tx = db.transaction(() => {
+    for (const card of cards) {
+      const titulo = String(card.name || '').trim();
+      if (!titulo) { semTitulo++; continue; }
+      const m = titulo.match(regexCNJ);
+
+      let proc = null;
+      if (m) {
+        const dig = m[0].replace(/\D/g, '');
+        proc = db.prepare(`SELECT id, observacoes FROM processos WHERE REPLACE(REPLACE(REPLACE(numero_cnj,'.',''),'-',''),' ','') = ?`).get(dig);
+      }
+      if (!proc) {
+        proc = db.prepare(`SELECT id, observacoes FROM processos WHERE numero_cnj = ?`).get(titulo.slice(0, 120))
+            || db.prepare(`SELECT id, observacoes FROM processos WHERE observacoes LIKE ?`).get(`%${titulo.slice(0, 60)}%`);
+      }
+      if (!proc) continue;
+
+      const obs = String(proc.observacoes || '');
+      // Se ainda não há o marcador com este título, insere no topo
+      if (!obs.includes(`📝 Trello — ${titulo}`)) {
+        const nova = `📝 Trello — ${titulo}\n${obs}`.slice(0, 3200);
+        db.prepare('UPDATE processos SET observacoes = ? WHERE id = ?').run(nova, proc.id);
+        gravados++;
+      }
+    }
+  });
+  tx();
+  res.json({ ok: true, gravados, sem_titulo: semTitulo });
+});
+
 // POST /api/processos/reaplicar-ordem-trello — atualiza SÓ a ordem (posicao) e a coluna
 // dos processos já importados, casando pelo título/CNJ do cartão. Não cria nada.
 // Serve para restaurar a organização do Trello sem reimportar.
@@ -484,28 +526,39 @@ function similaridade(a, b) {
 // (ex.: "Camila - revisional" → "Camila"). SEMPRE devolve algo, nunca null.
 function limparNomeCartao(bruto) {
   let s = String(bruto || '').trim();
-  // remove CNJ e números longos
+  // remove CNJ e sequências longas de dígitos (número CNJ com ou sem máscara)
   s = s.replace(/\d{7}[-.]?\d{2}[.]?\d{4}[.]?\d[.]?\d{2}[.]?\d{4}/g, ' ');
-  s = s.replace(/\bproc(?:esso)?\.?\s*n?[º°]?\s*[\d.\-/]+/gi, ' ');
-  // separa o nome do assunto: "Nome - assunto" | "Nome — assunto" | "Nome / assunto"
+  s = s.replace(/\d{15,}/g, ' ');
+  // remove "PROC." / "PROCESSO Nº ..." e o que vier grudado de número
+  s = s.replace(/\bproc(?:esso)?\.?\s*n?[º°]?\s*[\d.\-/]*/gi, ' ');
+  // remove valores em R$ (ex.: "(R$ 52.800,00)")
+  s = s.replace(/\(?\s*r\$\s*[\d.,]+\s*\)?/gi, ' ');
+  // separa nome do assunto no primeiro separador forte
   const sep = s.split(/\s+[-–—/]\s+/);
   if (sep.length > 1 && sep[0].trim().length >= 3) s = sep[0];
-  s = s.replace(/[|•·]+/g, ' ').replace(/\s+/g, ' ').trim();
-  s = s.replace(/^[\s\-–—/:.]+/, '').replace(/[\s\-–—/:.]+$/, '').trim(); // pontuação órfã nas pontas
+  // remove sufixos de status/assunto comuns que ficam grudados sem separador
+  s = s.replace(/\b(suspenso|reembolso|recorreram|recorrer|r[ée]plica|provas|curatela|golpe|esaj|revisional|remiss[ãa]o|conclus[ãa]o)\b/gi, ' ');
+  s = s.replace(/[|•·()]+/g, ' ').replace(/\s+/g, ' ').trim();
+  s = s.replace(/^[\s\-–—/:.]+/, '').replace(/[\s\-–—/:.]+$/, '').trim();
   return s;
 }
 function nomeDoCartao(proc) {
-  // 1. Título original do cartão do Trello, guardado nas anotações
-  const m = String(proc.observacoes || '').match(/📝 Trello — ([^:\n]{3,120})/);
-  if (m) { const n = limparNomeCartao(m[1]); if (n) return n; }
-  // 2. Cartão sem CNJ: o número_cnj guarda o próprio título
+  const obs = String(proc.observacoes || '');
+  // 1. Título original do cartão do Trello, guardado nas anotações (📝 Trello — TÍTULO:)
+  let m = obs.match(/📝 Trello — ([^\n]{3,140})/);
+  if (m) { const n = limparNomeCartao(m[1].replace(/:$/, '')); if (n && /[A-Za-zÀ-ú]/.test(n)) return n; }
+  // 2. Cartão sem CNJ real: o numero_cnj guarda o próprio título do cartão
   if (!/\d{7}/.test(proc.numero_cnj || '')) {
     const n = limparNomeCartao(proc.numero_cnj);
-    if (n) return n;
+    if (n && /[A-Za-zÀ-ú]/.test(n)) return n;
   }
-  // 3. Primeira linha aproveitável das anotações
-  const m2 = String(proc.observacoes || '').match(/^(?:Importado do Trello[^\n]*\n)?([A-ZÀ-Ú][^|\n]{3,80})/);
-  if (m2) { const n = limparNomeCartao(m2[1]); if (n) return n; }
+  // 3. Primeira linha aproveitável das anotações (pega nomes em MAIÚSCULAS ou Capitalizados)
+  const linhas = obs.split('\n').filter(Boolean);
+  for (const ln of linhas.slice(0, 4)) {
+    if (/^(Importado do Trello|💬|---|⚠️|💰|📇)/i.test(ln.trim())) continue;
+    const n = limparNomeCartao(ln);
+    if (n && n.length >= 3 && /[A-Za-zÀ-ú]{3}/.test(n)) return n;
+  }
   return null;
 }
 
@@ -955,6 +1008,7 @@ async function importarLoteAsync(jobId, numeros, userId) {
 }
 
 export default router;
+
 
 
 

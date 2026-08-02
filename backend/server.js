@@ -176,8 +176,11 @@ console.log('⏰ Verificação de prazos agendada (a cada 1h)');
 
 // ─── Monitoramento de andamentos — roda a cada 6h ─────────────────────────
 setTimeout(() => {
-  monitorarProcessos();
+  // NÃO roda monitorarProcessos no boot: cada deploy reiniciava o servidor e
+  // disparava uma varredura (com mensagens) — a Dra. Andreia recebia alertas
+  // a todo momento. Primeira rodada só 45 min após subir; depois a cada 6h.
   setTimeout(() => registrarWebhookMensagens(), 20 * 1000);
+  setTimeout(monitorarProcessos, 45 * 60 * 1000);
 
   // CRM diário do WhatsApp — 7h30 (horário de Brasília). Verifica a cada 30 min.
   let ultimoCrmDiario = null;
@@ -195,9 +198,9 @@ console.log('🔍 Monitoramento de andamentos agendado (a cada 6h)');
 
 // ─── Monitoramento emails tribunal — roda junto com andamentos (a cada 6h) ─
 setTimeout(() => {
-  monitorarEmailsTribunal();
+  setTimeout(monitorarEmailsTribunal, 50 * 60 * 1000); // 1ª rodada 50 min após subir
   setInterval(monitorarEmailsTribunal, 6 * 60 * 60 * 1000);
-}, 45 * 1000); // 45s após o boot
+}, 45 * 1000);
 console.log('📧 Monitoramento de emails de tribunais agendado (a cada 6h)');
 
 // ─── Sync Autentique — busca documentos assinados (a cada 6h) ─────────────
@@ -222,5 +225,6 @@ function agendarDJE() {
   console.log(`📰 Monitoramento DJE agendado para ${alvo.toLocaleTimeString('pt-BR')}`);
 }
 agendarDJE();
+
 
 

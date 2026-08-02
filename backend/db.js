@@ -305,6 +305,12 @@ export function initDB() {
   try { db.exec(`ALTER TABLE processos ADD COLUMN etapa_id INTEGER`); } catch {}
   try { db.exec(`ALTER TABLE processos ADD COLUMN trello_labels TEXT`); } catch {}
   try { db.exec(`ALTER TABLE processos ADD COLUMN posicao REAL`); } catch {}
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS app_config (
+      chave TEXT PRIMARY KEY,
+      valor TEXT
+    );
+  `);
   try { db.exec(`ALTER TABLE processo_checklist ADD COLUMN responsavel TEXT`); } catch {}
   try { db.exec(`ALTER TABLE processo_checklist ADD COLUMN data_limite TEXT`); } catch {}
   db.exec(`
@@ -476,6 +482,7 @@ export function initDB() {
 
   console.log('🗄️  Banco de dados inicializado');
 }
+
 
 
 

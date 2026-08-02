@@ -226,6 +226,7 @@ export default function Peticao() {
   }
   const [resultado, setResultado]             = useState(null);
   const [buscas, setBuscas]                   = useState([]);
+  const [verificacao, setVerificacao]         = useState(null);
   const [tokens, setTokens]                   = useState(null);
 
   useEffect(() => {
@@ -330,6 +331,7 @@ export default function Peticao() {
           const jobData = await aguardarJob(start.data.jobId);
           setResultado(jobData.conteudo);
           setBuscas(jobData.buscas || []);
+          setVerificacao(jobData.verificacao || null);
           if (jobData.peticaoId) setPeticaoId(jobData.peticaoId);
           const TIPOS_LABEL = { liminar:'Tutela de Urgência', peticao_inicial:'Petição Inicial',
             contestacao:'Contestação', recurso_apelacao:'Apelação', embargos:'Embargos',
@@ -352,6 +354,7 @@ export default function Peticao() {
 
       setResultado(jobData.conteudo);
       setBuscas(jobData.buscas || []);
+      setVerificacao(jobData.verificacao || null);
       if (jobData.peticaoId) setPeticaoId(jobData.peticaoId);
 
       const TIPOS_LABEL = { liminar:'Tutela de Urgência', peticao_inicial:'Petição Inicial',
@@ -426,6 +429,7 @@ export default function Peticao() {
 
       setResultado(jobData.conteudo);
       if (jobData.buscas?.length > 0) setBuscas(prev => [...prev, ...jobData.buscas]);
+      if (jobData.verificacao) setVerificacao(jobData.verificacao);
       setInstrucaoAjuste('');
       toast.success('Ajustes aplicados! Revise as alterações.', { id: toastId });
     } catch(e) {
@@ -649,6 +653,33 @@ export default function Peticao() {
           )}
 
           {/* Buscas realizadas */}
+          {verificacao && (
+            <div style={{ borderRadius: 10, padding: '10px 14px', marginBottom: 10,
+              background: verificacao.removidas?.length ? '#fdf2f2' : '#f0fdf4',
+              border: `1.5px solid ${verificacao.removidas?.length ? '#f5c2c0' : '#bbf7d0'}` }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 4,
+                color: verificacao.removidas?.length ? '#991b1b' : '#166534' }}>
+                {verificacao.removidas?.length
+                  ? `🛡️ Validador: ${verificacao.removidas.length} citação(ões) NÃO confirmadas foram removidas`
+                  : `🛡️ Validador: todas as ${verificacao.confirmadas?.length || 0} citação(ões) confirmadas nas fontes pesquisadas`}
+              </div>
+              {verificacao.confirmadas?.length > 0 && (
+                <div style={{ fontSize: 11, color: '#166534', marginBottom: verificacao.removidas?.length ? 6 : 0 }}>
+                  ✅ Confirmadas: {verificacao.confirmadas.filter(x => x.tipo !== 'url').map(x => x.ref).join(' · ') || '—'}
+                </div>
+              )}
+              {verificacao.removidas?.length > 0 && (
+                <div style={{ fontSize: 11, color: '#991b1b', lineHeight: 1.5 }}>
+                  🚫 Removidas (viraram [JURISPRUDÊNCIA PENDENTE]): {verificacao.removidas.map(x => x.ref).join(' · ')}
+                  <div style={{ marginTop: 3, color: '#7f1d1d' }}>
+                    A peça NUNCA sai com julgado não verificado. Se precisar dessas teses, busque o precedente
+                    real e substitua o marcador manualmente.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {buscas.length > 0 && (
             <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:8, padding:'10px 14px' }}>
               <p style={{ margin:'0 0 6px', fontSize:12, fontWeight:600, color:'#166534' }}>
@@ -856,6 +887,7 @@ export default function Peticao() {
 
 const lbl = { fontSize:11, fontWeight:600, color:'#6b6b68', display:'block', marginBottom:4 };
 const inp = { width:'100%', boxSizing:'border-box', padding:'9px 12px', border:'1px solid #d0cfc7', borderRadius:8, fontSize:13, background:'#fff' };
+
 
 
 

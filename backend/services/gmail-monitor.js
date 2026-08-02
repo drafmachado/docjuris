@@ -1,4 +1,5 @@
 import { getDB } from '../db.js';
+import { enviarAlertaWhatsApp } from './alertas.js';
 
 const GMAIL_REMETENTES = [
   'tjrj.pjeadm-LD@tjrj.jus.br',
@@ -103,11 +104,7 @@ async function notificarNovoAndamentoEmail(processo, andamento) {
         `*Data:* ${dataFmt}\n\n` +
         `_${andamento.descricao}_`;
 
-      await fetch(`${evolutionUrl.replace(/\/+$/, '').startsWith('http') ? evolutionUrl.replace(/\/+$/, '') : 'https://' + evolutionUrl.replace(/\/+$/, '')}/message/sendText/${instance}`, {
-        method: 'POST',
-        headers: { 'apikey': evolutionKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ number: '5511967351199', text: msg }),
-      });
+      await enviarAlertaWhatsApp(msg, { urgente: true }); // intimação = sempre urgente
     }
   } catch(e) { console.error('WhatsApp erro:', e.message); }
 
@@ -324,4 +321,5 @@ export async function monitorarEmailsTribunal() {
 
   console.log(`✅ Monitoramento email concluído — ${novos} novo(s) andamento(s)`);
 }
+
 

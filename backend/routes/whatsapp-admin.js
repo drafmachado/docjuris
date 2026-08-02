@@ -330,7 +330,22 @@ router.get('/analise-status', (req, res) => {
   res.json({ em_andamento: false, ultimas });
 });
 
+// ─── Configuração dos alertas de WhatsApp ───
+router.get('/alertas-config', async (req, res) => {
+  const { lerConfigAlertas } = await import('../services/alertas.js');
+  res.json(lerConfigAlertas());
+});
+router.put('/alertas-config', async (req, res) => {
+  const { salvarConfigAlertas } = await import('../services/alertas.js');
+  const { modo, linha } = req.body || {};
+  if (modo && !['todos', 'urgentes', 'desligado'].includes(modo)) {
+    return res.status(400).json({ error: 'Modo inválido' });
+  }
+  res.json(salvarConfigAlertas({ ...(modo ? { modo } : {}), ...(linha !== undefined ? { linha } : {}) }));
+});
+
 export default router;
+
 
 
 

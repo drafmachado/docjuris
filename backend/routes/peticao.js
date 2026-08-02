@@ -4,6 +4,18 @@ import { getDB } from '../db.js';
 import { extrairFontes, validarJurisprudencia } from '../services/verificador-juris.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
+// MODELOS DA PETIÇÃO IA
+// PECA  → redige e revisa as peças (Opus 5, o Opus vigente — melhor qualidade
+//         jurídica; ~R$ 2-2,50 por petição). Troque pelo Railway com a variável
+//         PETICAO_MODEL (ex.: claude-fable-5 para o topo absoluto, 2x o custo).
+// APOIO → responde perguntas sobre a peça (Sonnet — mais barato, é conversa).
+// Opus 5 tem raciocínio ligado por padrão e os tokens de raciocínio contam na
+// saída: max_tokens das chamadas de peça foi elevado para não truncar.
+// ═══════════════════════════════════════════════════════════════════════════
+const MODELO_PECA  = process.env.PETICAO_MODEL || 'claude-opus-5';
+const MODELO_APOIO = 'claude-sonnet-4-6';
+
+// ═══════════════════════════════════════════════════════════════════════════
 // A IA às vezes "conversa" antes da peça ("Com base na confirmação..., procedo
 // agora à reescrita..."). Instrução não impede; este limpador impede: descarta
 // TUDO que vier antes do endereçamento (EXCELENTÍSSIMO...) ou do primeiro
@@ -131,7 +143,7 @@ Responda a pergunta sobre a peça acima. NÃO reescreva a peça — apenas expli
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: MODELO_APOIO,
         max_tokens: 2000,
         system: systemPrompt,
         tools: [{ type: 'web_search_20250305', name: 'web_search' }],
@@ -223,8 +235,8 @@ Reescreva a peça COMPLETA aplicando os ajustes acima. Mantenha intacto tudo que
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 8000,
+        model: MODELO_PECA,
+        max_tokens: 16000,
         system: systemPrompt,
         tools: [{ type: 'web_search_20250305', name: 'web_search' }],
         messages: [{ role: 'user', content: userPrompt }],
@@ -647,8 +659,8 @@ INSTRUÇÕES DE EXECUÇÃO:
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 8000,
+        model: MODELO_PECA,
+        max_tokens: 16000,
         system: systemPrompt,
         tools: [{ type: 'web_search_20250305', name: 'web_search' }],
         messages: [{ role: 'user', content: contentBlocks }],
@@ -875,6 +887,7 @@ router.get('/:id/download/docx', authMiddleware, async (req, res) => {
 });
 
 export default router;
+
 
 
 

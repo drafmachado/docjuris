@@ -1,4 +1,5 @@
 import { getDB } from '../db.js';
+import { enviarAlertaWhatsApp } from './alertas.js';
 
 const ESCAVADOR_TOKEN = process.env.ESCAVADOR_API_TOKEN;
 const DATAJUD_KEY = 'cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==';
@@ -101,25 +102,15 @@ async function notificarMovimentacoes(processo, andamentos) {
     console.error('  Erro email:', e.message);
   }
 
-  // ─── WhatsApp (Evolution) — sempre UMA mensagem ───
+  // ─── WhatsApp — pela central de alertas (respeita o modo configurado) ───
+  // Andamento comum NÃO é urgente: no modo padrão "urgentes", vai só por email.
   try {
-    const evolutionUrl = process.env.EVOLUTION_API_URL;
-    const evolutionKey = process.env.EVOLUTION_API_KEY;
-    const instance = process.env.EVOLUTION_INSTANCE || 'docjuris';
-    const whatsappNumber = process.env.ANDREIA_WHATSAPP || '5511967351199';
-
-    if (evolutionUrl && evolutionKey) {
-      const msg = andamentos.length === 1
-        ? `📋 *Nova movimentação*\n\n*Processo:* ${processo.numero_cnj}\n*Cliente:* ${processo.client_nome || 'N/A'}\n*Data:* ${fmtD(recente.data)}\n\n_${recente.descricao}_`
-        : `📋 *${andamentos.length} movimentações ${eHistorico ? 'registradas (histórico)' : 'novas'}*\n\n*Processo:* ${processo.numero_cnj}\n*Cliente:* ${processo.client_nome || 'N/A'}\n\n*Mais recente (${fmtD(recente.data)}):*\n_${recente.descricao}_`;
-
-      await fetch(`${evolutionUrl}/message/sendText/${instance}`, {
-        method: 'POST',
-        headers: { 'apikey': evolutionKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ number: whatsappNumber, text: msg }),
-      });
-      console.log(`  💬 WhatsApp agrupado enviado`);
-    }
+    const msg = andamentos.length === 1
+      ? `📋 *Nova movimentação*\n\n*Processo:* ${processo.numero_cnj}\n*Cliente:* ${processo.client_nome || 'N/A'}\n*Data:* ${fmtD(recente.data)}\n\n_${recente.descricao}_`
+      : `📋 *${andamentos.length} movimentações ${eHistorico ? 'registradas (histórico)' : 'novas'}*\n\n*Processo:* ${processo.numero_cnj}\n*Cliente:* ${processo.client_nome || 'N/A'}\n\n*Mais recente (${fmtD(recente.data)}):*\n_${recente.descricao}_`;
+    const r = await enviarAlertaWhatsApp(msg, { urgente: false });
+    if (r.enviado) console.log(`  💬 WhatsApp agrupado enviado (linha ${r.instancia})`);
+    else console.log(`  💬 WhatsApp não enviado: ${r.motivo}`);
   } catch(e) {
     console.error('  Erro WhatsApp:', e.message);
   }
@@ -288,6 +279,7 @@ export async function monitorarProcessos() {
 
   console.log(`✅ Monitoramento concluído — ${novosAndamentos} novo(s) andamento(s)`);
 }
+
 
 
 

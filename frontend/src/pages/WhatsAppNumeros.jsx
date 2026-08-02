@@ -18,6 +18,19 @@ export default function WhatsAppNumeros() {
   const [analise, setAnalise] = useState(null);   // job em andamento
   const analisePoll = useRef(null);
   const [ultimoCrm, setUltimoCrm] = useState(null);
+  const [alertCfg, setAlertCfg] = useState(null);
+
+  useEffect(() => {
+    api.get('/whatsapp-admin/alertas-config').then(r => setAlertCfg(r.data)).catch(() => {});
+  }, []);
+
+  async function salvarAlertas(patch) {
+    try {
+      const r = await api.put('/whatsapp-admin/alertas-config', patch);
+      setAlertCfg(r.data);
+      toast.success('Configuração de alertas salva');
+    } catch(e) { toast.error(e.response?.data?.error || 'Erro'); }
+  }
   const [rodandoCrm, setRodandoCrm] = useState(false);
   const [statusCrm, setStatusCrm] = useState(null);
   const crmPoll = useRef(null);
@@ -168,6 +181,40 @@ export default function WhatsAppNumeros() {
         Cada número conectado aqui alimenta o CRM: mensagem de número desconhecido vira <b>lead automático</b> no funil.
         Os envios do sistema (códigos do portal, comunicados, alertas) continuam saindo apenas pelo número principal.
       </p>
+
+      {alertCfg && (
+        <div style={{ background: '#fff', borderRadius: 14, padding: '14px 18px', marginBottom: 14,
+          border: '1.5px solid #eceade' }}>
+          <div style={{ fontSize: 13.5, fontWeight: 800, color: '#0f2035', marginBottom: 3 }}>🔔 Alertas do sistema no WhatsApp</div>
+          <div style={{ fontSize: 12, color: '#6b6b68', marginBottom: 10, lineHeight: 1.5 }}>
+            Movimentações de processos e intimações chegam <b>sempre por email</b>. Aqui você escolhe o que
+            também chega no seu WhatsApp — e por qual linha (mensagem vinda de outra linha aparece como
+            contato normal, sem "mensagem para si mesma").
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {[
+              { id: 'urgentes', label: '⚡ Só urgências', dica: 'prazos e intimações — recomendado' },
+              { id: 'todos', label: '📋 Tudo', dica: 'inclui cada movimentação de processo' },
+              { id: 'desligado', label: '🔕 Desligado', dica: 'somente email' },
+            ].map(op => (
+              <button key={op.id} onClick={() => salvarAlertas({ modo: op.id })} title={op.dica}
+                style={{ padding: '8px 15px', borderRadius: 20, fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+                  border: `1.5px solid ${alertCfg.modo === op.id ? '#0f2035' : '#d0cfc7'}`,
+                  background: alertCfg.modo === op.id ? '#0f2035' : '#fff',
+                  color: alertCfg.modo === op.id ? '#fff' : '#374151' }}>
+                {op.label}
+              </button>
+            ))}
+            {instancias.length > 1 && (
+              <select value={alertCfg.linha || ''} onChange={e => salvarAlertas({ linha: e.target.value })}
+                style={{ width: 'auto', padding: '8px 11px', fontSize: 12.5, borderRadius: 10, border: '1px solid #d0cfc7' }}>
+                <option value="">Linha automática (evita a sua própria)</option>
+                {instancias.map(i => <option key={i.nome} value={i.nome}>Enviar pela {i.numero || i.nome}</option>)}
+              </select>
+            )}
+          </div>
+        </div>
+      )}
 
       <div style={{ background: '#fff', borderRadius: 14, padding: '14px 18px', marginBottom: 18,
         border: '1.5px solid #eceade', display: 'flex', justifyContent: 'space-between',
@@ -361,6 +408,7 @@ export default function WhatsAppNumeros() {
     </div>
   );
 }
+
 
 
 

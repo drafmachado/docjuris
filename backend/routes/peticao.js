@@ -1,6 +1,7 @@
 import express from 'express';
 import { gerarPeticaoDocx } from '../services/peticaoDocx.js';
 import { getDB } from '../db.js';
+import { extrairFontes, validarJurisprudencia } from '../services/verificador-juris.js';
 import { authMiddleware } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -115,10 +116,14 @@ Responda a pergunta sobre a peça acima. NÃO reescreva a peça — apenas expli
     }
 
     const data = await response.json();
-    const resposta = (data.content || [])
+    let resposta = (data.content || [])
       .filter(b => b.type === 'text')
       .map(b => b.text)
       .join('\n\n');
+
+    // Explicações também não podem citar julgado não verificado
+    const verifPg = validarJurisprudencia(resposta, extrairFontes(data.content));
+    resposta = verifPg.texto;
 
     if (!resposta || resposta.trim().length < 10) {
       jobs.set(jobId, { status: 'error', error: 'A IA não retornou resposta. Tente novamente.', createdAt: Date.now() });
@@ -209,10 +214,15 @@ Reescreva a peça COMPLETA aplicando os ajustes acima. Mantenha intacto tudo que
       .map(b => b.input?.query || '')
       .filter(Boolean);
 
-    const textos = (data.content || [])
+    let textos = (data.content || [])
       .filter(b => b.type === 'text')
       .map(b => b.text)
       .join('\n\n');
+
+    // Validador mecânico também na revisão — a peça revisada não pode ganhar citação inventada
+    const fontesAj = extrairFontes(data.content);
+    const verifAj = validarJurisprudencia(textos, fontesAj);
+    textos = verifAj.texto;
 
     if (!textos || textos.trim().length < 100) {
       jobs.set(jobId, { status: 'error', error: 'A IA não retornou a peça revisada. Tente novamente.', createdAt: Date.now() });
@@ -227,7 +237,7 @@ Reescreva a peça COMPLETA aplicando os ajustes acima. Mantenha intacto tudo que
       } catch(e) { /* atualização é bônus — não falhar o ajuste */ }
     }
 
-    jobs.set(jobId, { status: 'done', conteudo: textos, buscas, peticaoId: peticaoId || null, createdAt: Date.now() });
+    jobs.set(jobId, { status: 'done', conteudo: textos, buscas, verificacao: { confirmadas: verifAj.confirmadas, removidas: verifAj.removidas }, peticaoId: peticaoId || null, createdAt: Date.now() });
 
   } catch(e) {
     console.error('Erro ajuste petição:', e);
@@ -502,7 +512,9 @@ ${ESTRUTURA_TIPO[tipo_peca] ? ESTRUTURA_TIPO[tipo_peca] + '\n\nO roteiro acima �
 Você deve redigir peças processuais completas, tecnicamente precisas e estratégicas, seguindo rigorosamente as normas do Direito brasileiro.
 
 ═══════════════════════════════════════════════════════════
-REGRAS ABSOLUTAS DE INTEGRIDADE JURÍDICA — SEM EXCEÇÕES
+REGRAS ABSOLUTAS DE INTEGRIDADE JURÍDICA — COM VALIDADOR AUTOMÁTICO:
+Um validador de código confere CADA citação (REsp, AREsp, AgInt, RE, HC, Tema, Súmula, número de processo, URL) contra os resultados REAIS das buscas desta sessão. Citação que não constar das fontes pesquisadas é REMOVIDA automaticamente e substituída por [JURISPRUDÊNCIA PENDENTE] — inclusive ementas transcritas. Portanto: (1) SÓ cite julgados que você encontrou na busca desta sessão; (2) copie o URL EXATO do resultado no marcador [Verificar: URL]; (3) transcreva ementa apenas se ela apareceu no resultado da busca — jamais reconstrua de memória; (4) prefira fontes oficiais (scon.stj.jus.br, portal.stf.jus.br, tjrj.jus.br, tjsp.jus.br); (5) se a busca não retornar julgado adequado, escreva [JURISPRUDÊNCIA PENDENTE] você mesmo — a tese jurídica pode ser sustentada só na lei e na doutrina.
+ — SEM EXCEÇÕES
 ═══════════════════════════════════════════════════════════
 
 JURISPRUDÊNCIA:
@@ -638,6 +650,16 @@ INSTRUÇÕES DE EXECUÇÃO:
       .map(b => b.text)
       .join('\n\n');
 
+    // ── VALIDADOR MECÂNICO: remove qualquer citação que não conste das fontes
+    //    reais da busca. Nenhum julgado inventado sobrevive a este ponto. ──
+    const fontesReais = extrairFontes(data1.content);
+    const verif = validarJurisprudencia(textos, fontesReais);
+    textos = verif.texto;
+    if (verif.removidas.length) {
+      console.warn(`⚖️ Petição: ${verif.removidas.length} citação(ões) NÃO confirmadas removidas:`,
+        verif.removidas.map(x => x.ref).join(' | '));
+    }
+
     if (!textos || textos.trim().length < 100) {
       // Log para diagnóstico — mostra o que a API retornou de fato
       console.error('Petição vazia. stop_reason:', data1.stop_reason,
@@ -672,6 +694,7 @@ INSTRUÇÕES DE EXECUÇÃO:
       status: 'done',
       conteudo: textos,
       buscas,
+      verificacao: { confirmadas: verif.confirmadas, removidas: verif.removidas },
       peticaoId,
       createdAt: Date.now(),
     });
@@ -822,6 +845,7 @@ router.get('/:id/download/docx', authMiddleware, async (req, res) => {
 });
 
 export default router;
+
 
 
 

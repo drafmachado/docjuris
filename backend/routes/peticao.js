@@ -2,6 +2,36 @@ import express from 'express';
 import { gerarPeticaoDocx } from '../services/peticaoDocx.js';
 import { getDB } from '../db.js';
 import { extrairFontes, validarJurisprudencia } from '../services/verificador-juris.js';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// A IA às vezes "conversa" antes da peça ("Com base na confirmação..., procedo
+// agora à reescrita..."). Instrução não impede; este limpador impede: descarta
+// TUDO que vier antes do endereçamento (EXCELENTÍSSIMO...) ou do primeiro
+// marcador claro de início de peça. Se não achar marcador, mantém o texto
+// (peças atípicas como manifestações curtas podem não ter endereçamento).
+// ═══════════════════════════════════════════════════════════════════════════
+function removerPreambuloConversa(texto) {
+  const t = String(texto || '');
+  const marcadores = [
+    /EXCELENT[ÍI]SSIM[OA]/i,               // endereçamento padrão
+    /^\s*AO\s+JU[ÍI]ZO/im,                 // "AO JUÍZO DA ..."
+    /^\s*EGR[ÉE]GIO\s+TRIBUNAL/im,
+    /^\s*COLENDA\s+TURMA/im,
+  ];
+  let corte = -1;
+  for (const re of marcadores) {
+    const m = t.match(re);
+    if (m && (corte === -1 || m.index < corte)) corte = m.index;
+  }
+  if (corte > 0) {
+    const descartado = t.slice(0, corte).trim();
+    if (descartado) {
+      console.warn(`⚖️ Preâmbulo de conversa removido da peça (${descartado.length} caracteres): "${descartado.slice(0, 90)}..."`);
+    }
+    return t.slice(corte);
+  }
+  return t;
+}
 import { authMiddleware } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -170,7 +200,7 @@ REGRAS ABSOLUTAS:
 2. Se o ajuste exigir nova jurisprudência, use web search para buscar decisões REAIS. Toda citação nova DEVE ter: número CNJ completo, relator, data de julgamento, órgão julgador e link no formato [Verificar: URL]. Sem esses dados, escreva [JURISPRUDÊNCIA PENDENTE].
 3. PROIBIDO inventar decisões, artigos de lei inexistentes ou fatos não informados.
 4. Se a instrução for ambígua, aplique a interpretação mais conservadora juridicamente.
-5. Responda APENAS com o texto INTEGRAL da peça revisada, do endereçamento ao final. Sem comentários, sem explicações do que mudou, sem introduções.
+5. Responda APENAS com o texto INTEGRAL da peça revisada, COMEÇANDO DIRETAMENTE pelo endereçamento (EXCELENTÍSSIMO...). PROIBIDO qualquer texto antes dele: nada de "procedo à reescrita", "com base na confirmação", resumo dos ajustes ou comentários — um limpador automático descarta tudo que vier antes do endereçamento.
 6. QUALIFICAÇÃO DAS ADVOGADAS: a qualificação inicial da peça deve conter APENAS "representado(a) por sua(s) advogada(s) que esta subscreve(m)" — sem nomes, OABs ou endereço. Nomes e OABs constam somente no bloco de assinatura final. Se a peça em revisão tiver qualificação de advogadas no início, REMOVA-A.`;
 
   const userPrompt = `PEÇA ATUAL:
@@ -222,7 +252,7 @@ Reescreva a peça COMPLETA aplicando os ajustes acima. Mantenha intacto tudo que
     // Validador mecânico também na revisão — a peça revisada não pode ganhar citação inventada
     const fontesAj = extrairFontes(data.content);
     const verifAj = validarJurisprudencia(textos, fontesAj);
-    textos = verifAj.texto;
+    textos = removerPreambuloConversa(verifAj.texto);
 
     if (!textos || textos.trim().length < 100) {
       jobs.set(jobId, { status: 'error', error: 'A IA não retornou a peça revisada. Tente novamente.', createdAt: Date.now() });
@@ -654,7 +684,7 @@ INSTRUÇÕES DE EXECUÇÃO:
     //    reais da busca. Nenhum julgado inventado sobrevive a este ponto. ──
     const fontesReais = extrairFontes(data1.content);
     const verif = validarJurisprudencia(textos, fontesReais);
-    textos = verif.texto;
+    textos = removerPreambuloConversa(verif.texto);
     if (verif.removidas.length) {
       console.warn(`⚖️ Petição: ${verif.removidas.length} citação(ões) NÃO confirmadas removidas:`,
         verif.removidas.map(x => x.ref).join(' | '));
@@ -845,6 +875,7 @@ router.get('/:id/download/docx', authMiddleware, async (req, res) => {
 });
 
 export default router;
+
 
 
 

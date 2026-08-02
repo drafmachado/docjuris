@@ -1,4 +1,5 @@
 import { getDB } from '../db.js';
+import { enviarAlertaWhatsApp } from './alertas.js';
 
 const DJERJ_BASE = 'https://www3.tjrj.jus.br/consultadje';
 
@@ -168,11 +169,7 @@ async function notificarPrazoDetectado(processo, publicacao, analise) {
         (analise.tem_prazo ? `*⏰ Prazo detectado:* ${analise.tipo_prazo} — ${analise.data_prazo}\n\n` : '') +
         `_Prazo criado automaticamente no Veredo._`;
 
-      await fetch(`${evolutionUrl}/message/sendText/${instance}`, {
-        method: 'POST',
-        headers: { 'apikey': evolutionKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ number: '5511967351199', text: msg }),
-      });
+      await enviarAlertaWhatsApp(msg, { urgente: true }); // intimação = sempre urgente
       console.log(`  💬 WhatsApp enviado`);
     }
   } catch(e) {
@@ -274,4 +271,5 @@ export async function monitorarDJE() {
 
   console.log('✅ Monitoramento DJE concluído');
 }
+
 
